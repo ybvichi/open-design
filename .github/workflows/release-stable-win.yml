@@ -1,4 +1,4 @@
-name: release-stable
+name: release-stable-win
 
 on:
   workflow_dispatch:
