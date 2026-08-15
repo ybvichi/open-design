@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Open Design 平台化改造方案</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,theme:"base",flowchart:{curve:"step",htmlLabels:true},sequence:{mirrorActors:false},themeVariables:{primaryColor:"#ddf4ff",primaryTextColor:"#1f2328",primaryBorderColor:"#0969da",lineColor:"#57606a",secondaryColor:"#f0f3f6",tertiaryColor:"#fff",background:"#f6f7f9",mainBkg:"#ddf4ff",edgeLabelBackground:"#fff",clusterBkg:"#fff",clusterBorder:"#e2e6ea",actorBkg:"#ddf4ff",actorBorder:"#0969da",actorTextColor:"#1f2328",activationBkgColor:"#e8f3ff",activationBorderColor:"#0969da",sequenceNumberColor:"#0969da",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,PingFang SC,Microsoft YaHei,sans-serif",fontSize:"13px"}});
+</script>
+<style>
+:root{--bg:#f6f7f9;--card-bg:#fff;--border:#e2e6ea;--text:#1f2328;--text-muted:#57606a;--accent:#0969da;--accent-soft:#ddf4ff;--section-bg:#f0f3f6;--code-bg:#f6f8fa;--app:#0969da;--pkg:#1a7f37;--tool:#8250df;--content:#bf8700;--flow:#cf222e;--new:#9a6700;--layer-app:#ddf4ff;--layer-pkg:#daf5e3;--layer-tool:#ede2fe;--layer-content:#fff4d6;--layer-new:#fff8c5;--ok:#1a7f37;--ok-bg:#daf5e3;--warn:#9a6700;--warn-bg:#fff8c5;--bad:#cf222e;--bad-bg:#ffebe9}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.layout{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;background:var(--card-bg);border-right:1px solid var(--border);padding:20px 16px}
+.sidebar .brand{font-size:17px;font-weight:600;margin:0 0 4px}.sidebar .brand-sub{font-size:12px;color:var(--text-muted);margin:0 0 16px}
+.sidebar nav a{display:block;padding:5px 10px;border-radius:6px;color:var(--text);text-decoration:none;font-size:13px;margin:1px 0}
+.sidebar nav a:hover{background:var(--accent-soft);color:var(--accent)}
+.sidebar nav a.group-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);padding:8px 10px 3px;margin-top:6px}
+.sidebar nav a.group-label:hover{background:transparent;color:var(--text-muted)}
+.main{padding:32px 40px 80px;max-width:1280px}
+.main>header{border-bottom:2px solid var(--border);padding-bottom:16px;margin-bottom:28px}
+.main>header h1{margin:0 0 6px;font-size:28px}.main>header .meta{color:var(--text-muted);font-size:13px}
+.overview{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:32px}
+.overview p{margin:6px 0}.overview code{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:13px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:16px}
+.stat{background:var(--section-bg);border-radius:8px;padding:12px 14px;text-align:center}
+.stat .num{font-size:22px;font-weight:600;color:var(--accent)}.stat .lbl{font-size:12px;color:var(--text-muted)}
+section.arch-group{margin-bottom:40px;scroll-margin-top:16px}
+section.arch-group>h2{font-size:20px;border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 6px}
+section.arch-group .source{font-size:12px;color:var(--text-muted);margin-bottom:20px}
+section.arch-group .source code{background:var(--code-bg);padding:2px 6px;border-radius:4px}
+.layer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:8px}
+.layer-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.layer-card .layer-head{padding:12px 18px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.layer-card.app .layer-head{background:var(--layer-app);color:var(--app)}
+.layer-card.pkg .layer-head{background:var(--layer-pkg);color:var(--pkg)}
+.layer-card.tool .layer-head{background:var(--layer-tool);color:var(--tool)}
+.layer-card.content .layer-head{background:var(--layer-content);color:var(--content)}
+.layer-card.new .layer-head{background:var(--layer-new);color:var(--new)}
+.layer-card .layer-body{padding:14px 18px}
+.layer-card .layer-body p{margin:0 0 8px;font-size:13px;color:var(--text-muted)}
+.layer-card ul{list-style:none;padding:0;margin:0}
+.layer-card li{padding:5px 0;border-bottom:1px solid var(--section-bg);font-size:13px;display:flex;gap:8px;align-items:baseline}
+.layer-card li:last-child{border-bottom:0}
+.layer-card li .name{font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;font-weight:600;color:var(--text);min-width:120px;flex-shrink:0}
+.layer-card li .desc{color:var(--text-muted);font-size:12.5px}
+.diagram-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:32px;overflow-x:auto}
+.diagram-card .mermaid{display:flex;justify-content:center}
+.flow-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:24px}
+.flow-card h3{margin:0 0 14px;font-size:16px;color:var(--flow)}
+.flow-steps{display:flex;flex-direction:column;gap:0}
+.flow-step{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start;padding:10px 0;position:relative}
+.flow-step .step-num{width:28px;height:28px;border-radius:50%;background:var(--flow);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.flow-step:not(:last-child)::after{content:"";position:absolute;left:13px;top:38px;bottom:-2px;width:2px;background:var(--border)}
+.flow-step .step-body .step-title{font-weight:600;font-size:14px;margin-bottom:2px}
+.flow-step .step-body .step-desc{font-size:13px;color:var(--text-muted)}
+.flow-step .step-body code{background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:12px}
+table{width:100%;border-collapse:collapse;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:13px;margin-bottom:24px}
+th{background:var(--section-bg);text-align:left;padding:10px 14px;font-weight:600;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted)}
+td{padding:9px 14px;border-bottom:1px solid var(--section-bg);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td code{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,"SFMono-Regular","Consolas",monospace}
+td .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-right:4px}
+.tag.app{background:var(--layer-app);color:var(--app)}
+.tag.pkg{background:var(--layer-pkg);color:var(--pkg)}
+.tag.tool{background:var(--layer-tool);color:var(--tool)}
+.tag.content{background:var(--layer-content);color:var(--content)}
+.tag.new{background:var(--layer-new);color:var(--new)}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.pill.new{background:var(--layer-new);color:var(--new);border:1px solid #d4a72c}
+.pill.keep{background:var(--layer-pkg);color:var(--pkg);border:1px solid #40a365}
+.note{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:16px 0;font-size:13px}
+.note code{background:var(--code-bg);padding:2px 6px;border-radius:4px}
+.note.warn{background:var(--warn-bg);border-left-color:var(--warn)}
+.note.bad{background:var(--bad-bg);border-left-color:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px;font-size:12px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend .dot.app{background:var(--layer-app);border:1px solid var(--app)}
+.legend .dot.pkg{background:var(--layer-pkg);border:1px solid var(--pkg)}
+.legend .dot.tool{background:var(--layer-tool);border:1px solid var(--tool)}
+.legend .dot.content{background:var(--layer-content);border:1px solid var(--content)}
+.legend .dot.new{background:var(--layer-new);border:1px solid var(--new)}
+.role-table td:first-child{font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;font-weight:600;white-space:nowrap}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--border)}.main{padding:20px}}
+</style></head><body>
+<div class="layout">
+<aside class="sidebar">
+<p class="brand-sub">客户端 → 多用户云平台</p>
+<nav>
+<a class="group-label">方案总览</a>
+<a href="#overview">目标与现状差距</a>
+<a href="#target-arch">目标总体架构</a>
+<a class="group-label">平台能力</a>
+<a href="#identity">身份与认证</a>
+<a href="#team">团队与权限模型</a>
+<a href="#cloud-db">云数据库设计</a>
+<a href="#sync">离线优先同步引擎</a>
+<a href="#file-sync">文件与版本同步</a>
+<a href="#cloud-api">云 API 设计</a>
+<a class="group-label">工程落地</a>
+<a href="#contracts">契约与边界</a>
+<a href="#table-map">本地表映射与隔离评估</a>
+<a href="#security">安全模型</a>
+<a href="#deploy">部署拓扑</a>
+<a href="#roadmap">实施路线图</a>
+<a href="#migration">迁移与兼容</a>
+</nav>
+</aside>
+<div class="main">
+<header>
+<h1>Open Design 平台化改造方案</h1>
+<div class="meta">结合 <code>api-schema.html</code>（356 条路由 · 36 个模块）与 <code>database-schema.html</code>（27 张表 · 6 个 schema 文件）现状，输出从「本地单用户客户端」到「多用户 · 多组织 · 离线优先 · 云端同步平台」的实际改造方案 · 2026-08-01</div>
+</header>
+
+<section class="arch-group" id="overview">
+<h2>目标与现状差距</h2>
+<div class="source">来源: <code>apps/daemon/src/db.ts</code> · <code>apps/daemon/src/routes/**</code> · <code>deploy/README.md</code> · <code>packages/contracts</code></div>
+<div class="overview">
+<p><strong>现状</strong>：Open Design 是<b>本地单用户</b>客户端。daemon（Express）是唯一数据权威，项目文件落在 <code>.od/projects/&lt;id&gt;/</code> 磁盘，SQLite 只存元数据（27 张表）；唯一的「认证」是共享令牌 <code>OD_API_TOKEN</code>，没有用户、组织、权限、同步概念。</p>
+<p><strong>目标</strong>：改造成<b>多用户云平台</b> —— 支持用户/团队隔离与权限控制；所有数据同步到服务器数据库（PostgreSQL）；本地离线可用，联网后增量同步；异地登录即可拉取云端数据（HTML / 图片 / 视频 / 文档等）。</p>
+<div class="stat-grid">
+<div class="stat"><div class="num">356</div><div class="lbl">现有 API 路由</div></div>
+<div class="stat"><div class="num">27</div><div class="lbl">本地数据表</div></div>
+<div class="stat"><div class="num">26/1</div><div class="lbl">隔离可行 / 不可行</div></div>
+<div class="stat"><div class="num">2 层</div><div class="lbl">本地+云端数据权威</div></div>
+<div class="stat"><div class="num">3 角色</div><div class="lbl">owner/admin/member/viewer</div></div>
+</div>
+</div>
+<div class="legend">
+<span><span class="dot app"></span>应用层 App</span>
+<span><span class="dot pkg"></span>包层 Package</span>
+<span><span class="dot tool"></span>工具层 Tool</span>
+<span><span class="dot new"></span>新增（本次改造）</span>
+</div>
+
+<h3 style="margin:24px 0 12px">当前单机拓扑</h3>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    U["👤 用户"] -->|"浏览器 / Electron"| W["apps/web<br/>Next.js 16 UI"]
+    W -->|"/api/* 同源重写"| D["apps/daemon<br/>Express 守护进程"]
+    CLI["od CLI"] -->|"同一组 /api/*"| D
+    D -->|"元数据"| DB[("本地 SQLite<br/>.od/app.sqlite · 27 表")]
+    D -->|"项目文件"| FS[(".od/projects/&lt;id&gt;/<br/>HTML / 图片 / 视频 / 文档")]
+    D -->|"技能/模板/插件/设计系统"| CONTENT["skills/ · design-templates/<br/>design-systems/ · plugins/ · craft/"]
+    D -->|"spawn"| AGENTS["Agent CLIs<br/>claude / codex / opencode…"]
+    DB -. "无 owner / 无权限 / 无同步" .-> X["❌ 多用户 · 团队 · 云端"]
+    style X fill:#ffebe9,stroke:#cf222e
+    style DB fill:#ddf4ff,stroke:#0969da
+</div>
+</div>
+</section>
+
+<section class="arch-group" id="target-arch">
+<h2>目标总体架构</h2>
+<div class="source">来源: 目标设计 · 保留现有 daemon/web/desktop/packaged 拓扑，新增云端服务与同步层</div>
+<div class="overview">
+<p>改造遵循<b>「离线优先（offline-first）」</b>原则：<b>本地 daemon + 本地 SQLite 仍是离线时的工作权威</b>（agent 运行、文件编辑、预览渲染都留在本地），云端 PostgreSQL 是<b>跨设备共享权威</b>。两者通过<b>变更日志（outbox）+ 游标（cursor）</b>增量同步。</p>
+<p>新增三大横向能力：<b>身份与认证</b>（JWT）、<b>团队与权限</b>（组织/成员/角色）、<b>同步引擎</b>（元数据变更 + 文件块上传）。</p>
+</div>
+
+<h3 style="margin:24px 0 12px">目标总体架构</h3>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    subgraph C["客户端（每台设备）"]
+        W["apps/web · Next.js UI"]
+        D["apps/daemon · Express 守护进程"]
+        LDB[("本地 SQLite 缓存<br/>+ outbox 变更日志")]
+        LFS[("本地项目文件<br/>.od/projects/&lt;id&gt;/")]
+        SE["同步引擎 SyncEngine<span class='m-new'></span>"]
+        AUTH["认证/令牌客户端<span class='m-new'></span>"]
+    end
+
+    subgraph S["云端 Open Design Cloud（新增）"]
+        API["Open Design Cloud Server<span class='m-new'></span><br/>Express · Node ~24"]
+        PDB[("PostgreSQL<span class='m-new'></span><br/>用户 / 组织 / 项目 / 变更日志")]
+        OBJ[("对象存储<span class='m-new'></span><br/>文件块 + 版本")]
+        AUTH2["JWT 签发/校验<span class='m-new'></span>"]
+        PERM["权限判定层<span class='m-new'></span>"]
+    end
+
+    W -->|"/api/* 同源"| D
+    CLI["od CLI"] -->|"/api/*"| D
+    D -->|"元数据"| LDB
+    D -->|"项目文件"| LFS
+    D --> SE
+    SE -->|"HTTPS 批量 push / pull<br/>变更日志 · 游标"| API
+    AUTH -->|"注册 / 登录 / 刷新"| AUTH2
+    API --> PDB
+    API --> OBJ
+    AUTH2 --> PERM
+    PERM --> API
+
+    style API fill:#fff8c5,stroke:#9a6700,stroke-width:2px
+    style PDB fill:#fff8c5,stroke:#9a6700,stroke-width:2px
+    style OBJ fill:#fff8c5,stroke:#9a6700,stroke-width:2px
+    style AUTH2 fill:#fff8c5,stroke:#9a6700
+    style PERM fill:#fff8c5,stroke:#9a6700
+    style SE fill:#fff8c5,stroke:#9a6700
+    style AUTH fill:#fff8c5,stroke:#9a6700
+</div>
+</div>
+
+<h3 style="margin:24px 0 12px">分层职责对照</h3>
+<div class="layer-grid">
+<div class="layer-card app">
+<div class="layer-head">客户端运行时（保留）</div>
+<div class="layer-body"><p>本地单机行为不变，agent 运行与渲染仍在本机。</p><ul>
+<li><span class="name">apps/daemon</span><span class="desc">保留：项目/会话/文件/路由权威</span></li>
+<li><span class="name">apps/web</span><span class="desc">保留：UI + 新增登录/组织/同步状态视图</span></li>
+<li><span class="name">apps/desktop</span><span class="desc">保留：Electron 外壳，新增令牌安全存储</span></li>
+<li><span class="name">apps/packaged</span><span class="desc">保留：打包侧车启动</span></li>
+</ul></div>
+</div>
+<div class="layer-card new">
+<div class="layer-head">同步与身份层（新增）</div>
+<div class="layer-body"><p>daemon 内新增的横向能力，全部走 HTTP，不侵入现有业务路由。</p><ul>
+<li><span class="name">sync-engine</span><span class="desc">outbox 采集 · push/pull · 冲突处理</span></li>
+<li><span class="name">auth-client</span><span class="desc">JWT 获取/刷新 · 设备注册 · 离线缓存</span></li>
+<li><span class="name">file-chunker</span><span class="desc">大文件分块 · 断点续传 · 内容寻址</span></li>
+<li><span class="name">version-store</span><span class="desc">文件版本历史 · 恢复</span></li>
+</ul></div>
+</div>
+<div class="layer-card new">
+<div class="layer-head">云端服务（新增）</div>
+<div class="layer-body"><p>独立可部署服务，PostgreSQL 为共享权威。</p><ul>
+<li><span class="name">apps/cloud</span><span class="desc">Express 服务 · /api/cloud/* 命名空间</span></li>
+<li><span class="name">auth</span><span class="desc">注册/登录/JWT/刷新/登出/设备</span></li>
+<li><span class="name">orgs</span><span class="desc">组织/团队/成员/邀请/角色</span></li>
+<li><span class="name">sync</span><span class="desc">变更日志接收 · 游标推进 · 广播</span></li>
+<li><span class="name">files</span><span class="desc">对象存储 · 块上传 · 版本</span></li>
+</ul></div>
+</div>
+</div>
+
+<div class="note"><b>关键决策</b>：云端服务以 <code>/api/cloud/*</code> 独立命名空间托管在 <b>apps/cloud</b>（新 workspace 包），与现有本地 <code>/api/*</code> 严格分离；daemon 通过 <code>packages/contracts</code> 中的 DTO 与云端通信，避免两套协议漂移。</div>
+</section>
+
+<section class="arch-group" id="identity">
+<h2>身份与认证</h2>
+<div class="source">来源: 现状 <code>apps/daemon/src/api-token-auth.ts</code>（仅共享令牌） → 目标：邮箱/用户名 + 密码 + JWT</div>
+<div class="overview">
+<p>现状 <code>OD_API_TOKEN</code> 是<b>机器级共享令牌</b>，无法区分用户。改造为<b>用户级 JWT 体系</b>：注册 / 登录签发 <code>access_token</code>（短期）+ <code>refresh_token</code>（长期，可轮换）；每个设备注册一个 <code>device_id</code>，用于游标隔离与多端管理。</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant C as 客户端 daemon
+    participant CS as Cloud Server
+    participant PG as PostgreSQL
+
+    U->>C: 注册（邮箱 + 密码）
+    C->>CS: POST /api/cloud/auth/register
+    CS->>PG: 写入 users（argon2id 哈希）
+    CS-->>C: 返回 user + access/refresh token
+    C->>CS: POST /api/cloud/auth/device<br/>(device_id, platform)
+    CS-->>C: device 已注册（游标起点 0）
+    Note over C,CS: 本地 outbox 开始记录后续变更
+
+    U->>C: 异地登录（邮箱 + 密码）
+    C->>CS: POST /api/cloud/auth/login
+    CS-->>C: 新 JWT 会话
+    C->>CS: POST /api/cloud/sync/pull（since_cursor=0）
+    CS-->>PG: 全量快照 + 变更日志回放
+    CS-->>C: 项目/文件/会话元数据
+    C->>LFS: 拉取文件块 → 落盘重建本地工作区
+    Note over C,LFS: 异地即可打开同一批设计资源
+</div>
+</div>
+
+<h3 style="margin:24px 0 12px">令牌策略</h3>
+<table>
+<thead><tr><th>令牌</th><th>生命周期</th><th>存储</th><th>用途</th><th>策略</th></tr></thead>
+<tbody>
+<tr><td><code>access_token</code> (JWT)</td><td>15 分钟</td><td>内存 / 安全存储</td><td>调用云 API</td><td>过期自动用 refresh 换取</td></tr>
+<tr><td><code>refresh_token</code></td><td>30 天</td><td>系统钥匙串 / 加密文件（桌面）；localStorage（web）</td><td>换取新 access</td><td>可轮换 · 可吊销 · 每设备独立</td></tr>
+<tr><td><code>device_id</code></td><td>永久（可删除）</td><td>本地稳定存储</td><td>同步游标 · 多端管理</td><td>登出即失效</td></tr>
+</tbody>
+</table>
+
+<div class="note warn"><b>安全说明</b>：密码使用 <code>argon2id</code> 哈希；JWT 密钥来自服务端环境变量；本地令牌写入 daemon 数据目录下受 OS 权限保护的加密文件，<b>不</b>落进项目工作区。</div>
+</section>
+
+<section class="arch-group" id="team">
+<h2>团队与权限模型</h2>
+<div class="source">来源: 目标设计 · 个人空间 + 组织/团队协作</div>
+<div class="overview">
+<p>每个用户天然拥有<b>个人空间</b>（personal workspace），可创建<b>组织（organization）</b> → <b>团队（team）</b>；组织内成员按角色获得项目访问权。项目归属 <code>owner</code> 与可选 <code>org</code>，形成「项目 → 组织 → 成员」的授权链。</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+erDiagram
+    USERS ||--o{ DEVICES : "拥有"
+    USERS ||--o{ ORG_MEMBERS : "加入"
+    ORGS ||--o{ ORG_MEMBERS : "包含"
+    ORGS ||--o{ TEAMS : "包含"
+    ORGS ||--o{ PROJECTS : "拥有(可选)"
+    USERS ||--o{ PROJECTS : "拥有(个人)"
+    ORG_MEMBERS ||--o{ TEAM_MEMBERS : "扩展"
+    TEAMS ||--o{ TEAM_MEMBERS : "包含"
+
+    USERS {
+        uuid id PK
+        text email UK
+        text username UK
+        text password_hash
+        text display_name
+        text avatar_url
+        int created_at
+    }
+    DEVICES {
+        uuid id PK
+        uuid user_id FK
+        text device_id
+        text platform
+        text refresh_hash
+        int last_seen_at
+    }
+    ORGS {
+        uuid id PK
+        text name
+        uuid owner_user_id FK
+        text plan
+        int created_at
+    }
+    ORG_MEMBERS {
+        uuid org_id FK
+        uuid user_id FK
+        text role
+        int joined_at
+    }
+    TEAMS {
+        uuid id PK
+        uuid org_id FK
+        text name
+    }
+    TEAM_MEMBERS {
+        uuid team_id FK
+        uuid user_id FK
+        text role
+    }
+    PROJECTS {
+        uuid id PK
+        uuid owner_user_id FK
+        uuid org_id FK "nullable"
+        uuid team_id FK "nullable"
+        text name
+        text visibility
+        int updated_at
+    }
+</div>
+</div>
+
+<h3 style="margin:24px 0 12px">角色与权限矩阵</h3>
+<div class="role-table">
+<table>
+<thead><tr><th>能力</th><th>owner</th><th>admin</th><th>member</th><th>viewer</th></tr></thead>
+<tbody>
+<tr><td>查看项目 / 文件 / 会话</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>创建 / 编辑项目与文件</td><td>✅</td><td>✅</td><td>✅</td><td>—</td></tr>
+<tr><td>删除项目 / 文件 / 会话</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>管理成员 / 邀请</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>创建团队 / 配置组织</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>转让所有权 / 删除组织</td><td>✅</td><td>—</td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note"><b>隔离策略</b>：所有云 API 请求先经 <code>PERM</code> 层做「用户 → 组织成员 → 项目角色」解析，未授权一律 <code>403</code>；客户端离线时仍可本地读写（个人空间），联网合并时按权限提交，<b>云端绝不信任客户端声明</b>。</div>
+</section>
+
+<section class="arch-group" id="cloud-db">
+<h2>云数据库设计</h2>
+<div class="source">来源: 目标设计 · PostgreSQL 为跨设备共享权威 · 本地 SQLite 保留为离线缓存</div>
+<div class="overview">
+<p>云端 PostgreSQL 负责<b>用户 / 组织 / 权限 / 变更日志 / 文件索引</b>；业务表（项目、会话、消息、评论…）以「云表 = 本地表 + 审计列」方式镜像。本地 SQLite 保留为<b>离线工作权威 + outbox</b>，与云端通过变更日志双向同步。</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+erDiagram
+    PROJECTS ||--o{ CONVERSATIONS : "拥有"
+    PROJECTS ||--o{ PROJECT_FILES : "包含"
+    PROJECT_FILES ||--o{ FILE_VERSIONS : "版本"
+    PROJECTS ||--o{ MESSAGES : "经会话"
+    PROJECTS ||--o{ PREVIEW_COMMENTS : "包含"
+    PROJECTS ||--o{ TEMPLATES : "派生"
+    PROJECTS ||--o{ ROUTINES : "调度"
+    USERS ||--o{ CHANGE_LOG : "产生"
+    DEVICES ||--o{ SYNC_CURSORS : "游标"
+
+    PROJECTS {
+        uuid id PK
+        uuid owner_user_id FK
+        uuid org_id FK "nullable"
+        uuid team_id FK "nullable"
+        text name
+        text skill_id
+        text design_system_id
+        jsonb metadata_json
+        text custom_instructions
+        text visibility
+        bigint rev
+        timestamptz updated_at
+        timestamptz deleted_at "软删除"
+    }
+    PROJECT_FILES {
+        uuid id PK
+        uuid project_id FK
+        text path
+        text mime
+        bigint size
+        text content_hash
+        text storage_ref
+        bigint rev
+        timestamptz updated_at
+    }
+    FILE_VERSIONS {
+        uuid id PK
+        uuid file_id FK
+        int version_no
+        text content_hash
+        text storage_ref
+        uuid changed_by FK
+        timestamptz created_at
+    }
+    SYNC_CURSORS {
+        uuid device_id FK
+        text entity_scope
+        bigint cursor
+        timestamptz updated_at
+    }
+    CHANGE_LOG {
+        bigint seq PK
+        uuid actor_user_id FK
+        text entity_type
+        uuid entity_id
+        text op "insert/update/delete"
+        jsonb payload
+        text device_id
+        timestamptz created_at
+    }
+    MESSAGES {
+        uuid id PK
+        uuid conversation_id FK
+        text role
+        text content
+        int position
+        jsonb events_json
+        bigint rev
+        timestamptz updated_at
+    }
+    CONVERSATIONS {
+        uuid id PK
+        uuid project_id FK
+        text title
+        text session_mode
+        bigint rev
+        timestamptz updated_at
+    }
+</div>
+</div>
+
+<h3 style="margin:24px 0 12px">数据权威与角色划分</h3>
+<table>
+<thead><tr><th>数据</th><th>离线权威</th><th>云端权威</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>用户 / 组织 / 权限</td><td>只读缓存</td><td>PostgreSQL ✅</td><td>云端唯一真源</td></tr>
+<tr><td>项目 / 会话 / 消息 / 评论 / 模板 / 例程</td><td>本地 SQLite ✅</td><td>PostgreSQL（镜像）</td><td>变更日志双向同步</td></tr>
+<tr><td>项目文件（HTML/图片/视频/文档）</td><td><code>.od/projects</code> ✅</td><td>对象存储 + 索引</td><td>内容寻址 · 分块上传</td></tr>
+<tr><td>文件版本历史</td><td>本地 <code>.file-versions</code></td><td>对象存储版本区 ✅</td><td>跨设备恢复</td></tr>
+<tr><td>Agent 会话 / 运行状态</td><td>本地 ✅</td><td>仅同步恢复身份字段</td><td>运行本身留在本机</td></tr>
+<tr><td>插件 / 媒体 / 素材库</td><td>本地 ✅</td><td>可选同步（Phase 4）</td><td>大对象，按需</td></tr>
+</tbody>
+</table>
+</section>
+
+<section class="arch-group" id="sync">
+<h2>离线优先同步引擎</h2>
+<div class="source">来源: 目标设计 · outbox 模式 + 游标增量 + 冲突处理</div>
+<div class="overview">
+<p>同步引擎驻留在 daemon 内，监听本地数据库的写操作：每次业务写先在<b>本地事务</b>里落库并追加一条 outbox 记录（含 <code>entity_type / entity_id / op / payload / device_id</code>）。在线时批量 push 到云端；同时按设备游标 pull 云端新增变更回放本地。冲突采用<b>按实体 LWW（updated_at + 服务端 rev）</b>，文件冲突则<b>保留双版本</b>而非覆盖。</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    W["业务写<br/>（项目/消息/评论…）"] --> TX["本地事务<br/>落 SQLite + 写 outbox"]
+    TX --> OB[("outbox<br/>待推送队列")]
+    OB -->|"联网"| PUSH["push 批量提交<br/>携带 last_cursor"]
+    PUSH -->|"200 + 服务端游标"| ACK["标记已确认<br/>更新本地游标"]
+    ACK --> IDLE["空闲 / 定时 / 事件触发"]
+    IDLE -->|"pull"| PULL["pull 增量<br/>since_cursor 之后"]
+    PULL --> REPLAY["回放应用<br/>到本地 SQLite"]
+    REPLAY -->|"文件变更"| FSYNC["按需拉取文件块"]
+    REPLAY -->|"冲突"| CONF["LWW / 双版本保留"]
+    CONF --> IDLE
+</div>
+</div>
+
+<div class="flow-card">
+<h3>同步循环（8 步）</h3>
+<div class="flow-steps">
+<div class="flow-step"><div class="step-num">1</div><div class="step-body"><div class="step-title">本地写入即记录</div><div class="step-desc">业务路由写 SQLite 时，同一事务追加 <code>outbox</code> 记录 —— 不额外改业务代码，通过统一写入口钩子实现。</div></div></div>
+<div class="flow-step"><div class="step-num">2</div><div class="step-body"><div class="step-title">联网触发 push</div><div class="step-desc">daemon 检测到网络可达（或定时 30s / 写后 2s）→ 批量 POST <code>/api/cloud/sync/push</code>。</div></div></div>
+<div class="flow-step"><div class="step-num">3</div><div class="step-body"><div class="step-title">服务端校验与落库</div><div class="step-desc">云端校验用户权限 → 事务应用变更 → 写 <code>change_log</code> → 返回新游标。</div></div></div>
+<div class="flow-step"><div class="step-num">4</div><div class="step-body"><div class="step-title">确认与推进游标</div><div class="step-desc">客户端把 outbox 标记为已确认，<code>device_cursor</code> 推进到服务端返回的 <code>seq</code>。</div></div></div>
+<div class="flow-step"><div class="step-num">5</div><div class="step-body"><div class="step-title">pull 增量</div><div class="step-desc"><code>since_cursor</code> 之后的新变更回放本地；其他设备 / 在线协作者的修改在此进入本地。</div></div></div>
+<div class="flow-step"><div class="step-num">6</div><div class="step-body"><div class="step-title">文件变更按需拉取</div><div class="step-desc">元数据变更到达后，若文件块本地缺失 → 从对象存储分块下载落盘。</div></div></div>
+<div class="flow-step"><div class="step-num">7</div><div class="step-body"><div class="step-title">冲突处理</div><div class="step-desc">元数据按 <code>updated_at</code> + 服务端 <code>rev</code> LWW；文件内容冲突 → 保留双方版本，标记冲突待用户裁决。</div></div></div>
+<div class="flow-step"><div class="step-num">8</div><div class="step-body"><div class="step-title">多设备游标隔离</div><div class="step-desc">每设备独立 <code>sync_cursors</code>，多台机器各自增量，互不重放。</div></div></div>
+</div>
+</div>
+
+<div class="note"><b>幂等与断点续传</b>：push 请求携带 <code>device_id + from_cursor</code>，服务端按 <code>change_log.seq</code> 全局有序推进；某条失败不影响后续，客户端重试只补未确认区间。</div>
+</section>
+
+<section class="arch-group" id="file-sync">
+<h2>文件与版本同步</h2>
+<div class="source">来源: 现状 <code>apps/daemon/src/projects.ts</code>（磁盘文件） + <code>project-file-versions.ts</code> → 目标：内容寻址 + 分块上传</div>
+<div class="overview">
+<p>项目文件（HTML / 图片 / 视频 / 文档）<b>不上传整个到元数据库</b>，而是写入对象存储：按内容哈希（<code>sha256</code>）寻址实现去重，大文件分块（默认 4MB）上传支持断点续传；每次写文件生成一个新版本，可跨设备回滚。</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+flowchart TD
+    A["本地写文件<br/>projects.ts writeProjectFile"] --> B["计算 sha256<br/>+ 对比远端索引"]
+    B -->|"哈希已存在"| C["仅更新元数据引用<br/>(去重)"]
+    B -->|"新哈希"| D["按 4MB 分块<br/>生成 upload_id"]
+    D --> E["逐块 PUT /api/cloud/files/chunks<br/>携带 offset · 支持续传"]
+    E -->|"全部完成"| F["POST /api/cloud/files/complete<br/>注册 content_hash + storage_ref"]
+    F --> G["写 FILE_VERSIONS 版本记录"]
+    G --> H["同步元数据 → 各设备"]
+    H --> I["异地设备<br/>GET /api/cloud/files/:ref"]
+    I --> J["分块下载 → 落盘 .od/projects/&lt;id&gt;/"]
+</div>
+</div>
+
+<h3 style="margin:24px 0 12px">文件同步关键点</h3>
+<table>
+<thead><tr><th>机制</th><th>策略</th></tr></thead>
+<tbody>
+<tr><td>内容寻址</td><td><code>sha256(content)</code> 作为 <code>content_hash</code>，相同文件跨项目 / 跨设备共享一份存储</td></tr>
+<tr><td>分块大小</td><td>默认 4MB，按 mime 与体积调整（视频可更大）</td></tr>
+<tr><td>断点续传</td><td>上传携带 <code>offset</code>，服务端记录已收块，中断后继续</td></tr>
+<tr><td>版本历史</td><td>每次写入生成 <code>FILE_VERSIONS</code> 记录，保留最近 N 版（可配）</td></tr>
+<tr><td>预览同步</td><td>HTML 依赖的 CSS/JS/图片一并打包进版本，保证异地预览完整</td></tr>
+<tr><td>大对象限制</td><td>视频等大文件走对象存储直传（预签名 URL），不经同步 API</td></tr>
+</tbody>
+</table>
+</section>
+
+<section class="arch-group" id="cloud-api">
+<h2>云 API 设计</h2>
+<div class="source">来源: 目标设计 · 与现有 <code>/api/*</code> 并行，云端统一 <code>/api/cloud/*</code></div>
+<div class="overview">
+<p>现有本地路由（356 条）<b>全部保留不变</b>；云端新增独立命名空间，daemon 通过 <code>packages/contracts</code> DTO 调用。这样本地离线流程零改动，云能力以「可选叠加」方式接入。</p>
+</div>
+
+<h3 style="margin:24px 0 12px">新增云端端点</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/api/cloud/auth/register</code></td><td>注册（邮箱/用户名 + 密码）</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/auth/login</code></td><td>登录，返回 JWT + refresh</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/auth/refresh</code></td><td>刷新 access_token</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/auth/logout</code></td><td>吊销设备会话</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/auth/device</code></td><td>注册当前设备（device_id）</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/cloud/me</code></td><td>当前用户信息 + 组织列表</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/orgs</code></td><td>创建组织</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/cloud/orgs/:orgId</code></td><td>组织详情 + 成员</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/orgs/:orgId/members</code></td><td>邀请/添加成员</td></tr>
+<tr><td><code>PATCH</code></td><td><code>/api/cloud/orgs/:orgId/members/:userId</code></td><td>变更角色</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/orgs/:orgId/teams</code></td><td>创建团队</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/projects</code></td><td>把项目归属到组织/团队（云端索引）</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/sync/push</code></td><td>批量提交本地变更（outbox）</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/cloud/sync/pull?since=</code></td><td>增量拉取（change_log 回放）</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/files/init</code></td><td>初始化分块上传（upload_id）</td></tr>
+<tr><td><code>PUT</code></td><td><code>/api/cloud/files/chunks</code></td><td>上传文件块（offset 续传）</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/cloud/files/complete</code></td><td>完成上传，注册 content_hash + 版本</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/cloud/files/:ref</code></td><td>下载文件（含版本参数）</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/cloud/health</code></td><td>云端健康检查</td></tr>
+</tbody>
+</table>
+
+<div class="note"><b>契约落地</b>：全部 DTO 放入 <code>packages/contracts/src/api/cloud/</code>（新增），云端服务与 daemon 同步引用，避免双协议漂移 —— 符合仓库「web/daemon 集成走 contracts」的既有边界。</div>
+</section>
+
+<section class="arch-group" id="contracts">
+<h2>契约与边界</h2>
+<div class="source">来源: 仓库 <code>AGENTS.md</code> · <code>packages/AGENTS.md</code></div>
+<table>
+<thead><tr><th>新增模块</th><th>归属</th><th>职责边界</th></tr></thead>
+<tbody>
+<tr><td><code>apps/cloud</code></td><td>应用层 <span class="tag new">新增</span></td><td>云端 HTTP 服务；不碰本地 daemon 内部实现</td></tr>
+<tr><td><code>packages/contracts/src/api/cloud/</code></td><td>包层 <span class="tag new">新增</span></td><td>云 DTO / 错误形状 / SSE 事件，纯 TS</td></tr>
+<tr><td><code>apps/daemon/src/sync/</code></td><td>应用层 <span class="tag new">新增</span></td><td>outbox 采集、push/pull、冲突、文件分块 —— 仅在 daemon 内部</td></tr>
+<tr><td><code>apps/daemon/src/sync/sync-routes.ts</code></td><td>应用层 <span class="tag new">新增</span></td><td>注册 <code>/api/cloud/*</code> 反向代理到 apps/cloud（本地 daemon 做网关）</td></tr>
+<tr><td>现有 <code>apps/daemon/src/routes/**</code></td><td>应用层 <span class="tag app">保留</span></td><td>356 条本地路由不动；仅统一写入口挂 outbox 钩子</td></tr>
+</tbody>
+</table>
+<div class="note"><b>双轨原则</b>：仓库要求每个能力同时具备 UI 与 <code>od</code> CLI 两个面。云能力同样如此 —— <code>od auth login</code> / <code>od sync status</code> / <code>od org …</code> 与 web 登录/同步面板走同一批 <code>/api/cloud/*</code> 端点。</div>
+</section>
+
+<section class="arch-group" id="table-map">
+<h2>本地表映射与隔离评估</h2>
+<div class="source">来源: <code>database-schema.html</code> · 27 张表 · 6 个 schema 文件 · 隔离评估（26 可行 / 1 不可行）</div>
+<div class="overview">
+<p>下表把现有 27 张本地表按<b>是否参与云端同步 / 隔离方式 / 同步阶段</b>归类。核心结论：绝大多数表加 <code>owner_user_id</code> + 审计列即可隔离；唯一「隔离不可行」的是 <code>library_tokens</code>（令牌 hash 属服务级凭据，不跨用户复制）。</p>
+</div>
+
+<table>
+<thead><tr><th>表</th><th>Schema 文件</th><th>隔离方式</th><th>云端同步</th><th>阶段</th></tr></thead>
+<tbody>
+<tr><td><code>projects</code></td><td>db.ts</td><td>加 <code>owner_user_id</code> + <code>org_id</code></td><td>✅ 变更日志</td><td>Phase 1</td></tr>
+<tr><td><code>templates</code></td><td>db.ts</td><td>加 <code>owner_user_id</code></td><td>✅ 变更日志</td><td>Phase 1</td></tr>
+<tr><td><code>conversations</code></td><td>db.ts</td><td>经 project 归属</td><td>✅ 变更日志</td><td>Phase 1</td></tr>
+<tr><td><code>messages</code></td><td>db.ts</td><td>经 conversation 归属</td><td>✅ 变更日志</td><td>Phase 1</td></tr>
+<tr><td><code>agent_sessions</code></td><td>db.ts</td><td>经 conversation 归属</td><td>⚠️ 仅恢复身份字段</td><td>Phase 1</td></tr>
+<tr><td><code>preview_comments</code></td><td>db.ts</td><td>经 project 归属</td><td>✅ 变更日志</td><td>Phase 1</td></tr>
+<tr><td><code>tabs</code> / <code>tabs_state</code></td><td>db.ts</td><td>经 project 归属</td><td>⚠️ 设备级 UI 状态，可选</td><td>Phase 2</td></tr>
+<tr><td><code>deployments</code></td><td>db.ts</td><td>经 project 归属</td><td>✅ 变更日志</td><td>Phase 2</td></tr>
+<tr><td><code>routines</code> / <code>routine_runs</code> / <code>routine_schedule_claims</code></td><td>db.ts</td><td>经 project 归属</td><td>✅ 变更日志（调度锁不跨设备）</td><td>Phase 2</td></tr>
+<tr><td><code>critique_runs</code></td><td>critique/persistence.ts</td><td>经 project 归属</td><td>✅ 变更日志</td><td>Phase 2</td></tr>
+<tr><td><code>library_assets</code> / <code>library_asset_sources</code> / <code>library_embeddings</code> / <code>library_tasks</code> / <code>library_digests</code></td><td>library-store.ts</td><td>加 <code>owner_user_id</code>；embedding 向量为私有</td><td>⚠️ 元数据同步，向量按需</td><td>Phase 3</td></tr>
+<tr><td><code>library_tokens</code></td><td>library-store.ts</td><td><span class="pill new">服务级</span>令牌 hash，不跨用户复制</td><td>❌ 不同步</td><td>—</td></tr>
+<tr><td><code>media_tasks</code></td><td>media/tasks.ts</td><td>经 project 归属</td><td>⚠️ 仅结果元数据</td><td>Phase 3</td></tr>
+<tr><td><code>installed_plugins</code> / <code>plugin_marketplaces</code> / <code>applied_plugin_snapshots</code> / <code>run_devloop_iterations</code> / <code>genui_surfaces</code> / <code>skill_plugin_candidates</code></td><td>plugins/persistence.ts</td><td>加 <code>owner_user_id</code>；marketplace 可全局</td><td>⚠️ 插件偏好同步，运行态不跨设备</td><td>Phase 3</td></tr>
+<tr><td><code>registry_entries</code></td><td>registry/database-backend.ts</td><td>加 <code>owner_user_id</code></td><td>⚠️ 用户条目同步</td><td>Phase 3</td></tr>
+</tbody>
+</table>
+
+<div class="note warn"><b>本地迁移策略</b>：给本地 SQLite 每个可隔离表加 <code>owner_user_id</code> / <code>rev</code> / <code>deleted_at</code> 列（沿用现有 <code>PRAGMA table_info</code> + <code>ALTER TABLE ADD COLUMN</code> 前向兼容机制，零破坏升级）；新增 <code>outbox</code> / <code>sync_cursors</code> 表。首次登录时把存量项目标记为「待上传」，逐项上传到用户个人空间。</div>
+</section>
+
+<section class="arch-group" id="security">
+<h2>安全模型</h2>
+<div class="source">来源: 现状 <code>api-token-auth.ts</code> · 仓库安全边界 → 目标：用户级鉴权 + 权限判定</div>
+<div class="layer-grid">
+<div class="layer-card new">
+<div class="layer-head">云端鉴权（新增）</div>
+<div class="layer-body"><ul>
+<li><span class="name">argon2id</span><span class="desc">密码哈希，慢哈希防爆破</span></li>
+<li><span class="name">JWT + refresh</span><span class="desc">短时 access + 可轮换 refresh</span></li>
+<li><span class="name">速率限制</span><span class="desc">登录/注册端点限流防撞库</span></li>
+<li><span class="name">全站 TLS</span><span class="desc">反代终止，SSE 不压缩不缓冲</span></li>
+</ul></div>
+</div>
+<div class="layer-card new">
+<div class="layer-head">权限判定（新增）</div>
+<div class="layer-body"><ul>
+<li><span class="name">PERM 层</span><span class="desc">服务端唯一判定，不信任客户端声明</span></li>
+<li><span class="name">行级隔离</span><span class="desc">SQL 一律带 owner/org 过滤</span></li>
+<li><span class="name">对象存储 ACL</span><span class="desc">预签名 URL 限时有效</span></li>
+<li><span class="name">审计</span><span class="desc">change_log 含 actor 与设备，可追溯</span></li>
+</ul></div>
+</div>
+<div class="layer-card app">
+<div class="layer-head">本地边界（保留 + 加固）</div>
+<div class="layer-body"><ul>
+<li><span class="name">loopback 绑定</span><span class="desc">本地 daemon 仍仅监听回环</span></li>
+<li><span class="name">令牌落盘</span><span class="desc">加密文件 + OS 权限保护</span></li>
+<li><span class="name">路径校验</span><span class="desc">沿用 projects.ts 防穿越逻辑</span></li>
+<li><span class="name">SSRF 策略</span><span class="desc">沿用外部 fetch 边界</span></li>
+</ul></div>
+</div>
+</div>
+</section>
+
+<section class="arch-group" id="deploy">
+<h2>部署拓扑</h2>
+<div class="source">来源: 现状 <code>deploy/Dockerfile</code> 单镜像 → 目标：客户端 + 云服务 + PostgreSQL</div>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    subgraph Dev["用户设备"]
+        D["daemon + web + desktop"]
+    end
+    subgraph Cloud["云端（新增）"]
+        GW["反向代理 / TLS<br/>nginx / Caddy"]
+        CS["apps/cloud<br/>Express"]
+        PG[("PostgreSQL")]
+        S3[("对象存储<br/>S3 兼容 / 本地 MinIO")]
+    end
+    D -->|"HTTPS /api/cloud/*"| GW
+    GW --> CS
+    CS --> PG
+    CS --> S3
+</div>
+</div>
+<div class="overview">
+<p>云端以 <code>apps/cloud</code> 独立 Docker 服务发布，<code>docker-compose.yml</code> 增加 <code>cloud</code> + <code>postgres</code> 两个服务；对象存储默认用本地 MinIO 卷，生产可换 S3 兼容桶。客户端通过 <code>OD_CLOUD_URL</code> 配置云端地址，未配置则保持纯离线单机模式（向后兼容）。</p>
+</div>
+</section>
+
+<section class="arch-group" id="roadmap">
+<h2>实施路线图</h2>
+<div class="source">来源: 目标设计 · 按「身份 → 云服务 → 同步 → 文件 → 协作」依赖排序</div>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    P0["Phase 0<br/>契约与骨架"] --> P1["Phase 1<br/>身份 + 云服务"]
+    P1 --> P2["Phase 2<br/>元数据同步引擎"]
+    P2 --> P3["Phase 3<br/>文件与版本同步"]
+    P3 --> P4["Phase 4<br/>组织/团队/权限 UI"]
+    P4 --> P5["Phase 5<br/>存量迁移 + 多端验证"]
+    P0 -. "contracts 云 DTO<br/>apps/cloud 骨架<br/>本地表加审计列" .-> P1
+    P1 -. "注册/登录/JWT<br/>PostgreSQL schema<br/>PERM 层" .-> P2
+    P2 -. "outbox + 游标<br/>push/pull<br/>冲突 LWW" .-> P3
+    P3 -. "分块上传<br/>内容寻址<br/>版本历史" .-> P4
+    P4 -. "组织/成员/角色<br/>邀请 · 共享项目<br/>UI + od CLI" .-> P5
+    P5 -. "存量项目上传<br/>异地登录拉取<br/>e2e 双端验证" .-> P0
+</div>
+</div>
+
+<div class="flow-card">
+<h3>Phase 交付物清单</h3>
+<div class="flow-steps">
+<div class="flow-step"><div class="step-num">0</div><div class="step-body"><div class="step-title">契约与骨架</div><div class="step-desc"><code>packages/contracts</code> 新增 cloud DTO；<code>apps/cloud</code> 空服务 + <code>/api/cloud/health</code>；本地 SQLite 加 <code>owner_user_id / rev / deleted_at</code> 审计列与 <code>outbox / sync_cursors</code> 表。</div></div></div>
+<div class="flow-step"><div class="step-num">1</div><div class="step-body"><div class="step-title">身份 + 云服务</div><div class="step-desc">注册/登录/刷新/设备；PostgreSQL 全 schema 迁移；PERM 鉴权中间件；<code>od auth</code> CLI + web 登录页。</div></div></div>
+<div class="flow-step"><div class="step-num">2</div><div class="step-body"><div class="step-title">元数据同步引擎</div><div class="step-desc">daemon 统一写入口挂 outbox；push/pull + 游标；冲突 LWW；<code>od sync status</code> + web 同步指示器。</div></div></div>
+<div class="flow-step"><div class="step-num">3</div><div class="step-body"><div class="step-title">文件与版本同步</div><div class="step-desc">对象存储 + 分块上传 + 断点续传 + 内容寻址；文件版本历史与恢复；异地拉取落盘。</div></div></div>
+<div class="flow-step"><div class="step-num">4</div><div class="step-body"><div class="step-title">组织/团队/权限 UI</div><div class="step-desc">组织/团队/成员/角色管理；项目共享与权限判定；邀请流；<code>od org</code> CLI。</div></div></div>
+<div class="flow-step"><div class="step-num">5</div><div class="step-body"><div class="step-title">存量迁移 + 多端验证</div><div class="step-desc">存量项目逐项上传；异地登录拉取验证；e2e 双命名空间对比；性能与冲突回归。</div></div></div>
+</div>
+</div>
+</section>
+
+<section class="arch-group" id="migration">
+<h2>迁移与兼容</h2>
+<div class="source">来源: 仓库 <code>AGENTS.md</code> 数据目录契约 · 本地 SQLite 前向兼容机制</div>
+<div class="overview">
+<p>改造必须<b>向后兼容</b>：未配置云端时，Open Design 保持纯离线单机体验（现有 356 路由与 27 表零改动）。配置云端后，能力按需叠加。</p>
+</div>
+<div class="flow-card">
+<h3>从现有单机数据平滑上云</h3>
+<div class="flow-steps">
+<div class="flow-step"><div class="step-num">1</div><div class="step-body"><div class="step-title">首次登录</div><div class="step-desc">注册/登录后创建个人空间；<code>device_id</code> 注册，游标归零。</div></div></div>
+<div class="flow-step"><div class="step-num">2</div><div class="step-body"><div class="step-title">存量标记</div><div class="step-desc">扫描本地 <code>projects</code> 表，把无 <code>owner_user_id</code> 的旧项目标记为「待上传」。</div></div></div>
+<div class="flow-step"><div class="step-num">3</div><div class="step-body"><div class="step-title">逐项上传</div><div class="step-desc">项目元数据 → outbox；项目文件 → 分块上传；模板/会话/消息/评论随后。</div></div></div>
+<div class="flow-step"><div class="step-num">4</div><div class="step-body"><div class="step-title">异地恢复</div><div class="step-desc">新设备登录 → pull 全量 → 文件落盘 → 本地工作区重建，设计资源完整呈现。</div></div></div>
+</div>
+</div>
+<div class="note"><b>数据目录契约</b>：所有本地数据仍从 <code>RUNTIME_DATA_DIR</code> 派生（遵循仓库 daemon 数据目录契约）；云端 <code>apps/cloud</code> 不读取本地数据根，只通过 HTTP + DTO 交互，避免路径规则漂移。</div>
+</section>
+
+<footer style="border-top:1px solid var(--border);padding-top:16px;margin-top:40px;color:var(--text-muted);font-size:12px">
+Open Design 平台化改造方案 · 基于现有 API（356 路由）与数据库（27 表）设计 · 离线优先 · 多用户 · 云端同步
+</footer>
+</div>
+</div>
+<script src="js/mermaid-viewer.js"></script>
+</body></html>

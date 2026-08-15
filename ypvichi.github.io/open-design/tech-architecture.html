@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Open Design 技术架构图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,theme:"base",flowchart:{curve:"step",htmlLabels:true},sequence:{mirrorActors:false},themeVariables:{primaryColor:"#ddf4ff",primaryTextColor:"#1f2328",primaryBorderColor:"#0969da",lineColor:"#57606a",secondaryColor:"#f0f3f6",tertiaryColor:"#fff",background:"#f6f7f9",mainBkg:"#ddf4ff",edgeLabelBackground:"#fff",clusterBkg:"#fff",clusterBorder:"#e2e6ea",actorBkg:"#ddf4ff",actorBorder:"#0969da",actorTextColor:"#1f2328",activationBkgColor:"#e8f3ff",activationBorderColor:"#0969da",sequenceNumberColor:"#0969da",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans,PingFang SC,Microsoft YaHei,sans-serif",fontSize:"13px"}});
+</script>
+<style>
+:root{--bg:#f6f7f9;--card-bg:#fff;--border:#e2e6ea;--text:#1f2328;--text-muted:#57606a;--accent:#0969da;--accent-soft:#ddf4ff;--section-bg:#f0f3f6;--code-bg:#f6f8fa;--app:#0969da;--pkg:#1a7f37;--tool:#8250df;--content:#bf8700;--flow:#cf222e;--layer-app:#ddf4ff;--layer-pkg:#daf5e3;--layer-tool:#ede2fe;--layer-content:#fff4d6}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.layout{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;background:var(--card-bg);border-right:1px solid var(--border);padding:20px 16px}
+.sidebar .brand{font-size:17px;font-weight:600;margin:0 0 4px}.sidebar .brand-sub{font-size:12px;color:var(--text-muted);margin:0 0 16px}
+.sidebar nav a{display:block;padding:5px 10px;border-radius:6px;color:var(--text);text-decoration:none;font-size:13px;margin:1px 0}
+.sidebar nav a:hover{background:var(--accent-soft);color:var(--accent)}
+.sidebar nav a.group-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);padding:8px 10px 3px;margin-top:6px}
+.sidebar nav a.group-label:hover{background:transparent;color:var(--text-muted)}
+.main{padding:32px 40px 80px;max-width:1280px}
+.main>header{border-bottom:2px solid var(--border);padding-bottom:16px;margin-bottom:28px}
+.main>header h1{margin:0 0 6px;font-size:28px}.main>header .meta{color:var(--text-muted);font-size:13px}
+.overview{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:32px}
+.overview p{margin:6px 0}.overview code{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:13px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:16px}
+.stat{background:var(--section-bg);border-radius:8px;padding:12px 14px;text-align:center}
+.stat .num{font-size:22px;font-weight:600;color:var(--accent)}.stat .lbl{font-size:12px;color:var(--text-muted)}
+section.arch-group{margin-bottom:40px;scroll-margin-top:16px}
+section.arch-group>h2{font-size:20px;border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 6px}
+section.arch-group .source{font-size:12px;color:var(--text-muted);margin-bottom:20px}
+section.arch-group .source code{background:var(--code-bg);padding:2px 6px;border-radius:4px}
+.layer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:8px}
+.layer-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.layer-card .layer-head{padding:12px 18px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.layer-card.app .layer-head{background:var(--layer-app);color:var(--app)}
+.layer-card.pkg .layer-head{background:var(--layer-pkg);color:var(--pkg)}
+.layer-card.tool .layer-head{background:var(--layer-tool);color:var(--tool)}
+.layer-card.content .layer-head{background:var(--layer-content);color:var(--content)}
+.layer-card .layer-body{padding:14px 18px}
+.layer-card .layer-body p{margin:0 0 8px;font-size:13px;color:var(--text-muted)}
+.layer-card ul{list-style:none;padding:0;margin:0}
+.layer-card li{padding:5px 0;border-bottom:1px solid var(--section-bg);font-size:13px;display:flex;gap:8px;align-items:baseline}
+.layer-card li:last-child{border-bottom:0}
+.layer-card li .name{font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;font-weight:600;color:var(--text);min-width:120px;flex-shrink:0}
+.layer-card li .desc{color:var(--text-muted);font-size:12.5px}
+.diagram-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:32px;overflow-x:auto}
+.diagram-card .mermaid{display:flex;justify-content:center}
+.flow-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:24px}
+.flow-card h3{margin:0 0 14px;font-size:16px;color:var(--flow)}
+.flow-steps{display:flex;flex-direction:column;gap:0}
+.flow-step{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start;padding:10px 0;position:relative}
+.flow-step .step-num{width:28px;height:28px;border-radius:50%;background:var(--flow);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.flow-step:not(:last-child)::after{content:"";position:absolute;left:13px;top:38px;bottom:-2px;width:2px;background:var(--border)}
+.flow-step .step-body .step-title{font-weight:600;font-size:14px;margin-bottom:2px}
+.flow-step .step-body .step-desc{font-size:13px;color:var(--text-muted)}
+.flow-step .step-body code{background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:12px}
+table{width:100%;border-collapse:collapse;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:13px;margin-bottom:24px}
+th{background:var(--section-bg);text-align:left;padding:10px 14px;font-weight:600;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted)}
+td{padding:9px 14px;border-bottom:1px solid var(--section-bg);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td code{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,"SFMono-Regular","Consolas",monospace}
+td .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-right:4px}
+.tag.app{background:var(--layer-app);color:var(--app)}
+.tag.pkg{background:var(--layer-pkg);color:var(--pkg)}
+.tag.tool{background:var(--layer-tool);color:var(--tool)}
+.tag.content{background:var(--layer-content);color:var(--content)}
+.note{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:16px 0;font-size:13px}
+.note code{background:var(--code-bg);padding:2px 6px;border-radius:4px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px;font-size:12px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend .dot.app{background:var(--layer-app);border:1px solid var(--app)}
+.legend .dot.pkg{background:var(--layer-pkg);border:1px solid var(--pkg)}
+.legend .dot.tool{background:var(--layer-tool);border:1px solid var(--tool)}
+.legend .dot.content{background:var(--layer-content);border:1px solid var(--content)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--border)}.main{padding:20px}}
+</style></head><body>
+<div class="layout">
+<aside class="sidebar">
+
+<p class="brand-sub">技术架构图</p>
+<nav>
+<a class="group-label">总览</a>
+<a href="#overview">架构概览</a>
+<a href="#containers">容器视图</a>
+<a class="group-label">分层职责</a>
+<a href="#apps">应用层 Apps</a>
+<a href="#packages">包层 Packages</a>
+<a href="#tools">工具层 Tools</a>
+<a href="#content">内容目录</a>
+<a class="group-label">运行时</a>
+<a href="#flow">生成数据流</a>
+<a href="#routes">Daemon 路由</a>
+<a href="#agents">Agent 适配器</a>
+<a href="#streams">流格式分类</a>
+<a class="group-label">约束与契约</a>
+<a href="#deps">依赖矩阵</a>
+<a href="#data">数据目录契约</a>
+<a href="#release">发布通道模型</a>
+</nav>
+</aside>
+<div class="main">
+<header>
+<h1>Open Design 技术架构图</h1>
+<div class="meta">基于仓库根 <code>AGENTS.md</code>、<code>docs/architecture.md</code>、<code>docs/agent-adapters.md</code> 等文档梳理 · 单体仓 (monorepo) · pnpm workspace · 图表由 Mermaid 渲染</div>
+</header><section class="arch-group" id="overview">
+<h2>架构概览</h2>
+<div class="source">来源: <code>AGENTS.md</code> · <code>pnpm-workspace.yaml</code></div>
+<div class="overview">
+<p>Open Design 是一个由 <strong>pnpm workspace</strong> 管理的单体仓 (monorepo)，运行时目标为 <code>Node ~24</code> + <code>pnpm@10.33.2</code>。仓库由四类 workspace 入口构成：<code>apps/*</code>、<code>packages/*</code>、<code>tools/*</code>、<code>e2e</code>，外加若干顶层内容目录。</p>
+<p>核心运行时由 <strong>daemon</strong>（本地特权守护进程 + <code>od</code> CLI）统一承载 HTTP API、Agent 编排、技能、设计系统与产物；<strong>web</strong>（Next.js 16 App Router + React 18）通过同一组 <code>/api/*</code> 端点与 daemon 通信；<strong>desktop</strong> 与 <strong>packaged</strong>（Electron）作为外壳发现并托管 web URL。</p>
+<div class="stat-grid">
+<div class="stat"><div class="num">5</div><div class="lbl">应用 Apps</div></div>
+<div class="stat"><div class="num">14</div><div class="lbl">包 Packages</div></div>
+<div class="stat"><div class="num">4</div><div class="lbl">工具 Tools</div></div>
+<div class="stat"><div class="num">28</div><div class="lbl">Agent 适配器</div></div>
+<div class="stat"><div class="num">7</div><div class="lbl">流格式</div></div>
+<div class="stat"><div class="num">4</div><div class="lbl">发布通道</div></div>
+</div></div>
+<div class="legend">
+<span><span class="dot app"></span>应用层 App</span>
+<span><span class="dot pkg"></span>包层 Package</span>
+<span><span class="dot tool"></span>工具层 Tool</span>
+<span><span class="dot content"></span>内容目录 Content</span>
+</div></section>
+<section class="arch-group" id="containers">
+<h2>容器视图</h2>
+<div class="source">来源: <code>AGENTS.md</code> · <code>packages/AGENTS.md</code> · C4 Container Diagram</div>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart LR
+    subgraph D["apps/daemon"]
+        HTTP["HTTP API<br/>Express · 25+ 路由模块"]
+        ORCH["Agent 编排<br/>runtimes/defs/ 28 个适配器"]
+        SKILLS["技能 / 设计系统<br/>skills/ · design-templates/ · artifacts/"]
+        CLI["od CLI<br/>cli.ts · SUBCOMMAND_MAP"]
+        DB[("SQLite + 数据根<br/>RUNTIME_DATA_DIR")]
+    end
+
+    subgraph W["apps/web"]
+        ROUTER["App Router<br/>Next.js 16"]
+        UI["React 18 UI<br/>AssistantMessage · QuestionForm"]
+        I18N["i18n<br/>19 locale · types.ts 类型 Dict"]
+    end
+
+    CONTRACTS["packages/contracts<br/>纯 TS DTO / SSE / 错误形状"]
+    SIDECAR["packages/sidecar-proto<br/>+ sidecar + platform"]
+    COMPONENTS["packages/components<br/>共享 UI 原语"]
+    USER(["用户"])
+    EXT(["外部 Agent"])
+
+    USER -->|"POST /api/chat"| HTTP
+    USER -->|"od 子命令"| CLI
+    EXT -->|"od CLI 驱动"| CLI
+    HTTP -->|"触发 Agent 运行"| ORCH
+    ORCH -->|"工具调用 / 产物生成"| SKILLS
+    ORCH -->|"读写数据根"| DB
+    SKILLS -->|"ARTIFACTS_DIR 写入"| DB
+    HTTP -->|"状态查询"| DB
+    HTTP -->|"校验 DTO/SSE"| CONTRACTS
+    ORCH -->|"事件形状"| CONTRACTS
+    ORCH -->|"Agent 子进程管理"| SIDECAR
+    ROUTER -->|"HTTP /api/*"| HTTP
+    UI -->|"共享 UI 原语"| COMPONENTS
+    UI -->|"SSE 事件渲染"| CONTRACTS
+
+    style HTTP fill:#ddf4ff,stroke:#0969da
+    style ORCH fill:#ddf4ff,stroke:#0969da
+    style SKILLS fill:#ddf4ff,stroke:#0969da
+    style CLI fill:#ddf4ff,stroke:#0969da
+    style DB fill:#ddf4ff,stroke:#0969da
+    style ROUTER fill:#ddf4ff,stroke:#0969da
+    style UI fill:#ddf4ff,stroke:#0969da
+    style I18N fill:#ddf4ff,stroke:#0969da
+    style CONTRACTS fill:#daf5e3,stroke:#1a7f37
+    style SIDECAR fill:#daf5e3,stroke:#1a7f37
+    style COMPONENTS fill:#daf5e3,stroke:#1a7f37
+</div></div>
+</section><section class="arch-group" id="apps">
+<h2>应用层 Apps</h2>
+<div class="source">来源: <code>apps/AGENTS.md</code> · <code>AGENTS.md</code> Workspace directories</div>
+<div class="layer-grid">
+<div class="layer-card app"><div class="layer-head">apps/web</div><div class="layer-body"><p>Next.js 16 App Router + React 18 Web 运行时。不直接依赖 daemon 源码，通过 <code>/api/*</code> + <code>packages/contracts</code> 集成。</p><ul><li><span class="name">App Router</span><span class="desc">页面路由与渲染</span></li><li><span class="name">@open-design/components</span><span class="desc">源码级 transpile 共享组件</span></li><li><span class="name">i18n</span><span class="desc">19 个 locale，types.ts 为类型 Dict</span></li><li><span class="name">artifacts</span><span class="desc">question-form / TodoWrite 渲染</span></li></ul></div></div>
+<div class="layer-card app"><div class="layer-head">apps/daemon</div><div class="layer-body"><p>本地特权守护进程 + <code>od</code> bin。承载 <code>/api/*</code>、Agent 生成、技能、设计系统、产物、静态服务。</p><ul><li><span class="name">server.ts</span><span class="desc">解析 OD_DATA_DIR → RUNTIME_DATA_DIR</span></li><li><span class="name">routes/</span><span class="desc">25+ 路由模块（见路由表）</span></li><li><span class="name">runtimes/defs/</span><span class="desc">28 个 Agent 适配器定义</span></li><li><span class="name">cli.ts</span><span class="desc">od CLI，SUBCOMMAND_MAP 注册</span></li></ul></div></div>
+<div class="layer-card app"><div class="layer-head">apps/desktop</div><div class="layer-body"><p>Electron 外壳。通过 sidecar IPC 发现 web URL，不承载业务逻辑。</p><ul><li><span class="name">sidecar IPC</span><span class="desc">发现并加载 web 运行时</span></li></ul></div></div>
+<div class="layer-card app"><div class="layer-head">apps/packaged</div><div class="layer-body"><p>打包版 Electron 薄入口。启动打包 sidecar，仅持有 <code>od://</code> 入口胶水代码。</p><ul><li><span class="name">od:// 入口</span><span class="desc">打包运行时胶水</span></li><li><span class="name">命名空间数据根</span><span class="desc">解析后注入 OD_DATA_DIR</span></li></ul></div></div>
+<div class="layer-card app"><div class="layer-head">apps/landing-page</div><div class="layer-body"><p>独立静态 Astro 营销与公开目录站点。构建期读取仓库内容，不参与 daemon/web 产品运行时。</p><ul><li><span class="name">Astro 静态</span><span class="desc">构建期内容聚合</span></li></ul></div></div>
+</div></section>
+<section class="arch-group" id="packages">
+<h2>包层 Packages</h2>
+<div class="source">来源: <code>packages/AGENTS.md</code> · <code>AGENTS.md</code> 边界约束</div>
+<div class="layer-grid">
+<div class="layer-card pkg"><div class="layer-head">packages/contracts</div><div class="layer-body"><p>纯 TypeScript Web/Daemon 应用契约层。承载共享 API DTO、SSE 事件联合、错误形状、任务形状。禁止依赖 Next.js / Express / Node fs / 浏览器 API / SQLite / daemon 内部 / sidecar 控制面。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/sidecar-proto</div><div class="layer-body"><p>Open Design sidecar 业务协议。定义 sidecar 进程戳记五字段：<code>app</code>、<code>mode</code>、<code>namespace</code>、<code>ipc</code>、<code>source</code>。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/sidecar</div><div class="layer-body"><p>通用 sidecar 运行时。承载进程生成、IPC、命名空间隔离等通用原语。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/platform</div><div class="layer-body"><p>通用 OS 进程原语。跨平台进程扫描、信号、路径解析等底层能力。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/components</div><div class="layer-body"><p>共享 UI 组件库（<code>@open-design/components</code>）。web 在 dev 期源码级 transpile，组件与 CSS Module 编辑走正常 web 开发循环。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/launcher-proto</div><div class="layer-body"><p>启动器协议。定义打包/桌面启动器与编排层之间的契约。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/plugin-runtime</div><div class="layer-body"><p>插件运行时。承载插件加载、生命周期、沙箱边界。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/registry-protocol</div><div class="layer-body"><p>注册表协议。定义插件/技能/设计系统的注册与发现契约。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/host</div><div class="layer-body"><p>宿主抽象。承载宿主环境能力暴露与适配。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/agui-adapter</div><div class="layer-body"><p>AGUI 适配器。将 Agent 生成 UI 事件适配为可渲染组件树。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/download</div><div class="layer-body"><p>下载能力包。承载产物/资源下载与进度反馈。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/diagnostics</div><div class="layer-body"><p>诊断能力包。承载运行时健康检查、错误归因与上报。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/metatool</div><div class="layer-body"><p>元工具包。承载工具元数据描述与动态工具暴露。</p></div></div>
+<div class="layer-card pkg"><div class="layer-head">packages/release</div><div class="layer-body"><p>发布数据契约。发布元数据、存储发布、发布报告与通知向数据契约（产物构造与冒烟在 <code>tools/pack</code>）。</p></div></div>
+</div></section><section class="arch-group" id="tools">
+<h2>工具层 Tools</h2>
+<div class="source">来源: <code>tools/AGENTS.md</code> · <code>tools/pack/AGENTS.md</code></div>
+<div class="layer-grid">
+<div class="layer-card tool"><div class="layer-head">tools/dev</div><div class="layer-body"><p>本地开发生命周期控制面。唯一本地开发入口 <code>pnpm tools-dev</code>。拥有 sidecar 运行时/日志/IPC 命名空间；端口由 <code>--daemon-port</code> / <code>--web-port</code> 治理，导出 <code>OD_PORT</code> / <code>OD_WEB_PORT</code>。</p></div></div>
+<div class="layer-card tool"><div class="layer-head">tools/pack</div><div class="layer-body"><p>打包构建/启停/日志控制面、打包更新器 harness、安装器身份/注册表校验面、mac beta 发布产物准备面。调用包原语，不手搓 <code>--od-stamp-*</code> 参数。</p></div></div>
+<div class="layer-card tool"><div class="layer-head">tools/serve</div><div class="layer-body"><p>本地 fixture 服务控制面。首个服务 <code>tools-serve start updater</code> 提供确定性更新器元数据与产物。</p></div></div>
+<div class="layer-card tool"><div class="layer-head">tools/release</div><div class="layer-body"><p>发布元数据、存储发布、发布报告与通知向数据契约所有者。产物构造与冒烟测试留在 <code>tools/pack</code>。</p></div></div>
+</div></section>
+<section class="arch-group" id="content">
+<h2>内容目录</h2>
+<div class="source">来源: <code>skills/AGENTS.md</code> · <code>design-templates/AGENTS.md</code> · <code>AGENTS.md</code></div>
+<div class="layer-grid">
+<div class="layer-card content"><div class="layer-head">skills/</div><div class="layer-body"><p>功能技能。Agent 在任务中调用的工具集、brief、打包器。技能可通过 <code>od.craft.requires</code> 选择性启用通用品牌无关 craft 规则。</p></div></div>
+<div class="layer-card content"><div class="layer-head">design-templates/</div><div class="layer-body"><p>渲染目录：deck、prototype、image/video/audio 模板。供技能与产物生成使用。</p></div></div>
+<div class="layer-card content"><div class="layer-head">design-systems/</div><div class="layer-body"><p>品牌 <code>DESIGN.md</code> 文件集合。每个品牌的设计系统定义。</p></div></div>
+<div class="layer-card content"><div class="layer-head">craft/</div><div class="layer-body"><p>通用品牌无关 craft 规则。技能通过 <code>od.craft.requires</code> 选择性启用。</p></div></div>
+<div class="layer-card content"><div class="layer-head">mocks/</div><div class="layer-body"><p>基于回放的 mock CLI（opencode/claude/codex/gemini/cursor-agent/deepseek/qwen/grok、ACP 家族 devin/hermes/kilo/kimi/kiro/vibe、AMR vela）。PATH-overlay 即插即用，用于测试与自验证。</p></div></div>
+</div></section><section class="arch-group" id="flow">
+<h2>生成数据流</h2>
+<div class="source">来源: <code>AGENTS.md</code> Agent runtime conventions · Chat UI conventions</div>
+<div class="diagram-card">
+<div class="mermaid">
+flowchart TD
+    User([用户 / 外部 Agent]) --> Input["输入入口<br/>Web: POST /api/chat<br/>CLI: od 子命令"]
+    Input --> Route["Daemon 路由分发<br/>routes/chat.ts"]
+    Route --> Contract["packages/contracts<br/>校验 DTO / SSE 形状"]
+    Contract --> Orch["Agent 编排<br/>runtimes/ 选择 RuntimeAgentDef"]
+    Orch --> Prompt["组装系统提示<br/>prompts/system.ts + discovery.ts<br/>按 promptInputFormat 写 stdin"]
+    Prompt --> Stream["Agent 子进程流式输出<br/>text_delta / tool_use / turn_end"]
+    Stream --> Parse["Stream 解析器归一化<br/>claude-stream.ts / json-event-stream.ts"]
+    Parse --> ToolCall{"工具调用?"}
+    ToolCall -->|是| Skills["技能/产物生成<br/>skills/ + design-templates/ + artifacts/"]
+    Skills --> Data["写入 RUNTIME_DATA_DIR<br/>ARTIFACTS_DIR"]
+    Data --> SSE
+    ToolCall -->|否| SSE
+    SSE["SSE 回流 Web"]
+    SSE --> Render["UI 渲染<br/>AssistantMessage.tsx<br/>QuestionForm / TodoWrite / 工具组"]
+    Render --> User
+
+    classDef user fill:#fff4d6,stroke:#bf8700,color:#1f2328
+    classDef daemon fill:#ddf4ff,stroke:#0969da,color:#1f2328
+    classDef pkg fill:#daf5e3,stroke:#1a7f37,color:#1f2328
+    classDef flow fill:#ffe1e4,stroke:#cf222e,color:#1f2328
+    class User user
+    class Input,Route,Orch,Prompt,Stream,Parse,SSE,Render daemon
+    class Contract,Skills,Data pkg
+    class ToolCall flow
+</div></div>
+<div class="note"><code>claude</code> 适配器使用 <code>promptInputFormat: 'stream-json'</code> + <code>--input-format stream-json</code>，保持 stdin 开放以支持中途注入；其余 Agent 保持 <code>'text'</code>。<code>run.stdinOpen</code> 在收到非 <code>tool_use</code> 的 <code>turn_end</code> 时关闭。</div>
+</section><section class="arch-group" id="routes">
+<h2>Daemon 路由表</h2>
+<div class="source">来源: <code>apps/daemon/src/routes/</code> · <code>apps/daemon/src/*-routes.ts</code></div>
+<table><thead><tr><th>路由模块</th><th>路径前缀</th><th>职责</th></tr></thead><tbody>
+<tr><td><code>chat.ts</code></td><td><code>/api/chat</code></td><td>对话入口，接收用户消息，触发 Agent 运行</td></tr>
+<tr><td><code>runs.ts</code></td><td><code>/api/runs</code></td><td>运行实例管理、状态查询、事件回放</td></tr>
+<tr><td><code>automation.ts</code> / <code>routine.ts</code></td><td><code>/api/routines</code></td><td>自动化/例程编排，对应 Automations 标签页与 <code>od automation</code></td></tr>
+<tr><td><code>media.ts</code></td><td><code>/api/media</code></td><td>媒体资源管理，对应 <code>od media</code></td></tr>
+<tr><td><code>mcp-routes.ts</code></td><td><code>/api/mcp</code></td><td>MCP 配置/token 与 live artifacts 服务</td></tr>
+<tr><td><code>brand-routes.ts</code> / <code>design-systems.ts</code></td><td><code>/api/brands</code> · <code>/api/design-systems</code></td><td>品牌与设计系统管理，对应 <code>od</code> 子命令</td></tr>
+<tr><td><code>import-export-routes.ts</code></td><td><code>/api/import-export</code></td><td>项目导入导出</td></tr>
+<tr><td><code>handoff.ts</code></td><td><code>/api/handoff</code></td><td>CI handoff 工件交接</td></tr>
+<tr><td><code>live-artifact.ts</code></td><td><code>/api/live-artifact</code></td><td>实时产物（deck/prototype 等）渲染与注入</td></tr>
+<tr><td><code>genui.ts</code></td><td><code>/api/genui</code></td><td>生成式 UI 适配（<code>packages/agui-adapter</code>）</td></tr>
+<tr><td><code>memory.ts</code></td><td><code>/api/memory</code></td><td>记忆存储</td></tr>
+<tr><td><code>telemetry.ts</code></td><td><code>/api/telemetry</code></td><td>遥测与 <code>run_finished</code> 信号</td></tr>
+<tr><td><code>terminal.ts</code></td><td><code>/api/terminal</code></td><td>终端会话</td></tr>
+<tr><td><code>host-tools.ts</code></td><td><code>/api/host-tools</code></td><td>宿主工具暴露</td></tr>
+<tr><td><code>library.ts</code></td><td><code>/api/library</code></td><td>资源库</td></tr>
+<tr><td><code>deploy.ts</code></td><td><code>/api/deploy</code></td><td>部署</td></tr>
+<tr><td><code>social-share.ts</code></td><td><code>/api/social-share</code></td><td>社交分享</td></tr>
+<tr><td><code>whats-new.ts</code></td><td><code>/api/whats-new</code></td><td>更新动态</td></tr>
+<tr><td><code>vela.ts</code> / <code>xai.ts</code></td><td><code>/api/vela</code> · <code>/api/xai</code></td><td>特定 Agent 集成（AMR vela、xAI）</td></tr>
+<tr><td><code>daemon.ts</code> / <code>static-resource.ts</code></td><td>—</td><td>守护进程健康与静态资源服务</td></tr>
+</tbody></table>
+<div class="note">所有能力必须双面可达：Web UI 与 <code>od</code> CLI（<code>cli.ts</code> 经 <code>SUBCOMMAND_MAP</code> 注册）。参考实现：<code>od automation</code>、<code>od plugin</code>、<code>od ui</code>、<code>od project</code>、<code>od media</code>、<code>od mcp</code>、<code>od research</code>。</div>
+</section><section class="arch-group" id="agents">
+<h2>Agent 适配器</h2>
+<div class="source">来源: <code>apps/daemon/src/runtimes/defs/</code> · <code>docs/agent-adapters.md</code></div>
+<div class="overview"><p>共 <strong>28 个</strong>适配器定义文件位于 <code>apps/daemon/src/runtimes/defs/</code>，每个文件声明一个 <code>RuntimeAgentDef</code>，描述如何启动子进程、解析输出流、组装 prompt。适配器覆盖主流编码 Agent 与 ACP/AMR 家族。</p></div>
+<table><thead><tr><th>分类</th><th>适配器</th><th>说明</th></tr></thead><tbody>
+<tr><td><span class="tag app">主流编码</span></td><td><code>claude</code> · <code>codex</code> · <code>opencode</code> · <code>cursor-agent</code> · <code>copilot</code> · <code>gemini</code></td><td>头部编码 Agent；claude 使用 stream-json 中途输入</td></tr>
+<tr><td><span class="tag app">国内/中文</span></td><td><code>qwen</code> · <code>deepseek</code> · <code>grok-build</code> · <code>kimi</code> · <code>mimo</code> · <code>trae-cli</code></td><td>中文生态 Agent</td></tr>
+<tr><td><span class="tag app">ACP 家族</span></td><td><code>devin</code> · <code>hermes</code> · <code>kilo</code> · <code>kiro</code> · <code>vibe</code></td><td>ACP 协议家族 Agent</td></tr>
+<tr><td><span class="tag app">AMR</span></td><td><code>amr</code> · <code>vela</code> (CLI)</td><td>AMR 协议；vela 含 login + models + ACP</td></tr>
+<tr><td><span class="tag app">其他</span></td><td><code>aider</code> · <code>amp</code> · <code>antigravity</code> · <code>atomcode</code> · <code>byok-opencode</code> · <code>codebuddy</code> · <code>pi</code> · <code>qoder</code> · <code>reasonix</code></td><td>其余适配器</td></tr>
+<tr><td><span class="tag pkg">共享</span></td><td><code>shared.ts</code></td><td>适配器间共享工具与基类</td></tr>
+</tbody></table></section>
+<section class="arch-group" id="streams">
+<h2>流格式分类</h2>
+<div class="source">来源: <code>AGENTS.md</code> 验证策略 · <code>apps/daemon/src/runtimes/</code></div>
+<table><thead><tr><th>流格式</th><th>解析器</th><th>代表适配器</th><th>特征</th></tr></thead><tbody>
+<tr><td><code>stream-json</code></td><td><code>claude-stream.ts</code></td><td>claude</td><td>JSONL user 消息，stdin 保持开放，支持中途注入；<code>turn_end</code> 后关闭</td></tr>
+<tr><td><code>json-event-stream</code></td><td><code>json-event-stream.ts</code></td><td>codex 等</td><td>JSONL 事件流，归一化为统一事件</td></tr>
+<tr><td><code>qoder-stream</code></td><td><code>qoder-stream.ts</code></td><td>qoder</td><td>Qoder 专属事件协议</td></tr>
+<tr><td><code>text</code> (默认)</td><td>通用文本解析</td><td>多数适配器</td><td>prompt 以纯文本写入 stdin 后立即关闭</td></tr>
+<tr><td><code>ACP</code></td><td>ACP 协议解析</td><td>devin/hermes/kilo/kimi/kiro/vibe</td><td>ACP 家族共享协议</td></tr>
+<tr><td><code>AMR</code></td><td>AMR 协议解析</td><td>amr/vela</td><td>AMR 协议（含 login + models + ACP）</td></tr>
+<tr><td><code>BYOK</code></td><td>BYOK 适配</td><td>byok-opencode</td><td>Bring-Your-Own-Key 模式</td></tr>
+</tbody></table>
+<div class="note">验证：Agent 流/解析器变更应通过 <code>mocks/</code> 回放录制会话验证事件形状往返，避免消耗 provider 预算。激活：<code>export PATH="$PWD/mocks/bin:$PATH" OD_MOCKS_TRACE=&lt;8-char-id&gt; OD_MOCKS_NO_DELAY=1</code>。</div>
+</section><section class="arch-group" id="deps">
+<h2>依赖矩阵</h2>
+<div class="source">来源: <code>AGENTS.md</code> 边界约束 · Capability exposure</div>
+<table><thead><tr><th>消费方</th><th>被依赖</th><th>关系</th></tr></thead><tbody>
+<tr><td><span class="tag app">apps/web</span></td><td><span class="tag pkg">packages/contracts</span></td><td>共享 DTO/SSE/错误形状；禁止 import daemon src</td></tr>
+<tr><td><span class="tag app">apps/web</span></td><td><span class="tag pkg">packages/components</span></td><td>源码级 transpile 共享 UI 原语</td></tr>
+<tr><td><span class="tag app">apps/daemon</span></td><td><span class="tag pkg">packages/contracts</span></td><td>实现同一组 /api/* 契约</td></tr>
+<tr><td><span class="tag app">apps/daemon</span></td><td><span class="tag pkg">sidecar-proto · sidecar · platform</span></td><td>sidecar 业务协议 + 通用运行时 + OS 原语</td></tr>
+<tr><td><span class="tag app">apps/desktop</span></td><td><span class="tag app">apps/web</span></td><td>经 sidecar IPC 发现 web URL</td></tr>
+<tr><td><span class="tag app">apps/packaged</span></td><td><span class="tag app">apps/daemon</span> · <span class="tag app">apps/web</span></td><td>启动打包 sidecar，注入 OD_DATA_DIR</td></tr>
+<tr><td><span class="tag tool">tools/dev</span></td><td><span class="tag pkg">packages/*</span></td><td>调用包原语，不手搓 stamp 参数</td></tr>
+<tr><td><span class="tag tool">tools/pack</span></td><td><span class="tag pkg">packages/*</span></td><td>调用包原语；产物构造与冒烟在此</td></tr>
+<tr><td><span class="tag tool">tools/release</span></td><td><span class="tag pkg">packages/release</span></td><td>发布数据契约消费方</td></tr>
+<tr><td><span class="tag app">apps/daemon</span></td><td><span class="tag content">skills/</span> · <span class="tag content">design-templates/</span></td><td>运行时加载技能与模板</td></tr>
+<tr><td><span class="tag content">skills/</span></td><td><span class="tag content">craft/</span></td><td>经 <code>od.craft.requires</code> 选择性启用</td></tr>
+</tbody></table></section>
+<section class="arch-group" id="data">
+<h2>数据目录契约</h2>
+<div class="source">来源: <code>AGENTS.md</code> Daemon data directory contract</div>
+<div class="overview"><p>daemon 启动时由 <code>apps/daemon/src/server.ts</code> 将 <code>OD_DATA_DIR</code> 解析为 <code>RUNTIME_DATA_DIR</code>，作为唯一活跃数据根真源。所有 daemon 数据路径必须派生自 <code>RUNTIME_DATA_DIR</code> 或其派生常量（如 <code>PROJECTS_DIR</code>、<code>ARTIFACTS_DIR</code>）。</p></div>
+<table><thead><tr><th>路径</th><th>性质</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>RUNTIME_DATA_DIR</code></td><td>唯一活跃数据根</td><td>由 <code>OD_DATA_DIR</code> 解析而来</td></tr>
+<tr><td><code>PROJECTS_DIR</code></td><td>派生常量</td><td>托管项目根；导入文件夹项目例外，用 <code>metadata.baseDir</code></td></tr>
+<tr><td><code>ARTIFACTS_DIR</code></td><td>派生常量</td><td>产物根</td></tr>
+<tr><td>SQLite · app config · memory · MCP config/tokens · automation state · plugin state · connector creds · generated files · logs</td><td>daemon 数据</td><td>必须留在解析后的数据根下</td></tr>
+<tr><td>Agent 子进程</td><td>继承</td><td>接收 <code>OD_DATA_DIR</code> 作为真源，不自猜路径</td></tr>
+<tr><td><code>OD_MEDIA_CONFIG_DIR</code></td><td>窄覆盖</td><td>仅 <code>media-config.json</code>，非第二数据根</td></tr>
+<tr><td><code>OD_LEGACY_DATA_DIR</code></td><td>迁移源</td><td>仅遗留数据导入，非活跃数据根</td></tr>
+<tr><td><code>CODEX_HOME</code> 等外部工具 home</td><td>集成输入</td><td>非 daemon 运行时数据</td></tr>
+</tbody></table>
+<div class="note">禁止复用的逃逸模式：cwd 相对遗留目录的模块级默认值、<code>defaultRegistryRoots()</code> 重算数据根、依赖 <code>openDatabase</code> 回退而非传入解析根、脚本帮助文本建议具体遗留目录。修复时路由到 <code>RUNTIME_DATA_DIR</code> 或显式数据根参数。</div>
+</section>
+<section class="arch-group" id="release">
+<h2>发布通道模型</h2>
+<div class="source">来源: <code>AGENTS.md</code> Release channel model · <code>tools/pack/AGENTS.md</code></div>
+<table><thead><tr><th>通道</th><th>App 身份</th><th>定位</th></tr></thead><tbody>
+<tr><td><code>beta</code></td><td>Open Design Beta</td><td>每日 R&D/开发验证，快速反馈，非稳定晋升门</td></tr>
+<tr><td><code>prerelease</code></td><td>Open Design Prerelease</td><td>稳定交付的内部验证通道；稳定发布仍由 prerelease 产物门控</td></tr>
+<tr><td><code>preview</code></td><td>Open Design Preview</td><td>独立早期访问，类稳定严谨度；用 <code>X.Y.Z-preview.N</code>，发 preview R2 通道与 <code>preview/latest</code> 更新源</td></tr>
+<tr><td><code>stable</code></td><td>Open Design</td><td>正式交付通道；不依赖 preview，仅依赖 prerelease</td></tr>
+</tbody></table>
+<div class="note">Windows beta 更新器验证必须使用真实 beta 命名空间 <code>release-beta-win</code>，否则本地 beta-like 命名空间会创建独立卸载注册表项却看起来像同一个 <code>Open Design Beta</code> 应用。mac DMG 的拖拽安装 bundle 不得为 <code>Open Design.app</code>。</div>
+</section>
+</div>
+</div>
+<script src="js/mermaid-viewer.js"></script>
+</body></html>
