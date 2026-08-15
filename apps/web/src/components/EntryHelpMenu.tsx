@@ -23,13 +23,13 @@ import { Icon } from './Icon';
 import { useT } from '../i18n';
 
 //const REPO = 'https://github.com/nexu-io/open-design';
-const REPO = 'https://github.com/ypvichi/open-design';
+const REPO = 'https://github.com/ybvichi/open-design';
 const ISSUES_URL = `${REPO}/issues/new`;
 const PRS_URL = `${REPO}/pulls`;
 //const RELEASES_URL = `${REPO}/releases`;
-const RELEASES_URL = `https://ypvichi.github.io/hi-design/index.html`
+const RELEASES_URL = `https://ybvichi.github.io/hi-design/index.html`
 //const LATEST_RELEASE_URL = `${REPO}/releases/latest`;
-const LATEST_RELEASE_URL = `https://ypvichi.github.io/hi-design/index.html`;
+const LATEST_RELEASE_URL = `https://ybvichi.github.io/hi-design/index.html`;
 const X_URL = 'https://x.com/OpenDesignHQ';
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 

@@ -64,7 +64,7 @@ const residualSkippedDirectories = new Set([
   "node_modules",
   "out",
   // Git submodule — not project-owned source.
-  "ypvichi.github.io",
+  "ybvichi.github.io",
 ]);
 
 const residualAllowedExactPaths = new Set([
