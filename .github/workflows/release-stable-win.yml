@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: open-design-release-stable-win
+  group: open-design-release-stable
   cancel-in-progress: false
 
 env:
@@ -27,10 +27,12 @@ env:
   POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
   POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
   POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
+  OD_UPDATE_METADATA_URL: "https://ybvichi.github.io/hi-design/stable/latest/metadata.json"
 
 jobs:
   verify:
     name: Verify build (typecheck + tests)
+    # if: github.repository == 'nexu-io/open-design'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -66,6 +68,7 @@ jobs:
   build_win:
     name: Build release win x64
     needs: verify
+    # if: github.repository == 'nexu-io/open-design'
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -223,13 +226,13 @@ jobs:
           $ASSETS_DIR = "${{ runner.temp }}/release-assets"
           New-Item -ItemType Directory -Force -Path $ASSETS_DIR | Out-Null
           $SDIR = "${{ runner.temp }}/tools-pack/out/win/namespaces/release-stable-win/builder"
-          Copy-Item "$SDIR/Open Design-release-stable-win-setup.exe" "$ASSETS_DIR/Open Design-$VERSION-win-x64-setup.exe"
-          Copy-Item "$SDIR/Open Design-release-stable-win-portable.zip" "$ASSETS_DIR/Open Design-$VERSION-win-x64-portable.zip"
+          Copy-Item "$SDIR/Hi Design-release-stable-win-setup.exe" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe"
+          Copy-Item "$SDIR/Hi Design-release-stable-win-portable.zip" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip"
           Set-Location $ASSETS_DIR
-          $setupHash = (Get-FileHash -Path "Open Design-$VERSION-win-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$setupHash  Open Design-$VERSION-win-x64-setup.exe" | Set-Content -Path "Open Design-$VERSION-win-x64-setup.exe.sha256"
-          $zipHash = (Get-FileHash -Path "Open Design-$VERSION-win-x64-portable.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$zipHash  Open Design-$VERSION-win-x64-portable.zip" | Set-Content -Path "Open Design-$VERSION-win-x64-portable.zip.sha256"
+          $setupHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$setupHash  Hi Design-$VERSION-win-x64-setup.exe" | Set-Content -Path "Hi Design-$VERSION-win-x64-setup.exe.sha256"
+          $zipHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-portable.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$zipHash  Hi Design-$VERSION-win-x64-portable.zip" | Set-Content -Path "Hi Design-$VERSION-win-x64-portable.zip.sha256"
 
       - name: Upload windows release assets
         uses: actions/upload-artifact@v7
@@ -278,16 +281,55 @@ jobs:
           name: open-design-release-win-assets
           path: ${{ runner.temp }}/release-assets
 
+      - name: Generate metadata.json
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.release_version }}"
+          ASSETS_DIR="$RUNNER_TEMP/release-assets"
+
+          # Compute SHA256 for Windows artifacts
+          win_setup_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe" | awk '{print $1}')
+          win_portable_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip" | awk '{print $1}')
+
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
+
+          cat > "$ASSETS_DIR/metadata.json" <<METADATA
+          {
+            "channel": "stable",
+            "stableVersion": "$VERSION",
+            "releaseDate": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "win": {
+                "enabled": true,
+                "arch": "x64",
+                "artifacts": {
+                  "installer": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-setup.exe",
+                    "sha256": "$win_setup_sha"
+                  },
+                  "portable": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-portable.zip",
+                    "sha256": "$win_portable_sha"
+                  }
+                }
+              }
+            }
+          }
+          METADATA
+
+          echo "Generated metadata.json:"
+          cat "$ASSETS_DIR/metadata.json"
+
       - name: Create draft release with tag
         id: create_release
         run: |
           set -euo pipefail
           VERSION_TAG="v${{ inputs.release_version }}"
-          RELEASE_NAME="Open Design ${{ inputs.release_version }}"
+          RELEASE_NAME="Hi Design ${{ inputs.release_version }}"
           gh release create "$VERSION_TAG" \
             --target "$(git rev-parse HEAD)" \
             --title "$RELEASE_NAME" \
-            --notes "Open Design ${{ inputs.release_version }} stable release (Windows only)." \
+            --notes "Hi Design ${{ inputs.release_version }} stable release." \
             --draft
 
       - name: Upload assets to draft release
