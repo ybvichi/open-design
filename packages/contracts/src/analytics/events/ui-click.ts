@@ -1205,6 +1205,7 @@ export interface ArtifactHeaderClickProps {
     // Share button; before, both reported `share_dropdown` and were
     // indistinguishable in the funnel.
     | 'download_dropdown'
+    | 'download_dropdown_pixso'
     | 'share_dropdown'
     | 'settings';
   artifact_id?: string;
