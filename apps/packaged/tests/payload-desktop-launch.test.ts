@@ -32,10 +32,10 @@ const stamp: SidecarStamp = {
 function fakeRuntime(payloadDesktopProcess: boolean): PackagedLauncherRuntime {
   return {
     config: {} as PackagedLauncherRuntime["config"],
-    desktopExecutablePath: "/tmp/payload/Open Design Beta.app/Contents/MacOS/Open Design Beta",
+    desktopExecutablePath: "/tmp/payload/Hi Design Beta.app/Contents/MacOS/Hi Design Beta",
     descriptor: {} as PackagedLauncherRuntime["descriptor"],
     electronNodeCommand: null,
-    installedLaunchPath: "/Applications/Open Design Beta.app",
+    installedLaunchPath: "/Applications/Hi Design Beta.app",
     launcherPaths: {} as PackagedLauncherRuntime["launcherPaths"],
     paths: {} as PackagedLauncherRuntime["paths"],
     payloadDesktopProcess,
@@ -81,11 +81,11 @@ describe("payload desktop delegation", () => {
 
   it("forwards only the OS invite URL across an outer-to-payload cold start", () => {
     const deeplink = "opendesign://workspace/invite/continue?nonce=payload-cold-start";
-    expect(findPackagedDeeplinkArg(["Open Design.exe", "--unrelated", deeplink])).toBe(deeplink);
-    expect(findPackagedDeeplinkArg(["Open Design.exe", "--unrelated"])).toBeNull();
+    expect(findPackagedDeeplinkArg(["Hi Design.exe", "--unrelated", deeplink])).toBe(deeplink);
+    expect(findPackagedDeeplinkArg(["Hi Design.exe", "--unrelated"])).toBeNull();
     const plan = planPackagedPayloadDesktopDelegation(fakeRuntime(false), stamp, {
       currentPid: 4321,
-      forwardedArgs: ["Open Design.exe", "--unrelated", deeplink],
+      forwardedArgs: ["Hi Design.exe", "--unrelated", deeplink],
       timeoutMs: 60_000,
     });
 

@@ -124,7 +124,7 @@ export type ToolPackConfig = {
    */
   posthogCliApiKey?: string;
   /**
-   * PostHog project ID (e.g. `420348` for the official Open Design project)
+   * PostHog project ID (e.g. `420348` for the official Hi Design project)
    * used by `@posthog/cli sourcemap upload`. Sourced from
    * `POSTHOG_CLI_PROJECT_ID` (or the alias `POSTHOG_PROJECT_ID`) in CI.
    * Required for upload to be attempted; missing → strip-only path.

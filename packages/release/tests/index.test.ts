@@ -51,12 +51,12 @@ describe("@open-design/release", () => {
   });
 
   it("centralizes release identity and namespace derivation", () => {
-    expect(releaseChannelDescriptor("prerelease").productName).toBe("Open Design Prerelease");
-    expect(releaseChannelDescriptor("betas").productName).toBe("Open Design Betas");
+    expect(releaseChannelDescriptor("prerelease").productName).toBe("Hi Design Prerelease");
+    expect(releaseChannelDescriptor("betas").productName).toBe("Hi Design Betas");
     expect(releaseInstallIdentity("prerelease")).toEqual({
-      appId: "io.open-design.desktop.prerelease",
-      executableName: "Open Design Prerelease",
-      productName: "Open Design Prerelease",
+      appId: "io.hi-design.desktop.prerelease",
+      executableName: "Hi Design Prerelease",
+      productName: "Hi Design Prerelease",
     });
     expect(releaseNamespace("prerelease")).toBe("release-prerelease");
     expect(releaseNamespace("prerelease", "win")).toBe("release-prerelease-win");
@@ -70,7 +70,7 @@ describe("@open-design/release", () => {
     expect(releaseChannelFromVersion("1.2.3-prerelease.1")).toBe("prerelease");
     expect(releaseChannelFromNamespace("release-preview-linux")).toBe("preview");
     expect(releaseChannelFromNamespace("release-betas-win")).toBe("betas");
-    expect(releaseChannelFromNamespace("open-design")).toBe("stable");
+    expect(releaseChannelFromNamespace("hi-design")).toBe("stable");
     expect(releaseChannelFromNamespace("beta-local-flow")).toBeNull();
   });
 });
