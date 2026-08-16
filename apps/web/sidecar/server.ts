@@ -14,6 +14,7 @@ import { createRequire } from "node:module";
 import { createConnection, createServer as createTcpServer, type AddressInfo, type Server as TcpServer } from "node:net";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import os from "node:os";
 
 import {
   SIDECAR_ENV,
@@ -28,9 +29,15 @@ import {
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 
-const HOST = process.env.OD_HOST || "127.0.0.1";
-if (process.env.OD_HOST != null && !/^[a-zA-Z0-9._\-:[\]@]+$/.test(process.env.OD_HOST)) {
-  throw new Error(`OD_HOST contains invalid characters: ${process.env.OD_HOST}`);
+// The web sidecar always binds to all interfaces so LAN peers can reach the
+// project raw-file endpoint via the computer name or a private IP. Every other
+// route stays loopback-only via the createDaemonProxyHandler host guard, so a
+// wide bind does not widen the access surface. Deliberately hardcoded: OD_HOST
+// must not override it.
+const HOST = "0.0.0.0";
+
+function reportHostForStatus(): string {
+  return HOST === "0.0.0.0" || HOST === "::" || HOST === "[::]" ? "127.0.0.1" : HOST;
 }
 const DAEMON_HOST = "127.0.0.1";
 const STANDALONE_BACKEND_HOST = "127.0.0.1";
@@ -368,7 +375,7 @@ function isPrivateLanIpv4(value: string): boolean {
 
 function isLoopbackOrPrivateLanHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  return (
+  if (
     host === "localhost" ||
     host === "127.0.0.1" ||
     host === "::1" ||
@@ -376,7 +383,22 @@ function isLoopbackOrPrivateLanHost(hostname: string): boolean {
     host === "0.0.0.0" ||
     host === "::" ||
     isPrivateLanIpv4(host)
-  );
+  ) {
+    return true;
+  }
+  // Accept the machine's own hostname so LAN access (e.g. http://my-pc:9529)
+  // is treated as a local host when the operator has bound the sidecar wide.
+  try {
+    if (host === os.hostname().toLowerCase()) return true;
+  } catch {
+    // os.hostname() can throw in some environments; fall through
+  }
+  return false;
+}
+
+function isStrictLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
 }
 
 function defaultPortForProtocol(protocol: string): string {
@@ -940,7 +962,9 @@ async function createWebSidecarHandle(
     pid: process.pid,
     state: "running",
     updatedAt: new Date().toISOString(),
-    url: `http://${HOST}:${port}`,
+    // Report a loopback URL to local callers (desktop shell, tools-dev); the
+    // socket itself is bound to HOST (0.0.0.0) so LAN peers can still connect.
+    url: `http://${reportHostForStatus()}:${port}`,
   };
   let ipcServer: JsonIpcServerHandle | null = null;
   let stopped = false;
@@ -1009,6 +1033,33 @@ export function createDaemonProxyHandler(
   fallback: (request: IncomingMessage, response: ServerResponse) => Promise<void>,
 ): (request: IncomingMessage, response: ServerResponse) => void {
   return (request, response) => {
+    // Only the project raw-file endpoint (/api/projects/:id/raw/<file>) stays
+    // reachable from non-loopback hosts (computer name or private LAN IP) so a
+    // generated file can be fetched from another device on the network.
+    // Everything else is loopback-only.
+    const hostHeader = request.headers.host;
+    if (hostHeader != null) {
+      const parsedHost = parseHostHeader(hostHeader);
+      const hostname = parsedHost?.hostname?.toLowerCase() ?? "";
+      const pathname = request.url
+        ? new URL(request.url, `http://${hostHeader}`).pathname
+        : "";
+      const isRawProjectFile =
+        (request.method === "GET" || request.method === "HEAD") &&
+        /^\/api\/projects\/[^/]+\/raw\/.+\.[^/]+$/.test(pathname);
+      if (!isRawProjectFile && !isStrictLoopbackHost(hostname)) {
+        response.statusCode = 403;
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.end(JSON.stringify({
+          error: {
+            code: "FORBIDDEN",
+            message: "Access denied: this service is only available via localhost or 127.0.0.1",
+          },
+        }));
+        return;
+      }
+    }
+
     const daemonProxyTarget = daemonOrigin == null ? null : resolveDaemonProxyTarget(daemonOrigin, request.url);
     if (daemonProxyTarget != null) {
       const localPort = request.socket.localPort;

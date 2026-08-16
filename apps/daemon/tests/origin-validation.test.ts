@@ -1,5 +1,6 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -814,5 +815,38 @@ describe('configuredAllowedInternalHosts: OD_ALLOWED_INTERNAL_HOSTS parsing (iss
     expect(hosts).toEqual(['10.0.0.5']);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/CIDR/i);
+  });
+});
+
+describe('isAllowedBrowserOrigin: local machine hostname acceptance', () => {
+  const machineHostname = os.hostname();
+  const host = `${machineHostname}:7456`;
+
+  it('accepts the machine hostname as a same-origin browser origin', () => {
+    expect(
+      isAllowedBrowserOrigin(`http://${host}`, host, [7456], '0.0.0.0', []),
+    ).toBe(true);
+  });
+
+  it('still rejects an unrelated hostname', () => {
+    expect(
+      isAllowedBrowserOrigin(
+        'http://evil.example.com:7456',
+        'evil.example.com:7456',
+        [7456],
+        '0.0.0.0',
+        [],
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts the machine hostname through isLocalSameOrigin without an Origin header', () => {
+    const req = { headers: { host } };
+    expect(isLocalSameOrigin(req, 7456, {})).toBe(true);
+  });
+
+  it('rejects a non-local hostname through isLocalSameOrigin without an Origin header', () => {
+    const req = { headers: { host: 'evil.example.com:7456' } };
+    expect(isLocalSameOrigin(req, 7456, {})).toBe(false);
   });
 });
