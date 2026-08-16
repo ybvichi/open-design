@@ -13088,6 +13088,26 @@ function HtmlViewer({
     return ok;
   }
 
+  // 复制分享链接（自定义，与 dev 分支一致）：复制的是本地 raw 文件链接，
+  // 而不是部署/发布后的公开链接。
+  function copyLocalShareLink(url?: string) {
+    setDeployMenuOpen(false);
+    let lastUrl: string;
+    if (url) {
+      lastUrl = url;
+    } else {
+      const rawPath = projectFileUrl(projectId, file.name, workspaceContext);
+      const versioned = appendResourceQuery(rawPath, `v=${Math.round(file.mtime)}`);
+      lastUrl = new URL(versioned, window.location.origin).href;
+    }
+    void copyToClipboard(lastUrl).then((ok) => {
+      setExportToast({
+        message: ok ? '复制链接成功' : t('useEverywhere.copyFailed'),
+        tone: ok ? 'success' : 'error',
+      });
+    });
+  }
+
   function presentInThisTab() {
     setPresentMenuOpen(false);
     presentFullscreenRequestedRef.current = false;
@@ -15373,6 +15393,19 @@ function HtmlViewer({
                   <div className="share-menu-popover chrome-unified-popover" role="menu">
                     {unifiedActionTab === 'share' && rawCanShare ? (
                       <div className="chrome-unified-panel chrome-unified-panel--share">
+                      {/* 复制分享链接（自定义，与 dev 分支一致：复制本地 raw 文件链接） */}
+                      <button
+                        type="button"
+                        className="share-menu-item"
+                        role="menuitem"
+                        disabled={viewerOnly}
+                        title="复制分享链接"
+                        onClick={() => void copyLocalShareLink()}
+                      >
+                        <span className="share-menu-icon"><RemixIcon name="file-code-line" size={15} /></span>
+                        <span>复制分享链接</span>
+                      </button>
+                      <div className="share-menu-divider" />
                       {/* Team-only, same as ReactComponentViewer's copy of this card above —
                           see the comment there (recvq5bM78HWCE). */}
                       {workspaceContextHasTeamIdentity(workspaceContext) ? (
@@ -15454,19 +15487,20 @@ function HtmlViewer({
                         </div>
                       </>
                       ) : null}
-                      {/* Publishing is a menu row like every other action in
-                          this panel (deploy, save-as-template): same section
-                          label, same icon + label row, with a trailing "?"
-                          whose tooltip explains reach and the single-file
-                          limitation. The published state swaps the row for the
-                          link block (content, not an action). */}
+                      {/* ===== 以下「发布公开链接」功能已注释掉 =====
+                      Publishing is a menu row like every other action in
+                      this panel (deploy, save-as-template): same section
+                      label, same icon + label row, with a trailing "?"
+                      whose tooltip explains reach and the single-file
+                      limitation. The published state swaps the row for the
+                      link block (content, not an action).
                       {canPublishPublic ? (
                       <>
-                      {/* The "?" lives on the section label, not inside the publish
-                          menuitem: activating it is a help-discovery gesture, and
-                          nesting it in the row would make that gesture publish a
-                          public link (no hover-only path exists on touch). Same
-                          structure as the workspace-access help above. */}
+                      The "?" lives on the section label, not inside the publish
+                      menuitem: activating it is a help-discovery gesture, and
+                      nesting it in the row would make that gesture publish a
+                      public link (no hover-only path exists on touch). Same
+                      structure as the workspace-access help above.
                       <div className="share-menu-section-label share-menu-section-label--help" role="presentation">
                         <span>{t('fileViewer.shareMenuPublishViaOd')}</span>
                         <button
@@ -15542,16 +15576,18 @@ function HtmlViewer({
                       ) : null}
                       </>
                       ) : null}
-                      {/* The share panel is organized by intent, not by
-                          backend: the publish card above is the hero "get a
-                          link" path; social icons appear only once ANY link
-                          exists (published or deployed); Vercel/Cloudflare are
-                          the secondary "more ways to publish" tier; save-as-
-                          template keeps its spot at the bottom. */}
-                      {/* Icons only for a CLEAN link (published file or a
-                          deployment whose share page is live) — a protected or
-                          still-preparing deployment must not hand out a URL
-                          that recipients cannot open. */}
+                      ===== */}
+                      {/* ===== 以下「社交分享 / 在线部署 / 打开分享页 / 另存为模板」功能已注释掉 =====
+                      The share panel is organized by intent, not by
+                      backend: the publish card above is the hero "get a
+                      link" path; social icons appear only once ANY link
+                      exists (published or deployed); Vercel/Cloudflare are
+                      the secondary "more ways to publish" tier; save-as-
+                      template keeps its spot at the bottom.
+                      Icons only for a CLEAN link (published file or a
+                      deployment whose share page is live) — a protected or
+                      still-preparing deployment must not hand out a URL
+                      that recipients cannot open.
                       {activeProjectSocialShare && (shareableDeploymentUrl || publishedFileUrl) ? (
                         <>
                           <div className="share-menu-section-label" role="presentation">
@@ -15657,6 +15693,7 @@ function HtmlViewer({
                               : t('fileViewer.saveAsTemplate')}
                         </span>
                       </button>
+                      ===== */}
                       </div>
                     ) : null}
                     {unifiedActionTab === 'export' && rawCanDownload ? (
