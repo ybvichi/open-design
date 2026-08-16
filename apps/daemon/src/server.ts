@@ -7200,7 +7200,7 @@ export async function startServer({
 
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();
-    res.json({ ok: true, version: versionInfo.version });
+    res.json({ ok: true, version: versionInfo.version, hostname: os.hostname() });
   });
 
   app.get('/api/ready', async (_req, res) => {

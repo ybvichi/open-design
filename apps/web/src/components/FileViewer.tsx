@@ -77,6 +77,7 @@ import {
   measurePreviewBlockOffsets,
 } from './markdown-scroll-sync';
 import { useT, useI18n } from '../i18n';
+import { useDaemonHostname } from '../hooks/useDaemonHostname';
 import { useDismissOnOutsideInteraction } from '../hooks/useDismissOnOutsideInteraction';
 import {
   notifyTeamProjectsChanged,
@@ -13099,6 +13100,8 @@ function HtmlViewer({
     return ok;
   }
 
+  const daemonHostname = useDaemonHostname();
+
   // 复制分享链接（自定义，与 dev 分支一致）：复制的是本地 raw 文件链接，
   // 而不是部署/发布后的公开链接。
   function copyLocalShareLink(url?: string) {
@@ -13109,7 +13112,10 @@ function HtmlViewer({
     } else {
       const rawPath = projectFileUrl(projectId, file.name, workspaceContext);
       const versioned = appendResourceQuery(rawPath, `v=${Math.round(file.mtime)}`);
-      lastUrl = new URL(versioned, window.location.origin).href;
+      const baseUrl = daemonHostname
+        ? `http://${daemonHostname}:${window.location.port}/`
+        : window.location.origin;
+      lastUrl = new URL(versioned, baseUrl).href;
     }
     void copyToClipboard(lastUrl).then((ok) => {
       setExportToast({
@@ -17253,6 +17259,7 @@ function ImageViewer({
 }) {
   const t = useT();
   const { workspaceContext } = useProjectCollabContext();
+  const daemonHostname = useDaemonHostname();
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [pushMenuOpen, setPushMenuOpen] = useState(false);
   const [exportToast, setExportToast] = useState<ExportToastState | null>(null);
@@ -17300,7 +17307,10 @@ function ImageViewer({
   // 复制分享链接：分享的是项目 raw 文件的 HTTP 直链。
   function copyLocalShareLink() {
     setShareMenuOpen(false);
-    const shareUrl = new URL(url, window.location.origin).href;
+    const baseUrl = daemonHostname
+      ? `http://${daemonHostname}:${window.location.port}/`
+      : window.location.origin;
+    const shareUrl = new URL(url, baseUrl).href;
     void copyToClipboard(shareUrl).then((ok) => {
       setExportToast({
         message: ok ? '复制链接成功' : t('useEverywhere.copyFailed'),
@@ -17370,18 +17380,19 @@ function ImageViewer({
         </div>
         <div className="viewer-toolbar-actions">
           <div className="share-menu" ref={shareMenuRef}>
-            <button
-              type="button"
+            <a
               className="ghost-link"
+              href="#"
               aria-haspopup="menu"
               aria-expanded={shareMenuOpen}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
                 setPushMenuOpen(false);
                 setShareMenuOpen((v) => !v);
               }}
             >
               <span>分享</span>
-            </button>
+            </a>
             {shareMenuOpen ? (
               <div className="share-menu-popover" role="menu">
                 <button
@@ -17399,18 +17410,19 @@ function ImageViewer({
             ) : null}
           </div>
           <div className="share-menu" ref={pushMenuRef}>
-            <button
-              type="button"
+            <a
               className="ghost-link"
+              href="#"
               aria-haspopup="menu"
               aria-expanded={pushMenuOpen}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
                 setShareMenuOpen(false);
                 setPushMenuOpen((v) => !v);
               }}
             >
               <span>推送</span>
-            </button>
+            </a>
             {pushMenuOpen ? (
               <div className="share-menu-popover" role="menu">
                 <button
