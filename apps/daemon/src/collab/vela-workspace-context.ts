@@ -21,6 +21,7 @@ import {
   type VelaControlApiContext,
   type VelaUser,
 } from '../integrations/vela.js';
+import { readSsoConfigFile } from '../http/hiktools/hicoo.js';
 import type { HubEventsEndpoint } from './hub-events-subscriber.js';
 import {
   createDevWorkspaceContextProvider,
@@ -952,6 +953,7 @@ export function createFreshWorkspaceDirectoryFetcher(options: {
 
 export async function fetchVelaWorkspaceDirectory(
   options: VelaWorkspaceContextOptions = {},
+  dataDir?: string,
 ): Promise<WorkspaceDirectoryFetchResult> {
   const fetchImpl = options.fetch ?? fetch;
   const readSession = options.readSession ?? readVelaControlApiContext;
@@ -962,11 +964,12 @@ export async function fetchVelaWorkspaceDirectory(
   // clear a previously cached Team selection instead of preserving it forever.
   if (!session || !session.controlKey || !session.apiUrl) {
     // ===== MOCK MODE: bypass login for local dev =====
-    const loginName = 'zoo';
-    const departmentDetail = '动物园';
-    const dd = departmentDetail.split('/');
+    const ssoSession: any = dataDir ? readSsoConfigFile(dataDir) : null;
+    const loginName = ssoSession?.userInfo?.loginName ?? 'zoo';
+    const departmentDetail = ssoSession?.userInfo?.departmentDetail ?? '动物园';
+    const dd = departmentDetail.split('/'); // 软件产品研发中心/技术平台部/用户体验部/智能设计效能组
     const workspaceId = createHash('sha256').update(departmentDetail).digest('hex').slice(0, 32);
-    const workspaceName = dd[3] || dd[2] || dd[1] || dd[0] || '动物园';
+    const workspaceName = dd[3] || dd[2] || dd[1] || dd[0];
     return {
       ok: true,
       items: [

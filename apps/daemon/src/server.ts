@@ -3152,9 +3152,10 @@ export async function startServer({
   });
   const workspaceDirectoryAuthority = createWorkspaceDirectoryAuthorityBroker({
     fetchDirectory: async () => {
-      const result = await fetchVelaWorkspaceDirectory({
-        configuredEnv: configuredAmrEnv(),
-      });
+      const result = await fetchVelaWorkspaceDirectory(
+        { configuredEnv: configuredAmrEnv() },
+        RUNTIME_DATA_DIR,
+      );
       if (result.ok) workspaceTypes.learn(result.items);
       return result;
     },
