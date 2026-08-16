@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { installErrorHandlers } from '../../src/analytics/error-tracking';
 import { MatrixLoader } from '../../src/components/MatrixLoader';
 import { installWebObservability } from '../../src/observability/install';
+import { LoginGate } from '../../src/auth/LoginGate';
 
 // Install browser exception handlers at module-load time, before any other
 // client code can throw. The hooks buffer events until AnalyticsProvider
@@ -31,11 +32,15 @@ const App = dynamic(() => import('../../src/App').then((m) => m.App), {
   loading: () => (
     <div className="od-loading-shell">
       <MatrixLoader />
-      <span>Loading Open Design…</span>
+      <span>Loading Hi Design…</span>
     </div>
   ),
 });
 
 export function ClientApp() {
-  return <App />;
+  return (
+    //<LoginGate>
+      <App />
+    //</LoginGate>
+  );
 }

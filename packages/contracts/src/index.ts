@@ -3,6 +3,7 @@ export * from './errors.js';
 export * from './settings-nav.js';
 export * from './tasks.js';
 export * from './api/app-config.js';
+export * from './api/auth.js';
 export * from './api/agent-sessions.js';
 export * from './api/agent-setup.js';
 export * from './api/attribution.js';

@@ -744,6 +744,7 @@ import { createTerminalService } from './terminals.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import {
   createCollabPresenceCloudClient,
@@ -1112,6 +1113,11 @@ const CRAFT_DIR = resolveDaemonResourceDir(
   DAEMON_RESOURCE_ROOT,
   'craft',
   path.join(PROJECT_ROOT, 'craft'),
+);
+const FOR_DESIGNER_DIR = resolveDaemonResourceDir(
+  DAEMON_RESOURCE_ROOT,
+  'for-designer',
+  path.join(PROJECT_ROOT, 'for-designer'),
 );
 // User-installed skills and design systems live under the runtime data dir
 // so they respect OD_DATA_DIR overrides (test isolation, packaged runs).
@@ -7253,6 +7259,13 @@ export async function startServer({
 
   registerWhatsNewRoutes(app, {
     whatsNew: createWhatsNewService(),
+  });
+
+  registerAuthRoutes(app, {
+    env: process.env,
+    sendApiError,
+    dataDir: RUNTIME_DATA_DIR,
+    FOR_DESIGNER_DIR,
   });
 
   registerPluginEventRoutes(app, {
