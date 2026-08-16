@@ -256,7 +256,7 @@ export async function launchWindowsInstallerAfterQuit(
         "-LogPath",
         logPath,
       ],
-      { cwd: input.cwd, detached: true, stdio: "ignore", windowsHide: true },
+      { cwd: input.cwd, stdio: "ignore", windowsHide: true },
     );
     child.unref();
     return "";
