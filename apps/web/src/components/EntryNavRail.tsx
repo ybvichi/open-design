@@ -44,8 +44,8 @@ import type {
 import {
   fetchVelaLoginStatus,
   formatVelaBalanceUsd,
-  velaLogout,
 } from '../providers/daemon';
+import { logout } from '../auth/auth';
 import { resetCloudSignInTipDismissal } from './CloudSignInTip';
 import { SignOutConfirmDialog } from './SignOutConfirmDialog';
 import { notifyAmrLoginStatusChanged } from './amrLoginPolling';
@@ -1076,22 +1076,20 @@ export function EntryTopRightCluster({
                   onCancel={() => setConfirmSignOut(false)}
                   onConfirm={() => {
                     setConfirmSignOut(false);
-                    // Real sign-out: clear the vela profile auth on the
-                    // daemon, then nudge every workspace surface to re-read
-                    // (the context read now resolves to null → the shell
-                    // falls back to the signed-out local form).
-                    void velaLogout().then(async (result) => {
-                      if (!result.ok) return;
-                      await onSignedOut?.();
-                      // recvqbkcLqIFH7: a stale "dismissed" flag on the
-                      // footer's CloudSignInTip must not survive a real
-                      // sign-out, or the rail's only sign-in entry point
-                      // silently disappears with nothing left in its place.
-                      resetCloudSignInTipDismissal();
-                      notifyAmrLoginStatusChanged();
-                      notifyWorkspaceContextRefresh();
-                      notifyWorkspaceBillingRefresh();
-                      notifyTeamProjectsChanged();
+                    // Real sign-out: clear the OA SSO session (daemon-side
+                    // cookie + local browser marker), then refresh the page
+                    // so the app re-initializes in its signed-out state.
+                    // `logout` always clears local state even when the daemon
+                    // is unreachable, so the reload always proceeds.
+                    void logout().then(() => {
+                      window.location.reload();
+                      // 退出后直接刷新当前页，下面的状态重置/刷新动作暂时注释：
+                      // await onSignedOut?.();
+                      // resetCloudSignInTipDismissal();
+                      // notifyAmrLoginStatusChanged();
+                      // notifyWorkspaceContextRefresh();
+                      // notifyWorkspaceBillingRefresh();
+                      // notifyTeamProjectsChanged();
                     });
                   }}
                 />

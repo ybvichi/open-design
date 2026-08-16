@@ -2,7 +2,7 @@
 //
 // recvqgMWpJZqhL (P2, Feishu dogfood table): 客户端和网页端退出登录需要二次确认。
 // The nav rail's account-menu 退出登录 item used to POST
-// /api/integrations/vela/logout on the first click — a stray click signed the
+// /api/auth/logout on the first click — a stray click signed the
 // user out of the workspace instantly. It must now only ARM the shared
 // SignOutConfirmDialog: cancel keeps the session untouched, and only the
 // dialog's confirm action performs the real logout (with the usual
@@ -53,7 +53,7 @@ function renderRail(overrides: Partial<React.ComponentProps<typeof EntryNavRail>
 function stubFetch(onLogout: () => void) {
   return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
-    if (url.endsWith('/api/integrations/vela/logout') && init?.method === 'POST') {
+    if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
       onLogout();
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }
@@ -67,6 +67,18 @@ function stubFetch(onLogout: () => void) {
   });
 }
 
+// jsdom exposes `window.location.reload` as a non-configurable own property,
+// so it cannot be spied on directly. Replace the whole `window.location` with
+// a stand-in that carries a mocked `reload` (same pattern as PluginShareMenu).
+function stubLocationReload(): ReturnType<typeof vi.fn> {
+  const reload = vi.fn();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, reload },
+  });
+  return reload;
+}
+
 function openAccountMenuAndClickSignOut() {
   fireEvent.click(screen.getByTestId('entry-nav-account'));
   fireEvent.click(screen.getByRole('menuitem', { name: /退出登录/ }));
@@ -74,6 +86,9 @@ function openAccountMenuAndClickSignOut() {
 
 beforeEach(() => {
   resetWorkspaceDirectoryCache();
+  // jsdom cannot navigate: replace `location.reload` with a no-op so a
+  // confirmed sign-out (which reloads the page) doesn't spam the console.
+  stubLocationReload();
 });
 
 afterEach(() => {
@@ -120,41 +135,45 @@ describe('EntryNavRail account menu sign-out confirm (recvqgMWpJZqhL)', () => {
     expect(screen.queryByTestId('sign-out-confirm-dialog')).toBeNull();
   });
 
-  it('notifies the app to clear its saved model source only after logout succeeds', async () => {
-    const onSignedOut = vi.fn();
+  it('reloads the page after the SSO logout succeeds', async () => {
+    const reload = stubLocationReload();
     globalThis.fetch = stubFetch(() => {}) as typeof fetch;
 
-    renderRail({ onSignedOut });
+    renderRail();
     openAccountMenuAndClickSignOut();
-    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId('sign-out-confirm-accept'));
 
     await waitFor(() => {
-      expect(onSignedOut).toHaveBeenCalledTimes(1);
+      expect(reload).toHaveBeenCalledTimes(1);
     });
   });
 
-  it('keeps the saved model source when the daemon rejects logout', async () => {
-    const onSignedOut = vi.fn();
+  it('reloads the page even when the daemon rejects the SSO logout', async () => {
+    const reload = stubLocationReload();
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url.endsWith('/api/integrations/vela/logout') && init?.method === 'POST') {
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
         return new Response(JSON.stringify({ ok: false }), { status: 500 });
       }
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     }) as typeof fetch;
 
-    renderRail({ onSignedOut });
+    renderRail();
     openAccountMenuAndClickSignOut();
     fireEvent.click(screen.getByTestId('sign-out-confirm-accept'));
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/integrations/vela/logout',
+        '/api/auth/logout',
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    expect(onSignedOut).not.toHaveBeenCalled();
+    // Local sign-out always proceeds: the page reloads even when the
+    // daemon-side SSO logout fails.
+    await waitFor(() => {
+      expect(reload).toHaveBeenCalledTimes(1);
+    });
   });
 });

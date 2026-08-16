@@ -182,11 +182,34 @@ export async function login(username: string, password: string, remember: boolea
   return { ok: true, username: sessionUsername,userInfo:payload?.userInfo };
 }
 
-/** Clear the session from every storage the gate could have written to, and notify the server. */
-export async function logout(): Promise<any> {
+/**
+ * Clear the session from every storage the gate could have written to, and
+ * notify the server.
+ *
+ * Local session markers are always cleared first, even when the daemon is
+ * unreachable or the SSO logout request fails — the user must be signed out
+ * locally regardless of the server-side result.
+ */
+export async function logout(): Promise<{ ok: boolean }> {
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+    } catch {
+      // Blocked or unavailable storage — nothing left to clear.
+    }
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+    } catch {
+      // Blocked or unavailable storage — nothing left to clear.
+    }
+  }
+
   try {
-    return await fetch('/api/auth/logout', { method: 'POST' });
-  } catch(e) {
-    // 服务端登出失败时仍继续清除本地状态
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    return { ok: response.ok };
+  } catch {
+    return { ok: false };
   }
 }
