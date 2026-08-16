@@ -151,7 +151,7 @@ jobs:
             --portable
             --app-version "${{ inputs.release_version }}"
             --mac-compression normal
-            --to all
+            --to dmg
             --require-vela-cli
             --json
             --signed
@@ -248,11 +248,11 @@ jobs:
           ASSETS_DIR="$RUNNER_TEMP/release-assets"
           mkdir -p "$ASSETS_DIR"
           SDIR="$RUNNER_TEMP/tools-pack/out/mac/namespaces/release-stable"
-          cp "$SDIR/dmg/Hi Design-release-stable.dmg" "$ASSETS_DIR/Hi Design-$VERSION-mac-arm64.dmg"
-          cp "$SDIR/zip/Hi Design-release-stable.zip" "$ASSETS_DIR/Hi Design-$VERSION-mac-arm64.zip"
+          cp "$SDIR/dmg/Hi Design-release-stable.dmg" "$ASSETS_DIR/Hi.Design-$VERSION-mac-arm64.dmg"
+          cp "$SDIR/payload/Hi Design-release-stable-payload.zip" "$ASSETS_DIR/Hi.Design-$VERSION-mac-arm64-payload.zip"
           cd "$ASSETS_DIR"
-          shasum -a 256 "Hi Design-$VERSION-mac-arm64.dmg" > "Hi Design-$VERSION-mac-arm64.dmg.sha256"
-          shasum -a 256 "Hi Design-$VERSION-mac-arm64.zip" > "Hi Design-$VERSION-mac-arm64.zip.sha256"
+          shasum -a 256 "Hi.Design-$VERSION-mac-arm64.dmg" > "Hi.Design-$VERSION-mac-arm64.dmg.sha256"
+          shasum -a 256 "Hi.Design-$VERSION-mac-arm64-payload.zip" > "Hi.Design-$VERSION-mac-arm64-payload.zip.sha256"
 
       - name: Upload mac arm64 release assets
         uses: actions/upload-artifact@v7
@@ -317,7 +317,7 @@ jobs:
             --portable \
             --app-version "${{ inputs.release_version }}" \
             --mac-compression normal \
-            --to all \
+            --to dmg \
             --require-vela-cli \
             --json \
             --signed \
@@ -330,11 +330,11 @@ jobs:
           ASSETS_DIR="$RUNNER_TEMP/release-assets"
           mkdir -p "$ASSETS_DIR"
           SDIR="$RUNNER_TEMP/tools-pack/out/mac/namespaces/release-stable-intel"
-          cp "$SDIR/dmg/Hi Design-release-stable-intel.dmg" "$ASSETS_DIR/Hi Design-$VERSION-mac-x64.dmg"
-          cp "$SDIR/zip/Hi Design-release-stable-intel.zip" "$ASSETS_DIR/Hi Design-$VERSION-mac-x64.zip"
+          cp "$SDIR/dmg/Hi Design-release-stable-intel.dmg" "$ASSETS_DIR/Hi.Design-$VERSION-mac-x64.dmg"
+          cp "$SDIR/payload/Hi Design-release-stable-intel-payload.zip" "$ASSETS_DIR/Hi.Design-$VERSION-mac-x64-payload.zip"
           cd "$ASSETS_DIR"
-          shasum -a 256 "Hi Design-$VERSION-mac-x64.dmg" > "Hi Design-$VERSION-mac-x64.dmg.sha256"
-          shasum -a 256 "Hi Design-$VERSION-mac-x64.zip" > "Hi Design-$VERSION-mac-x64.zip.sha256"
+          shasum -a 256 "Hi.Design-$VERSION-mac-x64.dmg" > "Hi.Design-$VERSION-mac-x64.dmg.sha256"
+          shasum -a 256 "Hi.Design-$VERSION-mac-x64-payload.zip" > "Hi.Design-$VERSION-mac-x64-payload.zip.sha256"
 
       - name: Upload mac intel release assets
         uses: actions/upload-artifact@v7
@@ -421,7 +421,7 @@ jobs:
             "--namespace", "release-stable-win",
             "--portable",
             "--app-version", "${{ inputs.release_version }}",
-            "--to", "all",
+            "--to", "nsis",
             "--require-vela-cli",
             "--json"
           )
@@ -442,7 +442,7 @@ jobs:
               --namespace release-stable-win `
               --portable `
               --app-version "${{ inputs.release_version }}" `
-              --to all `
+              --to nsis `
               --require-vela-cli `
               --json
             if ($LASTEXITCODE -ne 0) {
@@ -505,13 +505,14 @@ jobs:
           $ASSETS_DIR = "${{ runner.temp }}/release-assets"
           New-Item -ItemType Directory -Force -Path $ASSETS_DIR | Out-Null
           $SDIR = "${{ runner.temp }}/tools-pack/out/win/namespaces/release-stable-win/builder"
-          Copy-Item "$SDIR/Hi Design-release-stable-win-setup.exe" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe"
-          Copy-Item "$SDIR/Hi Design-release-stable-win-portable.zip" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip"
+          $PDIR = "${{ runner.temp }}/tools-pack/out/win/namespaces/release-stable-win/payload"
+          Copy-Item "$SDIR/Hi Design-release-stable-win-setup.exe" "$ASSETS_DIR/Hi.Design-$VERSION-win-x64-setup.exe"
+          Copy-Item "$PDIR/Hi Design-release-stable-win-payload.7z" "$ASSETS_DIR/Hi.Design-$VERSION-win-x64-payload.7z"
           Set-Location $ASSETS_DIR
-          $setupHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$setupHash  Hi Design-$VERSION-win-x64-setup.exe" | Set-Content -Path "Hi Design-$VERSION-win-x64-setup.exe.sha256"
-          $zipHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-portable.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$zipHash  Hi Design-$VERSION-win-x64-portable.zip" | Set-Content -Path "Hi Design-$VERSION-win-x64-portable.zip.sha256"
+          $setupHash = (Get-FileHash -Path "Hi.Design-$VERSION-win-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$setupHash  Hi.Design-$VERSION-win-x64-setup.exe" | Set-Content -Path "Hi.Design-$VERSION-win-x64-setup.exe.sha256"
+          $payloadHash = (Get-FileHash -Path "Hi.Design-$VERSION-win-x64-payload.7z" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$payloadHash  Hi.Design-$VERSION-win-x64-payload.7z" | Set-Content -Path "Hi.Design-$VERSION-win-x64-payload.7z.sha256"
 
       - name: Upload windows release assets
         uses: actions/upload-artifact@v7
@@ -583,12 +584,12 @@ jobs:
           ASSETS_DIR="$RUNNER_TEMP/release-assets"
 
           # Compute SHA256 for all platform artifacts
-          mac_dmg_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-mac-arm64.dmg" | awk '{print $1}')
-          mac_zip_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-mac-arm64.zip" | awk '{print $1}')
-          mac_intel_dmg_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-mac-x64.dmg" | awk '{print $1}')
-          mac_intel_zip_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-mac-x64.zip" | awk '{print $1}')
-          win_setup_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe" | awk '{print $1}')
-          win_portable_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip" | awk '{print $1}')
+          mac_dmg_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-mac-arm64.dmg" | awk '{print $1}')
+          mac_payload_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-mac-arm64-payload.zip" | awk '{print $1}')
+          mac_intel_dmg_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-mac-x64.dmg" | awk '{print $1}')
+          mac_intel_payload_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-mac-x64-payload.zip" | awk '{print $1}')
+          win_setup_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-win-x64-setup.exe" | awk '{print $1}')
+          win_payload_sha=$(shasum -a 256 "$ASSETS_DIR/Hi.Design-$VERSION-win-x64-payload.7z" | awk '{print $1}')
 
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
 
@@ -602,13 +603,13 @@ jobs:
                 "enabled": true,
                 "arch": "arm64",
                 "artifacts": {
+                  "payload": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-arm64-payload.zip",
+                    "sha256": "$mac_payload_sha"
+                  },
                   "dmg": {
                     "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-arm64.dmg",
                     "sha256": "$mac_dmg_sha"
-                  },
-                  "zip": {
-                    "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-arm64.zip",
-                    "sha256": "$mac_zip_sha"
                   }
                 }
               },
@@ -616,13 +617,13 @@ jobs:
                 "enabled": true,
                 "arch": "x64",
                 "artifacts": {
+                  "payload": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-x64-payload.zip",
+                    "sha256": "$mac_intel_payload_sha"
+                  },
                   "dmg": {
                     "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-x64.dmg",
                     "sha256": "$mac_intel_dmg_sha"
-                  },
-                  "zip": {
-                    "url": "$RELEASE_URL/Hi.Design-$VERSION-mac-x64.zip",
-                    "sha256": "$mac_intel_zip_sha"
                   }
                 }
               },
@@ -634,9 +635,9 @@ jobs:
                     "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-setup.exe",
                     "sha256": "$win_setup_sha"
                   },
-                  "portable": {
-                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-portable.zip",
-                    "sha256": "$win_portable_sha"
+                  "payload": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-payload.7z",
+                    "sha256": "$win_payload_sha"
                   }
                 }
               }
