@@ -160,7 +160,7 @@ importers:
         specifier: 20.19.39
         version: 20.19.39
       '@types/ws':
-        specifier: ^8.18.1
+        specifier: 8.18.1
         version: 8.18.1
       jsdom:
         specifier: 29.1.1
@@ -361,7 +361,7 @@ importers:
         specifier: 5.5.0
         version: 5.5.0
       '@zumer/snapdom':
-        specifier: ^2.24.1
+        specifier: 2.24.1
         version: 2.24.1
       dompurify:
         specifier: 3.4.2

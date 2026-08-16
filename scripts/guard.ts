@@ -63,6 +63,7 @@ const residualSkippedDirectories = new Set([
   "dist",
   "node_modules",
   "out",
+  "ybvichi.github.io"
 ]);
 
 const residualAllowedExactPaths = new Set([
