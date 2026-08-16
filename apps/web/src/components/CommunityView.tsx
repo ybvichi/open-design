@@ -77,9 +77,13 @@ interface CommunityViewProps {
     action: PluginUseAction,
     target: CommunityTemplateUseTarget,
   ) => void;
+  /** Page title override. The gallery is shared by the standalone Community
+   *  route (title: community.title) and the project-stage rail destination
+   *  (title: entry.navProjectStage). */
+  title?: string;
 }
 
-export function CommunityView({ onRemixTemplate, onUsePrompt, onUsePlugin }: CommunityViewProps) {
+export function CommunityView({ onRemixTemplate, onUsePrompt, onUsePlugin, title }: CommunityViewProps) {
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
   const { context: workspaceContext } = useWorkspaceContext();
@@ -243,7 +247,7 @@ export function CommunityView({ onRemixTemplate, onUsePrompt, onUsePlugin }: Com
       <div className="community-template-view__header">
       <header className="community-template-view__hero">
         <div>
-          <h1 id="community-template-title" className="entry-section__title">{t('community.title')}</h1>
+          <h1 id="community-template-title" className="entry-section__title">{title ?? t('community.title')}</h1>
         </div>
         <div className="community-template-view__search" role="search">
           <Icon name="search" size={16} />

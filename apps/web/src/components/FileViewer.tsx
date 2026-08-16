@@ -9122,6 +9122,7 @@ function HtmlViewer({
   const speakerNotesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const boardPreviewScaleOptions = localCommentSideDockActive ? { canvasPadding: 0 } : undefined;
   const shareRef = useRef<HTMLDivElement | null>(null);
+  const pushMenuRef = useRef<HTMLDivElement | null>(null);
   const [chromeActionsHost, setChromeActionsHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     if (!workspaceActive || typeof document === 'undefined') {
@@ -12647,6 +12648,25 @@ function HtmlViewer({
   }, [deployMenuOpen, workspaceActive]);
 
   useEffect(() => {
+    if (!workspaceActive || !pushMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!pushMenuRef.current) return;
+      if (pushMenuRef.current.contains(e.target as Node)) return;
+      setPushMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setPushMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [pushMenuOpen, workspaceActive]);
+
+  useEffect(() => {
     if (!workspaceActive || !inTabPresent) return;
     const bodyStyle = document.body.style;
     const previousChromeHeight = bodyStyle.getPropertyValue('--workspace-tabs-chrome-height');
@@ -15817,7 +15837,7 @@ function HtmlViewer({
                   </div>
                 ) : null}
               </div>
-              <div className="share-menu chrome-share-menu chrome-share-menu--unified">
+              <div className="share-menu chrome-share-menu chrome-share-menu--unified" ref={pushMenuRef}>
                 <div style={{ position: 'absolute', left: '10000px', top: '10000px' }}>
                   <iframe id="ai-main-iframe" width={1920} height={1080}></iframe>
                 </div>

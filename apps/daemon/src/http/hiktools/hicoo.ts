@@ -10,9 +10,6 @@ import { generateToken } from '../token.js';
 export const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-export const DEFAULT_SSO_USERNAME = 'ypvichi';
-export const DEFAULT_SSO_DEPARTMENT_CODE = 'iux';
-export const DEFAULT_SSO_DEPARTMENT_NAME = '用户体验部';
 
 // 海康 CAS 公钥
 const CAS_RSA_PEM = `-----BEGIN PUBLIC KEY-----

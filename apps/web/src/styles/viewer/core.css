@@ -587,6 +587,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  cursor: pointer;
 }
 .ghost-link:hover { background: var(--bg-subtle); color: var(--text); }
 /* Viewer toolbar actions: pure outlined pills — stroke only, no fill. */

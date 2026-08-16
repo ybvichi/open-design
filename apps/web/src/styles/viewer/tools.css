@@ -795,6 +795,7 @@
   justify-content: flex-start;
   gap: 10px;
   width: 100%;
+  height: auto;
   padding: 8px 10px;
   font-size: 13px;
   text-align: left;
