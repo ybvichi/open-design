@@ -3172,7 +3172,103 @@ function LiveArtifactRefreshFact({
   );
 }
 
-function FileActions({
+// Reusable "分享" trigger + dropdown for the media/text viewers. It copies the
+// project raw file's local HTTP link (same behavior as ImageViewer's 分享).
+function LocalShareMenu({
+  projectId,
+  file,
+  variant = 'button',
+}: {
+  projectId: string;
+  file: ProjectFile;
+  variant?: 'button' | 'link';
+}) {
+  const t = useT();
+  const { workspaceContext } = useProjectCollabContext();
+  const daemonHostname = useDaemonHostname();
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [shareToast, setShareToast] = useState<ExportToastState | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  useDismissOnOutsideInteraction(shareMenuOpen, shareMenuRef, () => setShareMenuOpen(false));
+  const shareUrl = appendResourceQuery(
+    projectFileUrl(projectId, file.name, workspaceContext),
+    `v=${Math.round(file.mtime)}`,
+  );
+
+  function copyLocalShareLink() {
+    setShareMenuOpen(false);
+    const baseUrl = daemonHostname
+      ? `http://${daemonHostname}:${window.location.port}/`
+      : window.location.origin;
+    const shareLink = new URL(shareUrl, baseUrl).href;
+    void copyToClipboard(shareLink).then((ok) => {
+      setShareToast({
+        message: ok ? '复制链接成功' : t('useEverywhere.copyFailed'),
+        tone: ok ? 'success' : 'error',
+      });
+    });
+  }
+
+  return (
+    <>
+      <div className="share-menu chrome-share-menu" ref={shareMenuRef}>
+        {variant === 'link' ? (
+          <a
+            className="ghost-link"
+            href="#"
+            aria-haspopup="menu"
+            aria-expanded={shareMenuOpen}
+            onClick={(e) => {
+              e.preventDefault();
+              setShareMenuOpen((v) => !v);
+            }}
+          >
+            <span>分享</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="viewer-action"
+            aria-haspopup="menu"
+            aria-expanded={shareMenuOpen}
+            onClick={() => setShareMenuOpen((v) => !v)}
+          >
+            <Icon name="share" size={13} />
+            <span>分享</span>
+          </button>
+        )}
+        {shareMenuOpen ? (
+          <div className="share-menu-popover" role="menu">
+            <button
+              type="button"
+              className="share-menu-item"
+              role="menuitem"
+              onClick={() => copyLocalShareLink()}
+            >
+              <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
+              <span>复制分享链接</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {shareToast && typeof document !== 'undefined' ? createPortal(
+        <Toast
+          message={shareToast.message}
+          tone={shareToast.tone}
+          placement="top"
+          role={shareToast.tone === 'error' ? 'alert' : 'status'}
+          ttlMs={shareToast.tone === 'loading' ? 60000 : 2200}
+          onDismiss={shareToast.tone === 'loading' ? undefined : () => setShareToast(null)}
+        />,
+        document.body,
+      ) : null}
+    </>
+  );
+}
+
+// Reusable "推送" trigger + dropdown for pushing the current image to Pixso's
+// AI Builder Dev plugin (same behavior as ImageViewer's original 推送到 Pixso).
+function PixsoPushMenu({
   projectId,
   file,
 }: {
@@ -3181,8 +3277,123 @@ function FileActions({
 }) {
   const t = useT();
   const { workspaceContext } = useProjectCollabContext();
+  const [pushMenuOpen, setPushMenuOpen] = useState(false);
+  const [pushToast, setPushToast] = useState<ExportToastState | null>(null);
+  const pushMenuRef = useRef<HTMLDivElement | null>(null);
+  useDismissOnOutsideInteraction(pushMenuOpen, pushMenuRef, () => setPushMenuOpen(false));
+  const url = appendResourceQuery(
+    projectFileUrl(projectId, file.name, workspaceContext),
+    `v=${Math.round(file.mtime)}`,
+  );
+
+  async function triggerPixsoPush() {
+    setPushMenuOpen(false);
+    setPushToast({ message: '正在推送到 Pixso...', tone: 'loading' });
+    let dataUrl: string;
+    try {
+      dataUrl = await fetchImageAsDataUrl(url);
+    } catch {
+      setPushToast({ message: '图片读取失败，无法导入 Pixso', tone: 'error' });
+      return;
+    }
+
+    // 动态读取图片宽高
+    const img = new Image();
+    img.src = dataUrl;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('图片尺寸读取失败'));
+      });
+    } catch {
+      setPushToast({ message: '图片尺寸读取失败，无法导入 Pixso', tone: 'error' });
+      return;
+    }
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket('ws://127.0.0.1:9528');
+      ws.onopen = () => {
+        ws?.send(dataUrl + '###' + file.name + '###' + width + '###' + height);
+        ws?.close();
+        setPushToast({ message: '已推送到 Pixso', tone: 'success' });
+      };
+      ws.onerror = () => {
+        setPushToast({ message: 'Pixso 推送服务连接失败', tone: 'error' });
+        ws?.close();
+      };
+      ws.onclose = () => {
+        ws = null;
+      };
+    } catch {
+      setPushToast({ message: 'Pixso 推送服务连接失败', tone: 'error' });
+      ws = null;
+    }
+  }
+
+  return (
+    <>
+      <div className="share-menu" ref={pushMenuRef}>
+        <a
+          className="ghost-link"
+          href="#"
+          aria-haspopup="menu"
+          aria-expanded={pushMenuOpen}
+          onClick={(e) => {
+            e.preventDefault();
+            setPushMenuOpen((v) => !v);
+          }}
+        >
+          <span>推送</span>
+        </a>
+        {pushMenuOpen ? (
+          <div className="share-menu-popover" role="menu">
+            <button
+              type="button"
+              className="share-menu-item"
+              role="menuitem"
+              onClick={() => void triggerPixsoPush()}
+            >
+              <span className="share-menu-icon"><RemixIcon name="image-line" size={15} /></span>
+              <span className="share-menu-text">
+                <span>推送到 Pixso</span>
+                <small>请确保 Pixso 中已打开 AI Builder Dev 插件</small>
+              </span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {pushToast && typeof document !== 'undefined' ? createPortal(
+        <Toast
+          message={pushToast.message}
+          tone={pushToast.tone}
+          placement="top"
+          role={pushToast.tone === 'error' ? 'alert' : 'status'}
+          ttlMs={pushToast.tone === 'loading' ? 60000 : 2200}
+          onDismiss={pushToast.tone === 'loading' ? undefined : () => setPushToast(null)}
+        />,
+        document.body,
+      ) : null}
+    </>
+  );
+}
+
+function FileActions({
+  projectId,
+  file,
+  showShare = false,
+}: {
+  projectId: string;
+  file: ProjectFile;
+  showShare?: boolean;
+}) {
+  const t = useT();
+  const { workspaceContext } = useProjectCollabContext();
   return (
     <div className="viewer-toolbar-actions">
+      {showShare ? <LocalShareMenu projectId={projectId} file={file} variant="link" /> : null}
       <a
         className="ghost-link"
         href={projectFileUrl(projectId, file.name, workspaceContext)}
@@ -17279,114 +17490,10 @@ function ImageViewer({
 }) {
   const t = useT();
   const { workspaceContext } = useProjectCollabContext();
-  const daemonHostname = useDaemonHostname();
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [pushMenuOpen, setPushMenuOpen] = useState(false);
-  const [exportToast, setExportToast] = useState<ExportToastState | null>(null);
-  const shareMenuRef = useRef<HTMLDivElement | null>(null);
-  const pushMenuRef = useRef<HTMLDivElement | null>(null);
   const url = appendResourceQuery(
     projectFileUrl(projectId, file.name, workspaceContext),
     `v=${Math.round(file.mtime)}`,
   );
-
-  useEffect(() => {
-    if (!shareMenuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!shareMenuRef.current) return;
-      if (!shareMenuRef.current.contains(e.target as Node)) setShareMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShareMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [shareMenuOpen]);
-
-  useEffect(() => {
-    if (!pushMenuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!pushMenuRef.current) return;
-      if (!pushMenuRef.current.contains(e.target as Node)) setPushMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPushMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [pushMenuOpen]);
-
-  // 复制分享链接：分享的是项目 raw 文件的 HTTP 直链。
-  function copyLocalShareLink() {
-    setShareMenuOpen(false);
-    const baseUrl = daemonHostname
-      ? `http://${daemonHostname}:${window.location.port}/`
-      : window.location.origin;
-    const shareUrl = new URL(url, baseUrl).href;
-    void copyToClipboard(shareUrl).then((ok) => {
-      setExportToast({
-        message: ok ? '复制链接成功' : t('useEverywhere.copyFailed'),
-        tone: ok ? 'success' : 'error',
-      });
-    });
-  }
-
-  // 推送到 Pixso：把当前图片转 base64 data URL，通过本地 WebSocket 推给
-  // Pixso 的 AI Builder Dev 插件。
-  async function triggerPixsoPush() {
-    setPushMenuOpen(false);
-    setExportToast({ message: '正在推送到 Pixso...', tone: 'loading' });
-    let dataUrl: string;
-    try {
-      dataUrl = await fetchImageAsDataUrl(url);
-    } catch {
-      setExportToast({ message: '图片读取失败，无法导入 Pixso', tone: 'error' });
-      return;
-    }
-
-    // 动态读取图片宽高
-    const img = new Image();
-    img.src = dataUrl;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('图片尺寸读取失败'));
-      });
-    } catch {
-      setExportToast({ message: '图片尺寸读取失败，无法导入 Pixso', tone: 'error' });
-      return;
-    }
-    const width = img.naturalWidth;
-    const height = img.naturalHeight;
-
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket('ws://127.0.0.1:9528');
-      ws.onopen = () => {
-        ws?.send(dataUrl + '###' + file.name + '###' + width + '###' + height);
-        ws?.close();
-        setExportToast({ message: '已推送到 Pixso', tone: 'success' });
-      };
-      ws.onerror = () => {
-        setExportToast({ message: 'Pixso 推送服务连接失败', tone: 'error' });
-        ws?.close();
-      };
-      ws.onclose = () => {
-        ws = null;
-      };
-    } catch {
-      setExportToast({ message: 'Pixso 推送服务连接失败', tone: 'error' });
-      ws = null;
-    }
-  }
 
   return (
     <div className="viewer image-viewer">
@@ -17399,67 +17506,8 @@ function ImageViewer({
           </span>
         </div>
         <div className="viewer-toolbar-actions">
-          <div className="share-menu" ref={shareMenuRef}>
-            <a
-              className="ghost-link"
-              href="#"
-              aria-haspopup="menu"
-              aria-expanded={shareMenuOpen}
-              onClick={(e) => {
-                e.preventDefault();
-                setPushMenuOpen(false);
-                setShareMenuOpen((v) => !v);
-              }}
-            >
-              <span>分享</span>
-            </a>
-            {shareMenuOpen ? (
-              <div className="share-menu-popover" role="menu">
-                <button
-                  type="button"
-                  className="share-menu-item"
-                  role="menuitem"
-                  onClick={() => copyLocalShareLink()}
-                >
-                  <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
-                  <span className="share-menu-text">
-                    <span>复制分享链接</span>
-                  </span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-          <div className="share-menu" ref={pushMenuRef}>
-            <a
-              className="ghost-link"
-              href="#"
-              aria-haspopup="menu"
-              aria-expanded={pushMenuOpen}
-              onClick={(e) => {
-                e.preventDefault();
-                setShareMenuOpen(false);
-                setPushMenuOpen((v) => !v);
-              }}
-            >
-              <span>推送</span>
-            </a>
-            {pushMenuOpen ? (
-              <div className="share-menu-popover" role="menu">
-                <button
-                  type="button"
-                  className="share-menu-item"
-                  role="menuitem"
-                  onClick={() => void triggerPixsoPush()}
-                >
-                  <span className="share-menu-icon"><RemixIcon name="image-line" size={15} /></span>
-                  <span className="share-menu-text">
-                    <span>推送到 Pixso</span>
-                    <small>请确保 Pixso 中已打开 AI Builder Dev 插件</small>
-                  </span>
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <LocalShareMenu projectId={projectId} file={file} variant="link" />
+          <PixsoPushMenu projectId={projectId} file={file} />
           <span className="viewer-divider" aria-hidden />
           <a
             className="ghost-link"
@@ -17481,17 +17529,6 @@ function ImageViewer({
       <div className="viewer-body image-body">
         <img alt={file.name} src={url} />
       </div>
-      {exportToast && typeof document !== 'undefined' ? createPortal(
-        <Toast
-          message={exportToast.message}
-          tone={exportToast.tone}
-          placement="top"
-          role={exportToast.tone === 'error' ? 'alert' : 'status'}
-          ttlMs={exportToast.tone === 'loading' ? 60000 : 2200}
-          onDismiss={exportToast.tone === 'loading' ? undefined : () => setExportToast(null)}
-        />,
-        document.body,
-      ) : null}
     </div>
   );
 }
@@ -17548,7 +17585,7 @@ function VideoViewer({
             {t('fileViewer.videoMeta', { size: humanSize(file.size) })}
           </span>
         </div>
-        <FileActions projectId={projectId} file={file} />
+        <FileActions projectId={projectId} file={file} showShare />
       </div>
       <div className="viewer-body video-body">
         <video src={url} controls playsInline preload="metadata" />
@@ -17578,7 +17615,7 @@ function AudioViewer({
             {t('fileViewer.audioMeta', { size: humanSize(file.size) })}
           </span>
         </div>
-        <FileActions projectId={projectId} file={file} />
+        <FileActions projectId={projectId} file={file} showShare />
       </div>
       <div className="viewer-body audio-body">
         <div className="audio-card">
@@ -17679,6 +17716,7 @@ export function SvgViewer({
             </button>
           </div>
           <span className="viewer-divider" aria-hidden />
+          
           <button
             type="button"
             className="viewer-action"
@@ -17688,6 +17726,8 @@ export function SvgViewer({
             <Icon name="reload" size={13} />
             <span>{t('fileViewer.reload')}</span>
           </button>
+          <LocalShareMenu projectId={projectId} file={file} variant="link" />
+          <PixsoPushMenu projectId={projectId} file={file} />
           <a
             className="ghost-link"
             href={projectFileUrl(projectId, file.name, workspaceContext)}
@@ -17804,6 +17844,7 @@ function TextViewer({
             <Icon name={copied ? 'check' : 'copy'} size={13} />
             <span>{copied ? t('fileViewer.copied') : t('fileViewer.copy')}</span>
           </button>
+          <LocalShareMenu projectId={projectId} file={file} variant="button" />
         </div>
       </div>
       <div className="viewer-body">
@@ -18557,6 +18598,7 @@ function MarkdownViewer({
             <Icon name={copied ? 'check' : 'copy'} size={13} />
             <span>{copied ? t('fileViewer.copied') : t('fileViewer.copy')}</span>
           </button>
+          <LocalShareMenu projectId={projectId} file={file} variant="button" />
           {text !== null ? (
             <div className="share-menu chrome-share-menu" ref={downloadMenuRef}>
               <button
