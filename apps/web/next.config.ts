@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next';
 import { existsSync, realpathSync } from 'node:fs';
-import { networkInterfaces } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -155,7 +155,12 @@ function configuredAllowedDevHosts(): string[] {
   ]));
 }
 
+const COMPUTER_NAME = hostname();
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_HTTP_SERVER_URL: `http://${COMPUTER_NAME}:${process.env.OD_WEB_PORT?Number(process.env.OD_WEB_PORT):9529}/`,
+  },
   allowedDevOrigins: configuredAllowedDevHosts(),
   outputFileTracingRoot: WORKSPACE_ROOT,
   reactStrictMode: true,
