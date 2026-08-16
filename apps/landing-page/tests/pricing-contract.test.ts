@@ -122,7 +122,7 @@ describe("pricing contract", () => {
     assert.match(page, /now >= campaignStartAt && now < campaignEndAt/);
     assert.match(page, /data-pricing-campaign-surface/);
     assert.match(page, /class="pr-campaign-disclaimer"/);
-    assert.match(campaign, /套餐内的无限制模型额度与免费生成次数，仅可通过Open Design使用/);
+    assert.match(campaign, /套餐内的无限制模型额度与免费生成次数，仅可通过Hi Design使用/);
     assert.match(page, /<p class="pr-foot" set:html=\{footnoteHtml\} \/>\s*<p class="pr-campaign-disclaimer" data-pricing-campaign-surface hidden>\{deepSeekCampaign\.disclaimer\}<\/p>/);
     assert.doesNotMatch(page, /套餐内的<strong>无限制模型额度<\/strong>与<strong>免费生成次数<\/strong>/);
     assert.match(page, /\.pr-campaign-disclaimer\s*\{[\s\S]*font-size:\s*\.82rem;/);

@@ -1826,7 +1826,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           res,
           409,
           'RUN_NOT_RECHARGE_RESUMABLE',
-          'Only a failed Open Design Cloud run waiting for recharge can be resumed with the same request',
+          'Only a failed Hi Design Cloud run waiting for recharge can be resumed with the same request',
         );
       }
       // Claim BEFORE arming the restart. On a conflict the reused run stays
@@ -1850,7 +1850,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           res,
           409,
           'RUN_NOT_RECHARGE_RESUMABLE',
-          'Only a failed Open Design Cloud run waiting for recharge can be resumed with the same request',
+          'Only a failed Hi Design Cloud run waiting for recharge can be resumed with the same request',
         );
       }
       resumed = true;

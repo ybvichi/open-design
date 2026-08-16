@@ -149,7 +149,7 @@ describe("resolvePackagedLauncherRuntime", () => {
         // The launcher process runs from the stable installed app bundle, so
         // its stable launch path matches the persisted install descriptor and
         // the payload branch keeps the persisted entry untouched.
-        currentExecutablePath: "/Applications/Open Design Beta.app",
+        currentExecutablePath: "/Applications/Hi Design Beta.app",
       });
 
       expect(runtime.source).toBe("payload");
@@ -235,16 +235,16 @@ describe("resolvePackagedLauncherRuntime", () => {
         root,
         version: "1.2.3-beta.5",
       });
-      const resourcesPath = join(versionPaths.payloadRoot, "Open Design Beta.app", "Contents", "Resources");
+      const resourcesPath = join(versionPaths.payloadRoot, "Hi Design Beta.app", "Contents", "Resources");
       const payloadExecutablePath = join(
         versionPaths.payloadRoot,
-        "Open Design Beta.app",
+        "Hi Design Beta.app",
         "Contents",
         "MacOS",
-        "Open Design Beta",
+        "Hi Design Beta",
       );
       await mkdir(join(resourcesPath, "open-design", "bin"), { recursive: true });
-      await mkdir(join(versionPaths.payloadRoot, "Open Design Beta.app", "Contents", "MacOS"), { recursive: true });
+      await mkdir(join(versionPaths.payloadRoot, "Hi Design Beta.app", "Contents", "MacOS"), { recursive: true });
       await mkdir(join(resourcesPath, "prebundled", "daemon"), { recursive: true });
       await mkdir(join(resourcesPath, "prebundled", "web"), { recursive: true });
       await writeFile(join(resourcesPath, "open-design", "bin", "node"), "");
@@ -266,8 +266,8 @@ describe("resolvePackagedLauncherRuntime", () => {
         `${JSON.stringify({
           channel: "beta",
           entry: {
-            cwd: "payload/Open Design Beta.app",
-            executable: "payload/Open Design Beta.app/Contents/MacOS/Open Design Beta",
+            cwd: "payload/Hi Design Beta.app",
+            executable: "payload/Hi Design Beta.app/Contents/MacOS/Hi Design Beta",
           },
           namespace: config.namespace,
           payloadRoot: "payload",
@@ -295,22 +295,22 @@ describe("resolvePackagedLauncherRuntime", () => {
         installPath,
         `${JSON.stringify({
           channel: "beta",
-          launchPath: "/Applications/Open Design Legacy.app",
+          launchPath: "/Applications/Hi Design Legacy.app",
           namespace: config.namespace,
           schemaVersion: LAUNCHER_SCHEMA_VERSION,
         })}\n`,
       );
 
       const runtime = await resolvePackagedLauncherRuntime(config, paths, {
-        currentExecutablePath: "/Applications/Open Design Beta.app",
+        currentExecutablePath: "/Applications/Hi Design Beta.app",
       });
 
       expect(runtime.source).toBe("payload");
       expect(runtime.payloadDesktopProcess).toBe(false);
-      expect(runtime.installedLaunchPath).toBe("/Applications/Open Design Beta.app");
+      expect(runtime.installedLaunchPath).toBe("/Applications/Hi Design Beta.app");
       expect(JSON.parse(await readFile(installPath, "utf8"))).toMatchObject({
         channel: "beta",
-        launchPath: "/Applications/Open Design Beta.app",
+        launchPath: "/Applications/Hi Design Beta.app",
         namespace: config.namespace,
         schemaVersion: LAUNCHER_SCHEMA_VERSION,
       });

@@ -44,7 +44,7 @@ const SECTION_MARKERS = [
   ['direction-library', '## Direction library — infer and bind by default'],
   ['shared-device-frames', '## Multi-device / multi-screen — shared frames'],
   ['identity-charter', '# Identity and workflow charter (background)'],
-  ['slim-core-charter', '# Open Design Charter'],
+  ['slim-core-charter', '# Hi Design Charter'],
   ['slim-platform-contracts', '## Platform delivery contracts'],
   ['personal-memory', '## Personal memory (auto-extracted from past chats)'],
   ['memory-intent-gateway', '## Intent gateway — turn short asks into a brief'],
@@ -343,7 +343,7 @@ describe('composeSystemPrompt — position invariants', () => {
       const expectedHead = isSlim
         ? input.sessionMode === 'chat'
           ? '# Ask mode — bare conversation'
-          : '# Open Design Charter'
+          : '# Hi Design Charter'
         : '## Security: prompt injection resistance';
       expect(
         composed.startsWith(expectedHead),

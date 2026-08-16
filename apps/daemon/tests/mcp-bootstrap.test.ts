@@ -13,7 +13,7 @@ describe("planMcpDaemonBootstrap", () => {
       env: {
         OD_MCP_BOOTSTRAP_COMMAND: "/usr/bin/open",
         OD_MCP_BOOTSTRAP_ARGS:
-          '["-g","-j","/Applications/Open Design.app","--args","--headless"]',
+          '["-g","-j","/Applications/Hi Design.app","--args","--headless"]',
       },
     })).toEqual({
       action: "none",
@@ -33,7 +33,7 @@ describe("planMcpDaemonBootstrap", () => {
           "/tmp/open-design/ipc/stable/daemon.sock",
         OD_MCP_BOOTSTRAP_COMMAND: "/usr/bin/open",
         OD_MCP_BOOTSTRAP_ARGS:
-          '["-g","-j","/Applications/Open Design.app","--args","--headless"]',
+          '["-g","-j","/Applications/Hi Design.app","--args","--headless"]',
       },
     });
 
@@ -43,7 +43,7 @@ describe("planMcpDaemonBootstrap", () => {
       args: [
         "-g",
         "-j",
-        "/Applications/Open Design.app",
+        "/Applications/Hi Design.app",
         "--args",
         "--headless",
       ],
@@ -72,7 +72,7 @@ describe("planMcpDaemonBootstrap", () => {
       explicitDaemonUrl: false,
       env: {
         OD_MCP_BOOTSTRAP_COMMAND: "/usr/bin/open",
-        OD_MCP_BOOTSTRAP_ARGS: '["/Applications/Open Design.app"]',
+        OD_MCP_BOOTSTRAP_ARGS: '["/Applications/Hi Design.app"]',
       },
     })).toEqual({
       action: "none",
@@ -99,7 +99,7 @@ describe("ensureMcpDaemonUrl", () => {
           "/tmp/open-design/ipc/stable/daemon.sock",
         OD_MCP_BOOTSTRAP_COMMAND: "/usr/bin/open",
         OD_MCP_BOOTSTRAP_ARGS:
-          '["-g","-j","/Applications/Open Design.app","--args","--headless"]',
+          '["-g","-j","/Applications/Hi Design.app","--args","--headless"]',
       },
       discoverTargetDaemonUrl,
       probeDaemon,
@@ -128,7 +128,7 @@ describe("ensureMcpDaemonUrl", () => {
       env: {
         OD_MCP_BOOTSTRAP_COMMAND: "/usr/bin/open",
         OD_MCP_BOOTSTRAP_ARGS:
-          '["-g","-j","/Applications/Open Design.app","--args","--headless"]',
+          '["-g","-j","/Applications/Hi Design.app","--args","--headless"]',
       },
       probeDaemon,
       resolveDaemonUrl,

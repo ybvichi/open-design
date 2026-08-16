@@ -1294,7 +1294,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       try {
         const runtimeRoot = fs.realpathSync.native(RUNTIME_DATA_DIR_CANONICAL);
         if (sourceRoot === runtimeRoot || sourceRoot.startsWith(`${runtimeRoot}${path.sep}`)) {
-          return sendApiError(res, 400, 'BAD_REQUEST', 'cannot import Open Design runtime data');
+          return sendApiError(res, 400, 'BAD_REQUEST', 'cannot import Hi Design runtime data');
         }
       } catch {
         // The runtime data directory may not exist yet in first-run tests.
@@ -1488,7 +1488,7 @@ function normalizeDesignSystemCraftApplies(value: unknown): string[] | undefined
 export function assembleExample(templateHtml: string, slidesHtml: string, title: string) {
   return templateHtml
     .replace('<!-- SLIDES_HERE -->', slidesHtml)
-    .replace(/<title>.*?<\/title>/, `<title>${title} | Open Design Example</title>`);
+    .replace(/<title>.*?<\/title>/, `<title>${title} | Hi Design Example</title>`);
 }
 
 export function rewriteSkillAssetUrls(
