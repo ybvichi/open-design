@@ -256,7 +256,13 @@ export async function launchWindowsInstallerAfterQuit(
         "-LogPath",
         logPath,
       ],
-      { cwd: input.cwd, detached: true, stdio: "ignore", windowsHide: true },
+      // Deliberately NOT `detached: true` here. On Windows `DETACHED_PROCESS`
+      // gives the child no console, and `powershell.exe` is a console host: it
+      // exits immediately (code 0, no output) instead of running the launcher
+      // script, so the installer is never opened after the app quits. The
+      // launcher script itself detaches the long-lived helper via
+      // `Start-Process`, so the helper still outlives this process.
+      { cwd: input.cwd, stdio: "ignore", windowsHide: true },
     );
     child.unref();
     return "";
