@@ -3205,7 +3205,7 @@ export const ru: Dict = {
   'fileViewer.shareMenuPresentation': 'Презентация',
   'fileViewer.shareMenuSourceFiles': 'Исходные файлы',
   'fileViewer.shareMenuSave': 'СОХРАНИТЬ',
-  'fileViewer.shareMenuPublishViaOd': 'БЫСТРЫЙ ДОСТУП · OPEN DESIGN',
+  'fileViewer.shareMenuPublishViaOd': 'БЫСТРЫЙ ДОСТУП · HI DESIGN',
   'fileViewer.unifiedShareAria': 'Share and export actions',
   'fileViewer.unifiedShareTab': 'Share',
   'fileViewer.unifiedExportTab': 'Export',

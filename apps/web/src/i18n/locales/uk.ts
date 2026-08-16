@@ -3205,7 +3205,7 @@ export const uk: Dict = {
   'fileViewer.shareMenuPresentation': 'Презентація',
   'fileViewer.shareMenuSourceFiles': 'Вихідні файли',
   'fileViewer.shareMenuSave': 'ЗБЕРЕГТИ',
-  'fileViewer.shareMenuPublishViaOd': 'ШВИДКИЙ ДОСТУП · OPEN DESIGN',
+  'fileViewer.shareMenuPublishViaOd': 'ШВИДКИЙ ДОСТУП · HI DESIGN',
   'fileViewer.unifiedShareAria': 'Share and export actions',
   'fileViewer.unifiedShareTab': 'Share',
   'fileViewer.unifiedExportTab': 'Export',

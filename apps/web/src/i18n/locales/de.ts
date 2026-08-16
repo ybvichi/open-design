@@ -3205,7 +3205,7 @@ export const de: Dict = {
   'fileViewer.shareMenuPresentation': 'Präsentation',
   'fileViewer.shareMenuSourceFiles': 'Quelldateien',
   'fileViewer.shareMenuSave': 'SPEICHERN',
-  'fileViewer.shareMenuPublishViaOd': 'SCHNELL TEILEN · OPEN DESIGN',
+  'fileViewer.shareMenuPublishViaOd': 'SCHNELL TEILEN · HI DESIGN',
   'fileViewer.unifiedShareAria': 'Share and export actions',
   'fileViewer.unifiedShareTab': 'Share',
   'fileViewer.unifiedExportTab': 'Export',

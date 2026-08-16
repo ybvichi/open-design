@@ -3205,7 +3205,7 @@ export const tr: Dict = {
   'fileViewer.shareMenuPresentation': 'Sunum',
   'fileViewer.shareMenuSourceFiles': 'Kaynak dosyalar',
   'fileViewer.shareMenuSave': 'KAYDET',
-  'fileViewer.shareMenuPublishViaOd': 'HIZLI PAYLAŞIM · OPEN DESIGN',
+  'fileViewer.shareMenuPublishViaOd': 'HIZLI PAYLAŞIM · HI DESIGN',
   'fileViewer.unifiedShareAria': 'Share and export actions',
   'fileViewer.unifiedShareTab': 'Share',
   'fileViewer.unifiedExportTab': 'Export',
