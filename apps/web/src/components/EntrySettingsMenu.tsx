@@ -488,7 +488,7 @@ export function EntrySettingsMenu({
             </span>
             <span>{t('entry.followXiaohongshuLabel')}</span>
             <Icon name="external-link" size={12} className="entry-settings-menu__item-end" />
-          </a> */}
+          </a>
 
           <div className="entry-settings-menu__divider" aria-hidden />
 
