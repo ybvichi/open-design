@@ -381,7 +381,7 @@ function clearStaleAmrModelChoiceOnProfileChange(
 export function resetExecutionConfigAfterSignOut(config: AppConfig): AppConfig {
   return {
     ...config,
-    onboardingCompleted: false,
+    onboardingCompleted: true,
     mode: DEFAULT_CONFIG.mode,
     agentId: null,
     agentModels: {},

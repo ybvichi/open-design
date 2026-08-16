@@ -850,6 +850,7 @@ export const id: Dict = {
   'entry.navDesignSystems': 'Sistem desain',
   'entry.navBrands': 'Kit Merek',
   'entry.navIntegrations': 'Integrasi',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Proyek pribadi',

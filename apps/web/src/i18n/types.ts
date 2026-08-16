@@ -1246,6 +1246,7 @@ export interface Dict {
   'entry.navDesignSystems': string;
   'entry.navBrands': string;
   'entry.navIntegrations': string;
+  'entry.navProjectStage': string;
   // Team-edition navigation shell.
   'entry.navMembers': string;
   'entry.navWorkspaceSettings': string;

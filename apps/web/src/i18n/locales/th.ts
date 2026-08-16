@@ -850,6 +850,7 @@ export const th: Dict = {
   'entry.navDesignSystems': 'ดีไซน์ซิสเต็ม',
   'entry.navBrands': 'ชุดแบรนด์',
   'entry.navIntegrations': 'การเชื่อมต่อ',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'โปรเจกต์ส่วนตัว',

@@ -12,6 +12,7 @@ export type TrackingWorkspaceRole = 'owner' | 'admin' | 'member';
 export type TrackingWorkspaceScope = 'official' | 'personal' | 'team' | 'unknown';
 export type TrackingWorkspacePage =
   | 'home'
+  | 'project-stage'
   | 'community'
   | 'drafts'
   | 'all_projects'

@@ -850,6 +850,7 @@ export const ko: Dict = {
   'entry.navDesignSystems': '디자인 시스템',
   'entry.navBrands': '브랜드 키트',
   'entry.navIntegrations': '통합',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': '개인 프로젝트',

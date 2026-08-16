@@ -857,6 +857,7 @@ export const zhTW: Dict = {
   "entry.navDesignSystems": "設計體系",
   "entry.navBrands": "品牌套件",
   "entry.navIntegrations": "整合",
+  "entry.navProjectStage": "項目廣場",
   "entry.navMembers": "成員",
   "entry.navWorkspaceSettings": "Workspace 設定",
   "entry.navDrafts": "個人專案",

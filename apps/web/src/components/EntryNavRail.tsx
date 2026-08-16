@@ -1656,6 +1656,15 @@ export function EntryNavRail({
           <Icon name="home" size={16} />
         </NavButton>
         <NavButton
+          active={view === 'project-stage'}
+          ariaLabel={t('entry.navProjectStage')}
+          label={t('entry.navProjectStage')}
+          onClick={() => selectView('project-stage')}
+          testId="entry-nav-project-stage"
+        >
+          <Icon name="globe" size={16} />
+        </NavButton>
+        <NavButton
           active={view === 'community'}
           ariaLabel={communityLabel}
           label={communityLabel}

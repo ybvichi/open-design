@@ -850,6 +850,7 @@ export const ja: Dict = {
   'entry.navDesignSystems': 'デザインシステム',
   'entry.navBrands': 'ブランドキット',
   'entry.navIntegrations': 'インテグレーション',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': '個人プロジェクト',

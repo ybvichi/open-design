@@ -24,6 +24,7 @@ export type EntryHomeView =
   // template gallery surfaced as a rail destination (rather than only a home
   // sub-section); the rest are team-workspace slots (project spaces + members +
   // board + workspace settings) whose views are provided by other lanes.
+  | 'project-stage'
   | 'community'
   | 'drafts'
   | 'all-projects'
@@ -145,6 +146,9 @@ export function parseRoute(pathname: string): Route {
     // stays visible alongside the gallery.
     return { kind: 'home', view: 'community' };
   }
+  if (parts[0] === 'project-stage' && !parts[1]) {
+    return { kind: 'home', view: 'project-stage' };
+  }
   if (parts[0] === 'drafts' && !parts[1]) {
     return { kind: 'home', view: 'drafts' };
   }
@@ -187,6 +191,7 @@ export function buildPath(route: Route): string {
     }
     if (route.view === 'integrations') return '/integrations';
     if (route.view === 'community') return '/community';
+    if (route.view === 'project-stage') return '/project-stage';
     if (route.view === 'drafts') return '/drafts';
     if (route.view === 'all-projects') return '/all-projects';
     if (route.view === 'members') return '/members';

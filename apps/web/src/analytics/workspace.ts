@@ -38,6 +38,8 @@ export function entryViewToTracking(view: string): TrackingWorkspacePage {
   switch (view) {
     case 'community':
       return 'community';
+    case 'project-stage':
+      return 'project-stage';
     case 'drafts':
       return 'drafts';
     case 'all-projects':

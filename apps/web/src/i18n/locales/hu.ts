@@ -850,6 +850,7 @@ export const hu: Dict = {
   'entry.navDesignSystems': 'Tervezőrendszerek',
   'entry.navBrands': 'Márkacsomag',
   'entry.navIntegrations': 'Integrációk',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Személyes projektek',

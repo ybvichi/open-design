@@ -850,6 +850,7 @@ export const fa: Dict = {
   'entry.navDesignSystems': 'سیستم‌های طراحی',
   'entry.navBrands': 'کیت برند',
   'entry.navIntegrations': 'یکپارچه‌سازی‌ها',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'پروژه‌های شخصی',

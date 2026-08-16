@@ -850,6 +850,7 @@ export const tr: Dict = {
   'entry.navDesignSystems': 'Tasarım sistemleri',
   'entry.navBrands': 'Marka Kiti',
   'entry.navIntegrations': 'Entegrasyonlar',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Kişisel projeler',

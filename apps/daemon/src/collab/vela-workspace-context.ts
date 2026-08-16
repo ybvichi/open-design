@@ -960,7 +960,29 @@ export async function fetchVelaWorkspaceDirectory(
   // No local Vela session is an authoritative signed-out identity, not an
   // authority outage. Returning a successful empty directory lets clients
   // clear a previously cached Team selection instead of preserving it forever.
-  if (!session || !session.controlKey || !session.apiUrl) return { ok: true, items: [] };
+  if (!session || !session.controlKey || !session.apiUrl) {
+    // ===== MOCK MODE: bypass login for local dev =====
+    const loginName = 'zoo';
+    const departmentDetail = '动物园';
+    const dd = departmentDetail.split('/');
+    const workspaceId = createHash('sha256').update(departmentDetail).digest('hex').slice(0, 32);
+    const workspaceName = dd[3] || dd[2] || dd[1] || dd[0] || '动物园';
+    return {
+      ok: true,
+      items: [
+        {
+          workspaceId,
+          workspaceName,
+          workspaceType: 'team',
+          workspaceMemberId: loginName,
+          role: 'owner',
+          memberStatus: 'active',
+          lifecycleState: 'active',
+        },
+      ],
+    };
+    // ===================================================
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {

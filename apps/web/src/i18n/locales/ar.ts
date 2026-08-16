@@ -850,6 +850,7 @@ export const ar: Dict = {
   'entry.navDesignSystems': 'أنظمة التصميم',
   'entry.navBrands': 'حزمة العلامة التجارية',
   'entry.navIntegrations': 'عمليات الدمج',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'المشاريع الشخصية',

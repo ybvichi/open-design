@@ -850,6 +850,7 @@ export const uk: Dict = {
   'entry.navDesignSystems': 'Дизайн-системи',
   'entry.navBrands': 'Бренд-кіт',
   'entry.navIntegrations': 'Інтеграції',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Особисті проєкти',

@@ -850,6 +850,7 @@ export const ru: Dict = {
   'entry.navDesignSystems': 'Дизайн-системы',
   'entry.navBrands': 'Бренд-кит',
   'entry.navIntegrations': 'Интеграции',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Личные проекты',

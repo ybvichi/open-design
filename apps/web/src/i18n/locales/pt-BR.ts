@@ -850,6 +850,7 @@ export const ptBR: Dict = {
   'entry.navDesignSystems': 'Design systems',
   'entry.navBrands': 'Kit de marca',
   'entry.navIntegrations': 'Integrações',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Members',
   'entry.navWorkspaceSettings': 'Workspace settings',
   'entry.navDrafts': 'Projetos pessoais',

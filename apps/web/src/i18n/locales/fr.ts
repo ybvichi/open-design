@@ -850,6 +850,7 @@ export const fr: Dict = {
   'entry.navDesignSystems': 'Systèmes de design',
   'entry.navBrands': 'Kit de marque',
   'entry.navIntegrations': 'Intégrations',
+  'entry.navProjectStage': 'Project Stage',
   'entry.navMembers': 'Membres',
   'entry.navWorkspaceSettings': "Paramètres de l'espace de travail",
   'entry.navDrafts': 'Projets personnels',
