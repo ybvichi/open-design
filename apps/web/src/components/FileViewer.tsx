@@ -15011,52 +15011,6 @@ function HtmlViewer({
                 <RemixIcon name="message-3-line" size={15} />
                 <span className="viewer-comment-count" aria-hidden>{visibleSideComments.length}</span>
               </button>
-              <div style={{ position: 'absolute', left: '10000px', top: '10000px' }}>
-                <iframe id="ai-main-iframe" width={1920} height={1080}></iframe>
-              </div>
-              <div className="artifact-tool-menu-anchor">
-                <button
-                  type="button"
-                  className="viewer-action viewer-action-icon od-tooltip"
-                  data-testid="push-menu-toggle"
-                  data-tooltip="推送"
-                  data-tooltip-placement="bottom"
-                  title="推送"
-                  aria-label="推送"
-                  aria-haspopup="menu"
-                  aria-expanded={pushMenuOpen}
-                  onClick={() => setPushMenuOpen((v) => !v)}
-                >
-                  <RemixIcon name="share-forward-line" size={15} />
-                </button>
-                {pushMenuOpen ? (
-                  <div className="share-menu-popover chrome-unified-popover" role="menu">
-                    <button
-                      type="button"
-                      className="share-menu-item"
-                      role="menuitem"
-                      disabled={source == null || pixsoPushStatus === 'loading'}
-                      onClick={triggerPixsoPush}
-                    >
-                      <span className="share-menu-icon">
-                        <RemixIcon name="share-forward-line" size={15} />
-                      </span>
-                      <span className="share-menu-text">
-                        <span>
-                          {pixsoPushStatus === 'loading'
-                            ? '正在推送到 Pixso...'
-                            : pixsoPushStatus === 'success'
-                              ? '已推送到 Pixso'
-                              : pixsoPushStatus === 'error'
-                                ? 'Pixso 推送失败'
-                                : '推送到 Pixso'}
-                        </span>
-                        <small>请确保 Pixso 中已打开 AI Builder Dev 插件</small>
-                      </span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
               {source !== null && mode === 'preview' ? (
                 <div className="zoom-menu viewer-toolbar-zoom" ref={zoomMenuRef}>
                   <button
@@ -15843,6 +15797,55 @@ function HtmlViewer({
                   ) : null}
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="share-menu chrome-share-menu chrome-share-menu--unified">
+                <div style={{ position: 'absolute', left: '10000px', top: '10000px' }}>
+                  <iframe id="ai-main-iframe" width={1920} height={1080}></iframe>
+                </div>
+                <button
+                  type="button"
+                  className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only chrome-action-unified"
+                  aria-haspopup="menu"
+                  aria-expanded={pushMenuOpen}
+                  aria-label="推送"
+                  title="推送"
+                  disabled={viewerOnly}
+                  data-testid="push-menu-toggle"
+                  onClick={() => {
+                    setDeployMenuOpen(false);
+                    setPushMenuOpen((v) => !v);
+                  }}
+                >
+                  <RemixIcon name="share-forward-line" size={15} />
+                  <span>推送</span>
+                </button>
+                {pushMenuOpen ? (
+                  <div className="share-menu-popover chrome-unified-popover" role="menu">
+                    <button
+                      type="button"
+                      className="share-menu-item"
+                      role="menuitem"
+                      disabled={source == null || pixsoPushStatus === 'loading'}
+                      onClick={triggerPixsoPush}
+                    >
+                      <span className="share-menu-icon">
+                        <RemixIcon name="share-forward-line" size={15} />
+                      </span>
+                      <span className="share-menu-text">
+                        <span>
+                          {pixsoPushStatus === 'loading'
+                            ? '正在推送到 Pixso...'
+                            : pixsoPushStatus === 'success'
+                              ? '已推送到 Pixso'
+                              : pixsoPushStatus === 'error'
+                                ? 'Pixso 推送失败'
+                                : '推送到 Pixso'}
+                        </span>
+                        <small>请确保 Pixso 中已打开 AI Builder Dev 插件</small>
+                      </span>
+                    </button>
                   </div>
                 ) : null}
               </div>
