@@ -59,8 +59,8 @@ import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
-//export const AI_BUILDER_WEB_PREX:string = `https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web`
-export const AI_BUILDER_WEB_PREX:string = `http://localhost:7001`
+export const AI_BUILDER_WEB_PREX:string = `https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web`
+//export const AI_BUILDER_WEB_PREX:string = `http://localhost:7001`
 
 function projectDetailResolvedDir(
   projectsRoot: string,

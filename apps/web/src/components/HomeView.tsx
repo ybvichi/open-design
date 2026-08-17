@@ -529,6 +529,23 @@ export function HomeView({
       smoothScrollToTop(scrollContainer);
     });
   }, []);
+  // 刷新模板列表（取消分享后使用）
+  const refreshIuxTemplates = useCallback(async () => {
+    try {
+      const resp = await fetch(`${AI_BUILDER_WEB_PREX}/webapi/v1/od/templates`);
+      if (resp.ok) {
+        const json = await resp.json();
+        const templates = json.templates ?? [];
+        setIuxTemplates(templates);
+        console.log('我的templates', templates);
+      } else {
+        console.warn('Failed to load iux templates, status:', resp.status);
+      }
+    } catch (err) {
+      console.warn('Failed to load iux templates', err);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     // On mount use the cache-aware loader (skips the network when warm); an
@@ -539,19 +556,7 @@ export function HomeView({
         // 先展示插件列表，模板是附加数据，不能阻塞主流程
         setPlugins(rows);
         // 模板列表拉取失败只告警，不影响后续流程（插件列表、loading 状态）
-        try {
-          const resp = await fetch(`${AI_BUILDER_WEB_PREX}/webapi/v1/od/templates`);
-          if (resp.ok) {
-            const json = await resp.json();
-            const templates = json.templates ?? [];
-            setIuxTemplates(templates);
-            console.log('我的templates', templates);
-          } else {
-            console.warn('Failed to load iux templates, status:', resp.status);
-          }
-        } catch (err) {
-          console.warn('Failed to load iux templates', err);
-        }
+        await refreshIuxTemplates();
         setPluginsLoading(false);
       });
     };
@@ -562,7 +567,7 @@ export function HomeView({
       cancelled = true;
       window.removeEventListener('open-design:plugins-changed', onChanged);
     };
-  }, []);
+  }, [refreshIuxTemplates]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2274,6 +2279,18 @@ export function HomeView({
           onDuplicate={(record) => void duplicateExamplePlugin(record)}
           onOpenDetails={handleCommunityOpenDetails}
           onBrowseRegistry={onBrowseRegistry}
+          onCancelShare={async () => {
+            // 取消分享后重新加载模板列表
+            try {
+              const resp = await fetch(`${AI_BUILDER_WEB_PREX}/webapi/v1/od/templates`);
+              if (resp.ok) {
+                const json = await resp.json();
+                setIuxTemplates(json.templates ?? []);
+              }
+            } catch (err) {
+              console.warn('Failed to reload iux templates after cancel share', err);
+            }
+          }}
           preferDefaultFacet
           cardLayout="gallery"
         />
@@ -2329,8 +2346,9 @@ export function HomeView({
                 if (!resp.ok) {
                 throw new Error('Cancel share failed');
                 }
-                // 取消分享成功后刷新页面
-                window.location.reload();
+                // 取消分享成功后刷新模板列表并关闭弹框
+                await refreshIuxTemplates();
+                setDetailsRecord(null);
              }}
           />)
           :(

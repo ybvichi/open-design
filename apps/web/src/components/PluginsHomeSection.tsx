@@ -59,6 +59,7 @@ interface Props {
     action: PluginShareAction,
   ) => void;
   onBrowseRegistry?: () => void;
+  onCancelShare?: (record: TemplateRecord) => void;
   preferDefaultFacet?: boolean;
   title?: string;
   subtitle?: string;
@@ -82,6 +83,7 @@ export function PluginsHomeSection({
   onOpenDetails,
   onPluginShareAction,
   onBrowseRegistry,
+  onCancelShare,
   preferDefaultFacet = true,
   title,
   subtitle,
@@ -265,6 +267,7 @@ export function PluginsHomeSection({
                   onCreateProject={onCreateProject}
                   onOpenDetails={onOpenDetails}
                   onSave={handleSavePlugin}
+                  onCancelShare={onCancelShare}
                   layout={cardLayout}
                 />
               ))}
@@ -667,6 +670,7 @@ interface TemplateCardProps {
   onCreateProject?: (input: any) => Promise<boolean> | boolean | void | undefined;
   onOpenDetails?: (record: any,type?:string) => void;
   onSave?: (record: any) => void;
+  onCancelShare?: (record: TemplateRecord) => void;
   layout?: 'rich' | 'gallery';
 }
 
@@ -676,6 +680,7 @@ function TemplateCard({
   onCreateProject,
   onOpenDetails,
   onSave,
+  onCancelShare,
   layout = 'rich',
 }: TemplateCardProps) {
   const { t } = useI18n();
@@ -686,7 +691,7 @@ function TemplateCard({
   const fileCount = record.files.length;
   const isFinished = useRef(false);
   const homeFile: any =
-    record.files?.find((f: any) => f.home) || record.files?.[0]
+    record.files?.find((f: any) => f.home) || record.files?.[0] || null;
 
   async function handleCreateIuxTemplate() {
     const input = {
@@ -735,6 +740,7 @@ function TemplateCard({
       if (resp.ok) {
         setCancelToast('取消分享成功!');
         setCancelToastTone('success');
+        onCancelShare?.(record);
       } else {
         setCancelToast('取消分享失败!');
         setCancelToastTone('error');
@@ -774,13 +780,15 @@ function TemplateCard({
               <span className="plugins-home__card-owner-text">我</span>
             </div>
           )}
-          <HtmlProjectCoverFrame
-            src={AI_BUILDER_WEB_PREX + homeFile.path}
-            initial={homeFile.initial}
-            iframeClassName="recent-projects__thumb-iframe"
-            glyphClassName="project-thumb-glyph"
-            diagnostic="unknown"
-          />
+          {homeFile && (
+            <HtmlProjectCoverFrame
+              src={AI_BUILDER_WEB_PREX + homeFile.path}
+              initial={homeFile.initial}
+              iframeClassName="recent-projects__thumb-iframe"
+              glyphClassName="project-thumb-glyph"
+              diagnostic="unknown"
+            />
+          )}
           <div className="plugins-home__gallery-actions"
             style={{ justifyContent: 'center' }}
           >
@@ -866,7 +874,7 @@ function TemplateCard({
         </div>
         <div className="plugins-home__card-overlay-body">
           <p className="plugins-home__overlay-desc">
-            {homeFile.name}
+            {homeFile?.name}
             {fileCount > 1 ? ` +${fileCount - 1}` : ''}
           </p>
         </div>
