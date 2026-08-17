@@ -3111,6 +3111,10 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled {
 }
 .project-ds-picker-list {
   overflow-y: auto;
+  /* The popover now has a fixed height (set inline from the trigger anchor), so
+     this grid column must be allowed to shrink below its content and scroll
+     internally instead of stretching the outer frame. */
+  min-height: 0;
   padding: 5px;
   display: flex;
   flex-direction: column;
@@ -3211,6 +3215,10 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled {
 }
 .project-ds-picker-preview {
   overflow-y: auto;
+  /* Fixed-height popover: absorb differing preview heights (hover switches the
+     kit render, whose height varies by system) with this pane's own scroll so
+     the outer frame stays stable instead of resizing. */
+  min-height: 0;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;

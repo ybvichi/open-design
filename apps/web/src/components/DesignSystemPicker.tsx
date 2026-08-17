@@ -34,7 +34,11 @@ function isUserSystem(system: DesignSystemSummary): boolean {
 interface PopoverAnchor {
   left: number;
   width: number;
-  maxHeight: number;
+  // Fixed popover height (not a max): the two-column body sizes its list and
+  // preview panes to this height and each scrolls internally, so hovering
+  // different systems (whose right-pane preview heights differ) never resizes
+  // the outer popover. Clamped to the room available above/below the trigger.
+  height: number;
   // Vertical placement: when the trigger sits near the bottom of the
   // viewport (e.g. the composer-top picker) the popover opens upward,
   // anchored by `bottom`; otherwise it opens downward, anchored by `top`.
@@ -135,14 +139,14 @@ export function DesignSystemPicker({
           bottom: window.innerHeight - rect.top + gap,
           left,
           width: popoverWidth,
-          maxHeight: Math.max(220, Math.min(420, spaceAbove)),
+          height: Math.max(220, Math.min(420, spaceAbove)),
         });
       } else {
         setAnchor({
           top: rect.bottom + gap,
           left,
           width: popoverWidth,
-          maxHeight: Math.max(220, Math.min(420, spaceBelow)),
+          height: Math.max(220, Math.min(420, spaceBelow)),
         });
       }
     }
@@ -285,7 +289,7 @@ export function DesignSystemPicker({
               bottom: anchor.bottom,
               left: anchor.left,
               width: anchor.width,
-              maxHeight: anchor.maxHeight,
+              height: anchor.height,
             }}
           >
             <div className="project-ds-picker-search">

@@ -104,6 +104,20 @@ describe('DesignSystemPicker', () => {
     expect(screen.queryByTestId('project-ds-picker-preview-frame')).toBeNull();
   });
 
+  it('gives the popover a fixed height so hovering does not resize it', async () => {
+    renderPicker();
+
+    fireEvent.click(screen.getByTestId('project-ds-picker-trigger'));
+
+    // The popover is anchored to a fixed height (list + preview each scroll
+    // internally) so hovering systems whose right-pane preview differs in
+    // height never resizes the outer frame. A regression to `max-height` would
+    // let the frame grow/shrink with the hovered preview — the reported jitter.
+    const popover = await screen.findByTestId('project-ds-picker-popover');
+    expect(popover.style.height).not.toBe('');
+    expect(popover.style.maxHeight).toBe('');
+  });
+
   it('updates the preview target on hover and opens the expanded kit preview', async () => {
     renderPicker();
 

@@ -32,6 +32,7 @@ import { Toast } from './Toast';
 import { AnimatePresence, motion } from 'motion/react';
 import { popoverIn } from '../motion';
 import { AI_BUILDER_WEB_PREX } from './workspace-context';
+import { useAuth } from '../auth/LoginGate';
 import {
   HtmlProjectCoverFrame
 } from "./project-cover";
@@ -657,6 +658,7 @@ interface TemplateRecord {
   sourceProjectId: string;
   files: Array<{ name: string }>;
   createdAt: number;
+  username?: string;
 }
 
 interface TemplateCardProps {
@@ -677,11 +679,15 @@ function TemplateCard({
   layout = 'rich',
 }: TemplateCardProps) {
   const { t } = useI18n();
+  const { username } = useAuth();
+  const [cancelToast, setCancelToast] = useState<string | null>(null);
+  const [cancelToastTone, setCancelToastTone] = useState<'success' | 'error'>('success');
   const title = record.name;
   const fileCount = record.files.length;
   const isFinished = useRef(false);
   const homeFile: any =
     record.files?.find((f: any) => f.home) || record.files?.[0]
+
   async function handleCreateIuxTemplate() {
     const input = {
       "name": record.name,
@@ -711,6 +717,34 @@ function TemplateCard({
     isFinished.current = false;
     // console.log('我拿到创建函数参数了吗？', input);
   }
+
+  async function handleCancelShare(event: React.MouseEvent) {
+    event.stopPropagation();
+    try {
+      const resp = await fetch(`${AI_BUILDER_WEB_PREX}/webapi/v1/od/template`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceProjectId: record.sourceProjectId,
+          isDelete: true,
+          username,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (resp.ok) {
+        setCancelToast('取消分享成功!');
+        setCancelToastTone('success');
+      } else {
+        setCancelToast('取消分享失败!');
+        setCancelToastTone('error');
+      }
+    } catch (err) {
+      console.warn('[handleCancelShare] cancel failed:', err);
+      setCancelToast('取消分享失败!');
+      setCancelToastTone('error');
+    }
+  }
   if (layout === 'gallery') {
     return (
       <article
@@ -735,6 +769,11 @@ function TemplateCard({
               {fileCount} files
             </span>
           </div> */}
+          {record.username && record.username === username && (
+            <div className="plugins-home__card-owner-badge">
+              <span className="plugins-home__card-owner-text">我</span>
+            </div>
+          )}
           <HtmlProjectCoverFrame
             src={AI_BUILDER_WEB_PREX + homeFile.path}
             initial={homeFile.initial}
@@ -745,6 +784,7 @@ function TemplateCard({
           <div className="plugins-home__gallery-actions"
             style={{ justifyContent: 'center' }}
           >
+            
             <button
               style={{ width: "50%", flex: 'none' }}
               type="button"
@@ -759,6 +799,18 @@ function TemplateCard({
               <Icon name={isFinished.current ? 'spinner' : 'play'} size={12} />
               <span>{isFinished.current?'正在创建':'立刻使用'}</span>
             </button>
+            {record.username && record.username === username && (
+            <button
+              style={{ width: "50%", flex: 'none' }}
+              type="button"
+              className="plugins-home__action"
+              disabled={isFinished.current}
+              onClick={handleCancelShare}
+            >
+              <Icon name={isFinished.current ? 'spinner' : 'close'} size={12} />
+              <span>取消分享</span>
+            </button>
+            )}
           </div>
         </div>
 
@@ -781,6 +833,16 @@ function TemplateCard({
             {record.name}
           </p>
         </div>
+        <AnimatePresence>
+          {cancelToast ? (
+            <Toast
+              message={cancelToast}
+              tone={cancelToastTone}
+              ttlMs={2200}
+              onDismiss={() => setCancelToast(null)}
+            />
+          ) : null}
+        </AnimatePresence>
       </article>
     );
   }

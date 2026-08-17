@@ -10755,6 +10755,39 @@ function HtmlViewer({
       checkIuxLinkDebounceTimerRef.current = null;
     }, 300);
   }
+  async function cancelToIux(){
+    try {
+      const fileData = file as any;
+      const projectId = fileData.localPath?.match(/projects[\\/]([a-f0-9-]{36})[\\/]/i)?.[1];
+      if (!projectId) return;
+      const username = getStoredUsername() ?? '';
+      const resp = await fetch(`${AI_BUILDER_WEB_PREX}/webapi/v1/od/template`,{
+        method:"POST",
+        body: JSON.stringify({ sourceProjectId: projectId, isDelete: true, username }),
+        headers: {
+          "Content-Type":"application/json"
+        }
+      });
+      if (resp.ok) {
+        setExportToast({
+          message: '取消分享成功!',
+          tone: 'success',
+        });
+        setIuxLink('');
+      } else {
+        setExportToast({
+          message: '取消分享失败!',
+          tone: 'error',
+        });
+      }
+    } catch (err) {
+      console.warn('[cancelToIux] cancel failed:', err);
+      setExportToast({
+        message: '取消分享失败!',
+        tone: 'error',
+      });
+    }
+  }
   async function deployToIux(type?:any){
     setDeploying(true);
     // 任何一步（取文件列表、读内容、POST 分享）抛异常都统一提示失败，
@@ -10800,9 +10833,11 @@ function HtmlViewer({
         });
       })
       const preparedFiles = await Promise.all(htmlFiles);
+      const username = getStoredUsername() ?? '';
       const params:any = {
         sourceProjectId:projectId,
         name,
+        username,
         files: preparedFiles
       }
       console.log('params',params,fileData);
@@ -14373,6 +14408,18 @@ function HtmlViewer({
               >
                 {t('common.cancel')}
               </button>
+              {iuxLink?(
+              <button
+                type="button"
+                className="ghost-link button-like"
+                disabled={deploying}
+                onClick={() => {
+                  void cancelToIux();
+                  //void deployToSelectedProvider();
+                }}
+              >
+                取消分享
+              </button>):null}
               <button
                 type="button"
                 className="viewer-action primary"
