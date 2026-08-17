@@ -589,8 +589,8 @@ jobs:
           win_setup_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe" | awk '{print $1}')
           win_payload_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-payload.7z" | awk '{print $1}')
 
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
-
+          # RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
+          RELEASE_URL="https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/public/webresources/download/hi-design/stable/versions/v$VERSION"
           cat > "$ASSETS_DIR/metadata.json" <<METADATA
           {
             "channel": "stable",
