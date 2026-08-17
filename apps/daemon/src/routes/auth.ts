@@ -83,7 +83,7 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
       if (err.message === 'invalid username or password') {
         return sendApiError(res, 401, 'UNAUTHORIZED', 'invalid username or password');
       }
-      return sendApiError(res, 500, 'INTERNAL_ERROR', 'SSO login failed');
+      return sendApiError(res, 500, 'INTERNAL_ERROR', 'SSO login failed,'+JSON.stringify(err));
     }
   });
 

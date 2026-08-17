@@ -1,0 +1,145 @@
+{
+  "schema_version": "tpp-page-family-mapping.v1",
+  "batch": "table",
+  "region_classes": {
+    "search": "h-page-search",
+    "filter": "filter-container",
+    "toolbar": "bar-search-row",
+    "table": "el-table",
+    "pagination": "el-pagination",
+    "tabs": "el-tabs",
+    "tree": "el-tree",
+    "sidebar": "h-page-sidebar",
+    "statistics": "h-stats",
+    "details_content": "contentStyle"
+  },
+  "families": {
+    "table-basic": {
+      "name": "基础表格页",
+      "match": ["basic-table", "基础表格", "仅标题", "带操作栏"],
+      "semantics": ["page-title", "optional-toolbar", "data-table", "pagination"]
+    },
+    "table-manual-filter": {
+      "name": "手动过滤表格页",
+      "match": ["manual-filter-table", "手动过滤", "过滤盒"],
+      "semantics": ["explicit-filter-controls", "query-action", "reset-action", "data-table"]
+    },
+    "table-realtime-filter": {
+      "name": "即时过滤表格页",
+      "match": ["realtime-filter-table", "即时过滤"],
+      "semantics": ["instant-filter-controls", "selected-filter-state", "data-table"]
+    },
+    "table-tabs": {
+      "name": "标签页表格页",
+      "match": ["tabbed-table", "带标签页", "标签页表格"],
+      "semantics": ["dataset-tabs", "optional-tree", "data-table", "pagination"]
+    },
+    "table-tree": {
+      "name": "树表格页",
+      "match": ["tree-table", "带树控件", "树控件表格"],
+      "semantics": ["tree-sidebar", "optional-tabs", "data-table", "pagination"]
+    },
+    "table-statistics": {
+      "name": "统计表格页",
+      "match": ["statistics-table", "带统计"],
+      "semantics": ["summary-statistics", "data-table", "pagination"]
+    },
+    "table-details-pane": {
+      "name": "详情栏表格页",
+      "match": ["details-pane-table", "带详情栏"],
+      "semantics": ["master-table", "selection-linked-details", "details-pane"]
+    }
+  },
+  "pages": {
+    "/pages/table/onlyTitle": {
+      "family": "table-basic",
+      "variant": "only-title",
+      "parameters": {"toolbar": false}
+    },
+    "/pages/table/withAnOperationBar": {
+      "family": "table-basic",
+      "variant": "with-operation-bar",
+      "parameters": {"toolbar": true}
+    },
+    "/pages/table/regularFilterBoxHeightAndLow": {
+      "family": "table-manual-filter",
+      "variant": "regular-filter-box-high-low",
+      "parameters": {"filter_placement": "regular-box", "collapse_mode": "high-low-frequency"}
+    },
+    "/pages/table/fullyRetractableRegularFilterBox": {
+      "family": "table-manual-filter",
+      "variant": "regular-filter-box-fully-retractable",
+      "parameters": {"filter_placement": "regular-box", "collapse_mode": "all-retractable"}
+    },
+    "/pages/table/horizontalBarFilteringHeightAndLow": {
+      "family": "table-manual-filter",
+      "variant": "horizontal-filter-high-low",
+      "parameters": {"filter_placement": "horizontal-bar", "collapse_mode": "high-low-frequency"}
+    },
+    "/pages/table/fullyRetractableHorizontalBarFiltering": {
+      "family": "table-manual-filter",
+      "variant": "horizontal-filter-fully-retractable",
+      "parameters": {"filter_placement": "horizontal-bar", "collapse_mode": "all-retractable"}
+    },
+    "/pages/table/manualSideBarFiltering": {
+      "family": "table-manual-filter",
+      "variant": "sidebar-manual-filter",
+      "parameters": {"filter_placement": "left-sidebar", "trigger": "manual"}
+    },
+    "/pages/table/realTimeHorizontalBarFiltering": {
+      "family": "table-realtime-filter",
+      "variant": "horizontal-realtime-filter",
+      "parameters": {"filter_placement": "horizontal-bar", "trigger": "realtime"}
+    },
+    "/pages/table/realTimeSideBarFiltering": {
+      "family": "table-realtime-filter",
+      "variant": "sidebar-realtime-filter",
+      "parameters": {"filter_placement": "left-sidebar", "trigger": "realtime"}
+    },
+    "/pages/table/linearTabPage": {
+      "family": "table-tabs",
+      "variant": "linear-tabs",
+      "parameters": {"tab_style": "linear", "tree": false}
+    },
+    "/pages/table/linearTabPageAndTreeControl": {
+      "family": "table-tabs",
+      "variant": "linear-tabs-with-tree",
+      "parameters": {"tab_style": "linear", "tree": true}
+    },
+    "/pages/table/cardTypeTabPage": {
+      "family": "table-tabs",
+      "variant": "card-tabs",
+      "parameters": {"tab_style": "card", "tree": false}
+    },
+    "/pages/table/cardTypeTabPageAndTreeControl": {
+      "family": "table-tabs",
+      "variant": "card-tabs-with-tree",
+      "parameters": {"tab_style": "card", "tree": true}
+    },
+    "/pages/table/treeControl": {
+      "family": "table-tree",
+      "variant": "tree-only",
+      "parameters": {"tab_style": "none"}
+    },
+    "/pages/table/treeControlAndLinearTabPage": {
+      "family": "table-tree",
+      "variant": "tree-with-linear-tabs",
+      "parameters": {"tab_style": "linear"}
+    },
+    "/pages/table/treeControlAndCardTypeTabPage": {
+      "family": "table-tree",
+      "variant": "tree-with-card-tabs",
+      "parameters": {"tab_style": "card"}
+    },
+    "/pages/table/withStatisticalTable": {
+      "family": "table-statistics",
+      "variant": "with-statistics",
+      "parameters": {"statistics": true}
+    },
+    "/pages/table/withDetailsSectionTable": {
+      "family": "table-details-pane",
+      "variant": "with-details-pane",
+      "parameters": {"details_placement": "right"}
+    }
+  }
+}

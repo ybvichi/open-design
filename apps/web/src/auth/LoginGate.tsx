@@ -2,6 +2,7 @@ import { createContext, useContext, useLayoutEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
 import { Icon } from '../components/Icon';
+import { UpdaterPopup } from '../components/UpdaterPopup';
 import {
   DEFAULT_PASSWORD,
   DEFAULT_USERNAME,
@@ -158,6 +159,9 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
       {/* <div className={styles.topLeftLogo}>
         <span className="od-brand-glyph" style={{ width: 80, height: 80, display: 'inline-block' }} />
       </div> */}
+      <div className={styles.topRightUpdater}>
+        <UpdaterPopup />
+      </div>
       <div className={styles.card}>
         <div className={styles.brand}>
           <span className={styles.brandMark} aria-hidden>

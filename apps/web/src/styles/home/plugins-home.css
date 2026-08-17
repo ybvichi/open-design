@@ -1230,6 +1230,30 @@ button.plugins-home__use-menu-item:focus-visible {
   color: #111;
 }
 
+/* Owner badge — "我" triangle in the top-left corner of gallery cards */
+.plugins-home__card-owner-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 28px 28px 0 0;
+  border-color: var(--accent) transparent transparent transparent;
+  pointer-events: none;
+}
+.plugins-home__card-owner-text {
+  position: absolute;
+  top: -24px;
+  left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 /* Touch/coarse-pointer fallback — overlays should be visible
    without hover so phone/tablet users can still see metadata. */
 @media (hover: none) {

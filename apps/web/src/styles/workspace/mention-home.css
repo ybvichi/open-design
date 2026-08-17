@@ -489,6 +489,14 @@
   color: #ffffff;
 }
 
+/* The global `button:hover:not(:disabled)` rule in primitives.css swaps the
+   background to `--bg-subtle`, which is a jarring jump for the filled primary
+   button. Keep the hover subtle: accent -> accent-hover only. */
+.updater-popup__button--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
 @media (max-width: 560px) {
   .updater-popup {
     width: calc(100vw - var(--entry-rail-width, 56px) - 18px);

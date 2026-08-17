@@ -1,0 +1,17 @@
+{
+  "schema_version": "product-design-system.v1",
+  "maintenance": {
+    "purpose": "PVIA产品知识入口；当前仅登记产品身份和知识待建设状态。",
+    "edit_policy": "形成真实Profile、Shell、tokens和页面合同时再增加路径并移除待建设状态。",
+    "managed_paths": {
+      "product.json": "PVIA产品身份、继承关系和当前知识建设状态。"
+    }
+  },
+  "id": "public-security.pvia",
+  "industry": "public-security",
+  "product": "pvia",
+  "name": "公安视频图像应用平台",
+  "extends": "hui",
+  "status": "knowledge-pending",
+  "pages": []
+}

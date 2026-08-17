@@ -1,0 +1,97 @@
+              <div class="collection-page" :class="{'card-tabs-page': config.page_kind==='card-tabs','is-table-page':showTable}">
+                <div v-if="config.page_kind==='card-tabs'" data-zone="navigation.view-tabs" data-component="navigation.tabs">
+                <el-tabs v-model="activeCardTab" :type="cardTabType" class="card-tabs-navigation" @tab-click="cardTabChanged">
+                  <el-tab-pane v-for="tab in config.card_tabs" :key="tab.id" :label="tab.label" :name="tab.id"></el-tab-pane>
+                </el-tabs>
+                </div>
+                <div v-if="config.filters && config.filters.length" class="query-filter" data-zone="query.filter" data-component="filter.search-form">
+                  <el-form class="query-filter__form" :model="filters" label-position="top" size="small">
+                    <el-form-item v-for="field in config.filters" :key="field.key" :label="field.label">
+                      <el-input v-if="field.kind==='input'" v-model="filters[field.key]" :placeholder="field.placeholder" suffix-icon="h-icon-search" clearable></el-input>
+                      <el-select v-else v-model="filters[field.key]"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                    </el-form-item>
+                    <el-form-item class="query-filter__actions"><el-button type="primary" icon="h-icon-search" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button></el-form-item>
+                  </el-form>
+                  <el-divider v-if="showFilterToolbarDivider" class="collection-filter-divider"></el-divider>
+                </div>
+
+                <div class="collection-main" :class="{'has-details-pane':isTableDetailsPane}">
+                <div class="collection-list">
+                <div class="page-toolbar" data-zone="page.actions" data-component="toolbar.action-toolbar">
+                  <div class="page-toolbar__left"><el-button v-for="action in config.toolbar_actions" :key="action.label" type="text" size="small" :icon="action.icon" @click="toolbarAction(action.label)">{{ action.label }}</el-button></div>
+                  <div class="page-toolbar__right">
+                    <span v-if="config.page_kind==='switch'">展示方式</span>
+                    <el-radio-group v-if="config.page_kind==='switch'" v-model="viewMode" class="view-switch" size="small">
+                      <el-radio-button label="card">卡片</el-radio-button><el-radio-button label="table">列表</el-radio-button>
+                    </el-radio-group>
+                  </div>
+                </div>
+
+                <div class="data-region" data-zone="data.results">
+                  <div v-if="showTable" class="data-table-pattern" data-component="table.data-table">
+                  <el-table :data="pagedRows" height="100%" stripe row-key="id" @selection-change="selectedRows=$event" @row-click="selectDetailRow">
+                    <el-table-column type="selection" width="48" align="center" header-align="center"></el-table-column>
+                    <el-table-column v-for="column in config.columns" :key="column.prop" :prop="column.prop" :label="column.label" :min-width="column.min_width">
+                      <template slot-scope="scope"><span v-if="column.prop==='status'" :class="scope.row.status==='在线'?'status-online':'status-offline'">{{ scope.row[column.prop] }}</span><span v-else>{{ scope.row[column.prop] }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="120" fixed="right"><template slot-scope="scope"><el-button type="link" size="mini" @click.stop="openDetail(scope.row)">详情</el-button><el-button type="link" size="mini" @click.stop="openPreview(scope.row)">预览</el-button></template></el-table-column>
+                  </el-table>
+                  </div>
+
+                  <div v-else-if="config.page_kind==='card-tabs'" class="capture-scroll">
+                    <div class="knowledge-card-grid" :style="cardGridStyle" data-component="collection.card-grid">
+                      <el-card v-for="row in pagedRows" :key="row.id" class="knowledge-card" shadow="hover" :style="knowledgeCardStyle" :header-style="knowledgeHeaderStyle" :body-style="knowledgeBodyStyle">
+                        <div v-if="activeCardTabSpec.card_profile==='similarity-card'" slot="header">
+                          <div class="knowledge-card__comparison-media" :style="comparisonMediaStyle">
+                            <img class="knowledge-card__comparison-image" :src="row.referenceImage" alt="参考图片">
+                            <img class="knowledge-card__comparison-image" :src="row.captureImage" alt="抓拍图片">
+                            <div class="knowledge-card__metric" :style="metricContainerStyle"><div class="knowledge-card__metric-value" :style="metricValueStyle">{{ row.metric }}</div></div>
+                          </div>
+                          <div class="knowledge-card__title-row" :style="comparisonTitleRowStyle"><span class="knowledge-card__title" :style="primaryTextStyle">{{ row.title }}</span><el-tag data-variant="secondary" :data-flood="row.tone || 'blue'">{{ row.status }}</el-tag></div>
+                        </div>
+                        <div v-else slot="header" class="knowledge-card__text-header">
+                          <img :src="row.image" alt="事件类型背景">
+                          <div class="knowledge-card__text-content" :style="textContentStyle">
+                            <div class="knowledge-card__title" :style="textTitleStyle">{{ row.title }}</div>
+                            <div class="knowledge-card__tag-list" :style="tagListStyle"><el-tag v-for="tag in row.tags" :key="tag.label" data-variant="secondary" :data-flood="tag.tone || 'blue'">{{ tag.label }}</el-tag></div>
+                          </div>
+                        </div>
+                        <template v-if="activeCardTabSpec.card_profile==='similarity-card'">
+                          <div class="knowledge-card__meta-row" :style="metadataRowStyle"><i class="h-icon-info_data" :style="metadataIconStyle"></i><span>{{ row.category }}</span></div>
+                          <div class="knowledge-card__meta-row" :style="metadataRowStyle"><i class="h-icon-info_time" :style="metadataIconStyle"></i><span>{{ row.time }}</span></div>
+                          <div class="knowledge-card__meta-row" :style="metadataRowStyle"><i class="h-icon-info_location" :style="metadataIconStyle"></i><span>{{ row.location }}</span></div>
+                        </template>
+                        <template v-else>
+                          <div class="knowledge-card__meta-row" :style="metadataRowStyle"><i class="h-icon-info_location" :style="metadataIconStyle"></i><span>{{ row.location }}</span></div>
+                          <div class="knowledge-card__meta-row" :style="metadataRowStyle"><i class="h-icon-info_time" :style="metadataIconStyle"></i><span>{{ row.time }}</span></div>
+                        </template>
+                      </el-card>
+                    </div>
+                  </div>
+                  <div v-else class="capture-scroll">
+                    <div class="capture-grid" data-component="collection.card-grid">
+                      <el-card v-for="row in pagedRows" :key="row.id" class="capture-card" shadow="hover">
+                        <div slot="header" class="capture-preview" @click="openPreview(row)"><i class="h-icon-liveview"></i><span class="capture-preview__code">{{ row.captureCode }}</span></div>
+                        <div class="capture-card__title">{{ row.deviceName }}</div>
+                        <div class="capture-card__meta"><span>{{ row.area }}</span><span>{{ row.captureTime }}</span></div>
+                      </el-card>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="page-pagination" data-zone="page.pagination" data-component="pagination.page-navigation"><el-pagination :current-page.sync="currentPage" :page-size="pageSize" :page-sizes="[10,20,50,100]" layout="total, sizes, ->, prev, pager, next, jumper" :total="rowTotal" @size-change="pageSize=$event"></el-pagination></div>
+                </div>
+                <aside v-if="isTableDetailsPane" class="table-detail-pane" :class="{'has-master-divider':showMasterDetailsDivider}" data-zone="detail.content" data-component="detail.details-pane">
+                  <el-tabs v-model="activeDetailTab">
+                    <el-tab-pane v-for="tab in config.detail_tabs" :key="tab.id" :label="tab.label" :name="tab.id">
+                      <div class="table-detail-pane__content">
+                      <section v-for="section in tab.sections" :key="section.id" class="table-detail-pane__section">
+                        <div class="table-detail-pane__section-title">{{ section.title }}</div>
+                        <div v-for="field in section.fields" :key="field.key" class="table-detail-pane__field"><span class="table-detail-pane__label">{{ field.label }}</span><span class="table-detail-pane__value">{{ detailFieldValue(field.key) }}</span></div>
+                      </section>
+                      </div>
+                    </el-tab-pane>
+                  </el-tabs>
+                </aside>
+                </div>
+              </div>

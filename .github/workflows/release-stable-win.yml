@@ -142,7 +142,7 @@ jobs:
             "--namespace", "release-stable-win",
             "--portable",
             "--app-version", "${{ inputs.release_version }}",
-            "--to", "all",
+            "--to", "nsis",
             "--require-vela-cli",
             "--json"
           )
@@ -163,7 +163,7 @@ jobs:
               --namespace release-stable-win `
               --portable `
               --app-version "${{ inputs.release_version }}" `
-              --to all `
+              --to nsis `
               --require-vela-cli `
               --json
             if ($LASTEXITCODE -ne 0) {
@@ -226,13 +226,14 @@ jobs:
           $ASSETS_DIR = "${{ runner.temp }}/release-assets"
           New-Item -ItemType Directory -Force -Path $ASSETS_DIR | Out-Null
           $SDIR = "${{ runner.temp }}/tools-pack/out/win/namespaces/release-stable-win/builder"
+          $PDIR = "${{ runner.temp }}/tools-pack/out/win/namespaces/release-stable-win/payload"
           Copy-Item "$SDIR/Hi Design-release-stable-win-setup.exe" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe"
-          Copy-Item "$SDIR/Hi Design-release-stable-win-portable.zip" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip"
+          Copy-Item "$PDIR/Hi Design-release-stable-win-payload.7z" "$ASSETS_DIR/Hi Design-$VERSION-win-x64-payload.7z"
           Set-Location $ASSETS_DIR
           $setupHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$setupHash  Hi Design-$VERSION-win-x64-setup.exe" | Set-Content -Path "Hi Design-$VERSION-win-x64-setup.exe.sha256"
-          $zipHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-portable.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$zipHash  Hi Design-$VERSION-win-x64-portable.zip" | Set-Content -Path "Hi Design-$VERSION-win-x64-portable.zip.sha256"
+          $payloadHash = (Get-FileHash -Path "Hi Design-$VERSION-win-x64-payload.7z" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$payloadHash  Hi Design-$VERSION-win-x64-payload.7z" | Set-Content -Path "Hi Design-$VERSION-win-x64-payload.7z.sha256"
 
       - name: Upload windows release assets
         uses: actions/upload-artifact@v7
@@ -289,7 +290,7 @@ jobs:
 
           # Compute SHA256 for Windows artifacts
           win_setup_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-setup.exe" | awk '{print $1}')
-          win_portable_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-portable.zip" | awk '{print $1}')
+          win_payload_sha=$(shasum -a 256 "$ASSETS_DIR/Hi Design-$VERSION-win-x64-payload.7z" | awk '{print $1}')
 
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
 
@@ -307,9 +308,9 @@ jobs:
                     "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-setup.exe",
                     "sha256": "$win_setup_sha"
                   },
-                  "portable": {
-                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-portable.zip",
-                    "sha256": "$win_portable_sha"
+                  "payload": {
+                    "url": "$RELEASE_URL/Hi.Design-$VERSION-win-x64-payload.7z",
+                    "sha256": "$win_payload_sha"
                   }
                 }
               }

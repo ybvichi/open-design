@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hi-Builder TPP 页面族</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="__HUI_CSS__">
+  <style>
+    [v-cloak] { display: none; }
+    * { box-sizing: border-box; }
+    html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { min-width: 1280px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+
+    :root,
+    .product-context {
+/* __PRODUCT_TOKENS__ */
+/* __PORTAL_GEOMETRY__ */
+/* __PAGE_PATTERN_GEOMETRY__ */
+    }
+
+/* __PRODUCT_SHELL_STYLES__ */
+    .content-shell { min-width: 0; flex: 1; height: 100%; overflow: hidden; }
+    .page-frame { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .page-frame.has-external-master-media { display: grid; grid-template: 40px minmax(0, 1fr) / 352px minmax(0, 1fr); }
+    .page-frame.has-external-master-media > .page-breadcrumb { grid-column: 1 / -1; }
+    .page-frame.has-external-master-media > .details-master-photo { grid-column: 1; grid-row: 2; }
+    .page-frame.has-external-master-media > .page-workspace { grid-column: 2; grid-row: 2; }
+    .page-breadcrumb {
+      position: relative; display: flex; align-items: center; height: 40px; flex: none;
+      padding: 0 16px; border-bottom: 1px solid var(--h-color-border-tertiary);
+      color: var(--h-color-text-secondary); background: var(--h-color-bg-primary);
+    }
+    .page-breadcrumb strong { margin-left: 8px; color: var(--h-color-text-primary); font-weight: 500; }
+    .page-workspace { min-height: 0; flex: 1; padding: 16px 16px 0; overflow: hidden; }
+
+/* __RENDERER_STYLES__ */
+    @media (max-width: 1380px) {
+      .capture-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak>
+<!-- __PRODUCT_SHELL_START__ -->
+        <section class="content-shell">
+          <div class="page-frame" :class="{'has-external-master-media':externalMasterMedia}" :data-page-kind="config.page_kind" :data-pattern-id="config.pattern_ids.join(',')">
+            <div class="page-breadcrumb"><span>{{ config.portal.section }}</span><!-- @include ../fragments/navigation/page-tabs.html --><template v-if="!formTabsInBreadcrumb"><i class="h-icon-angle_right_sm"></i><strong>{{ config.title }}</strong></template></div>
+            <section v-if="externalMasterMedia" class="details-master-photo is-external" data-zone="media.preview" data-component="media.image-viewer">
+              <img :src="detailMedia.src" :alt="config.media.alt">
+              <div class="details-master-photo__name">{{ detailValues.personName }}</div>
+              <div class="details-master-photo__code">{{ detailValues.employeeNo }}</div>
+              <el-button type="text" @click="mediaAction('查看原图')">查看原图</el-button>
+            </section>
+            <div class="page-workspace">

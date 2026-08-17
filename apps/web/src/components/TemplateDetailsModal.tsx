@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PreviewModal } from './PreviewModal';
 import { Icon } from './Icon';
 import { AI_BUILDER_WEB_PREX } from './workspace-context';
+import { useAuth } from '../auth/LoginGate';
 
 export interface TemplateFile {
   name: string;
@@ -32,11 +33,17 @@ interface Props {
   record: TemplateRecord | any;
   onClose: () => void;
   onUse: () => Promise<void>;
+  onCancelShare?: () => Promise<void>;
 }
 
-export function TemplateDetailsModal({ record, onClose, onUse }: Props) {
+export function TemplateDetailsModal({ record, onClose, onUse, onCancelShare }: Props) {
+  const { username: currentUsername } = useAuth();
   const [html, setHtml] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelToast, setCancelToast] = useState<string | null>(null);
+  const [cancelToastTone, setCancelToastTone] = useState<'success' | 'error'>('success');
 
   const homeFile = record.files.find((f: any) => f.home) ?? record.files[0];
   const fileCount = record.files.length;
@@ -69,6 +76,24 @@ export function TemplateDetailsModal({ record, onClose, onUse }: Props) {
   const onView = useCallback(() => {
     void load();
   }, [load]);
+
+  async function handleCancelShare() {
+    if (!onCancelShare) return;
+    setIsCanceling(true);
+    try {
+      await onCancelShare();
+      setCancelToast('取消分享成功!');
+      setCancelToastTone('success');
+    } catch (err) {
+      console.warn('[TemplateDetailsModal] cancel share failed:', err);
+      setCancelToast('取消分享失败!');
+      setCancelToastTone('error');
+    } finally {
+      setIsCanceling(false);
+    }
+  }
+
+  const isOwner = record.username && currentUsername && record.username === currentUsername;
 
   // Sidebar — template metadata + file list only.
   // No "example query" or "developer details" — those are plugin-only.
@@ -130,7 +155,6 @@ export function TemplateDetailsModal({ record, onClose, onUse }: Props) {
       </section>
     </div>
   );
-  const [isLoading, setIsLoading] = useState(false);
   return (
     <PreviewModal
       title={record.name}
@@ -154,7 +178,7 @@ export function TemplateDetailsModal({ record, onClose, onUse }: Props) {
       primaryAction={
         {
           label: isLoading ? '正在创建...' : '立刻使用',
-          disabled: isLoading,
+          disabled: isLoading || isCanceling,
           onClick: async () => {
             if (isLoading) return;
             setIsLoading(true);
@@ -165,6 +189,28 @@ export function TemplateDetailsModal({ record, onClose, onUse }: Props) {
             }
           },
           testId: `template-details-use-${record.id}`,
+          menu: isOwner && onCancelShare
+            ? [
+                {
+                  label: '取消分享',
+                  onClick: async () => {
+                    if (isCanceling) return;
+                    setIsCanceling(true);
+                    try {
+                      await onCancelShare();
+                      setCancelToast('取消分享成功!');
+                      setCancelToastTone('success');
+                    } catch (err) {
+                      console.warn('[TemplateDetailsModal] cancel share failed:', err);
+                      setCancelToast('取消分享失败!');
+                      setCancelToastTone('error');
+                    } finally {
+                      setIsCanceling(false);
+                    }
+                  },
+                },
+              ]
+            : undefined,
         }
       }
     />
