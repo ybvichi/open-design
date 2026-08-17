@@ -1,15 +1,15 @@
 ---
-name: hi-design
+name: hi-builder
 description: 将海康安防领域的自然语言页面需求编译为稳定一致的HUI Vue（V2.6.1版本）单页HTML。用于生成或修改行业产品页面、复用产品门户框架、选择业务Composition与TPP页面族Renderer，并执行静态和浏览器验收。
 ---
 
-# Hi-Design
+# Hi-Builder
 
 ## 目标
 
 把自然语言业务需求转换为语义PageSpec，再由确定性编译器生成符合HUI通用规范、行业语义、产品外观和D2C协议的单文件HTML。
 
-AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源地址、服务API、图标注册方式或视觉数值。Compiler和Validator必须从本Skill的权威合同读取这些事实，不得引用`Hi-Design/`之外的运行资源。
+AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源地址、服务API、图标注册方式或视觉数值。Compiler和Validator必须从本Skill的权威合同读取这些事实，不得引用`Hi-Builder/`之外的运行资源。
 
 ## 必读契约
 

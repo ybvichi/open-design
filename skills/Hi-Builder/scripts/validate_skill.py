@@ -102,8 +102,8 @@ def validate_rule_ownership(root: Path = ROOT) -> list[str]:
     except (OSError, json.JSONDecodeError) as exc:
         return [f"规则归属索引无效: {exc}"]
 
-    if ownership.get("schema_version") != "hi-design-rule-ownership.v1":
-        errors.append("规则归属索引版本必须是hi-design-rule-ownership.v1")
+    if ownership.get("schema_version") != "hi-builder-rule-ownership.v1":
+        errors.append("规则归属索引版本必须是hi-builder-rule-ownership.v1")
 
     governed = ownership.get("governed_documents")
     if not isinstance(governed, list) or not governed:
@@ -562,8 +562,8 @@ def main() -> int:
             errors.append("SKILL.md缺少YAML frontmatter")
         else:
             block = frontmatter.group(1)
-            if not re.search(r"^name:\s*hi-design\s*$", block, re.M):
-                errors.append("SKILL.md name必须是hi-design")
+            if not re.search(r"^name:\s*hi-builder\s*$", block, re.M):
+                errors.append("SKILL.md name必须是hi-builder")
             if not re.search(r"^description:\s*\S+", block, re.M):
                 errors.append("SKILL.md缺少description")
         if len(text.splitlines()) > 500:
@@ -978,11 +978,11 @@ def main() -> int:
             errors.append("HTML模板缺少页面标题标记")
 
     if errors:
-        print("[FAIL] Hi-Design")
+        print("[FAIL] Hi-Builder")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("[PASS] Hi-Design")
+    print("[PASS] Hi-Builder")
     print("  ✓ Skill入口与UI元数据")
     print("  ✓ HUI通用知识与行业产品知识")
     print("  ✓ 产品优先与HUI兜底索引")

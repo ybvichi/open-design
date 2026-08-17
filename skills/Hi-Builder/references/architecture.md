@@ -1,10 +1,10 @@
-# Hi-Design架构契约
+# Hi-Builder架构契约
 
 ## 使命与边界
 
 <!-- rule-owner:mission-and-output-boundary -->
 
-Hi-Design把一次自然语言业务需求编译为符合HUI通用知识、行业语义、产品外观和D2C标注协议的可运行单文件HTML。
+Hi-Builder把一次自然语言业务需求编译为符合HUI通用知识、行业语义、产品外观和D2C标注协议的可运行单文件HTML。
 
 流水线为：
 

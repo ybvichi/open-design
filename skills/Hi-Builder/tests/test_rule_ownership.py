@@ -15,7 +15,7 @@ from validate_skill import validate_rule_ownership
 
 class RuleOwnershipTest(unittest.TestCase):
     def copy_skill(self, target: Path) -> Path:
-        copied = target / "Hi-Design"
+        copied = target / "Hi-Builder"
         shutil.copytree(ROOT, copied, ignore=shutil.ignore_patterns("output", "__pycache__", ".DS_Store"))
         return copied
 

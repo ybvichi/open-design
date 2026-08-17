@@ -186,7 +186,7 @@ def validate_runtime_contract(
                 continue
             resolved = (html_path.parent / value).resolve()
             if resolved != PROJECT_ROOT and PROJECT_ROOT not in resolved.parents:
-                errors.append(f"本地运行资源越出Hi-Design边界: {value}")
+                errors.append(f"本地运行资源越出Hi-Builder边界: {value}")
 
     scripts = "\n".join(parser.scripts)
     external_font_styles = [

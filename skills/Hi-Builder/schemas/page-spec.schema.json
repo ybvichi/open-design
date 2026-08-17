@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hi-design.page-spec.v2",
-  "title": "Hi-Design PageSpec Envelope",
+  "$id": "hi-builder.page-spec.v2",
+  "title": "Hi-Builder PageSpec Envelope",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "industry", "product", "page_type", "payload"],

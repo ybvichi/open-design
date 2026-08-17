@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hi-design.pattern-page-spec.v2",
+  "$id": "hi-builder.pattern-page-spec.v2",
   "title": "HUI TPP Pattern PageSpec",
   "type": "object",
   "additionalProperties": false,
