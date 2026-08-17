@@ -36,10 +36,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth=0 origin ${{ inputs.ref || github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -74,10 +76,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth=0 origin ${{ inputs.ref || github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -269,10 +273,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth=0 origin ${{ inputs.ref || github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -351,10 +357,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+        run: |
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth=0 origin ${{ inputs.ref || github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -539,10 +546,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+        run: |
+          set -euo pipefail
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth=0 origin ${{ inputs.ref || github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Pre-flight tag/release check
         run: |
