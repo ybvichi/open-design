@@ -1,0 +1,13 @@
+{
+  "schema_version": "hui-component-pattern.v2",
+  "id": "detail.details-pane",
+  "name": "关联详情面板",
+  "split_mode": "composite",
+  "vue_component": "DetailsPane",
+  "description": "展示与当前选中数据联动的详情内容和详情操作",
+  "category": "detail",
+  "status": "active",
+  "use_when": ["主表、主列表或主对象需要在同页联动展示详情"],
+  "hui_components": ["el-tabs", "el-tab-pane", "el-form", "el-form-item", "el-button"],
+  "owner": "hui-common"
+}

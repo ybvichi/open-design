@@ -1,0 +1,263 @@
+            </div>
+          </div>
+        </section>
+<!-- __PRODUCT_SHELL_END__ -->
+  </div>
+
+  <script src="__VUE_JS__"></script>
+  <script src="__HUI_JS__"></script>
+  <script>
+    const PAGE_CONFIG = Object.freeze(/* __PAGE_CONFIG__ */ {});
+    const PREVIEW_FIXTURES = Object.freeze(/* __PREVIEW_FIXTURES__ */ {});
+    function cloneRuntimeValue(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    new Vue({
+      el: '#app',
+      data: function () {
+        return {
+          config: PAGE_CONFIG,
+          sidebarCollapsed: false,
+          expandedSideMenus: [],
+          portalKeyword: '',
+          activeCardTab: '',
+          activeDetailTab: '',
+          activeDetailSection: '',
+          activeFormSection: '',
+          activeFormTab: '',
+          viewMode: 'table',
+          formModel: {},
+          filters: {},
+          appliedFilters: {},
+          selectedRows: [],
+          selectedDetailRow: {},
+          currentPage: 1,
+          pageSize: 20,
+          rows: [],
+          total: 0,
+          cardTabRows: {},
+          detailValues: {},
+          relatedTableRows: {},
+          detailMedia: { src: '', thumbnails: [] }
+        };
+      },
+      created: function () {
+        this.loadPreviewFixtures();
+      },
+      computed: {
+        huiShellOpenMenus: function () { return (this.config.portal.side_menus || []).filter(function (item) { return item.children && item.children.length; }).map(function (item) { return item.id; }); },
+        formSections: function () {
+          return this.config.form_sections || [{ id: 'basic', title: '基础信息', fields: this.config.form_fields || [] }];
+        },
+        visibleFormSections: function () {
+          var tabs = this.config.form_tabs || [];
+          if (!tabs.length) return this.formSections;
+          var active = tabs.filter(function (tab) { return tab.id === this.activeFormTab; }, this)[0] || tabs[0];
+          var ids = active.section_ids || [];
+          return this.formSections.filter(function (section) { return ids.indexOf(section.id) !== -1; });
+        },
+        formTabsInBreadcrumb: function () { return !!((this.config.form_tabs || []).length && (this.config.pattern_parameters || {}).page_tabs_placement === 'breadcrumb'); },
+        isAnchoredForm: function () { return this.config.pattern_family === 'hui.tpp.family.form-anchored'; },
+        isWorkOrderForm: function () {
+          var parameters = this.config.pattern_parameters || {};
+          return parameters.complexity === 'workflow' || (this.config.pattern_family === 'hui.tpp.family.form-stepped' && parameters.step_placement === 'left-sidebar');
+        },
+        formStepDirection: function () {
+          var parameters = this.config.pattern_parameters || {};
+          return parameters.step_placement === 'left-sidebar' ? 'vertical' : (parameters.steps_direction || 'horizontal');
+        },
+        isFirstLevelGroupedForm: function () { return this.config.pattern_family === 'hui.tpp.family.form-grouped' && (this.config.pattern_parameters || {}).group_depth === 1; },
+        activeFormSectionIndex: function () {
+          var ids = this.formSections.map(function (section) { return section.id; });
+          var index = ids.indexOf(this.activeFormSection);
+          return index < 0 ? 0 : index;
+        },
+        isAnchoredDetails: function () { return (this.config.pattern_family || '').indexOf('details-anchored') !== -1; },
+        isTextImageDetails: function () { return (this.config.pattern_family || '').indexOf('details-text-image') !== -1; },
+        isSimulationFile: function () { return (this.config.pattern_family || '').indexOf('details-simulation-file') !== -1; },
+        isMasterDetail: function () { return (this.config.pattern_family || '').indexOf('details-master-detail') !== -1; },
+        isParallelDetails: function () { return (this.config.pattern_family || '').indexOf('details-parallel') !== -1; },
+        isTableDetailsPane: function () { return this.config.pattern_family === 'hui.tpp.family.table-details-pane'; },
+        showFilterToolbarDivider: function () { return !!(((this.config.pattern_parameters || {}).separators || {}).filter_toolbar) && !!(this.config.filters || []).length; },
+        showMasterDetailsDivider: function () { return !!(((this.config.pattern_parameters || {}).separators || {}).master_details); },
+        anchorHorizontal: function () { return (this.config.pattern_parameters || {}).anchor_position === 'sticky-top'; },
+        showMasterSummary: function () { return (this.isMasterDetail || this.isParallelDetails) && (this.config.summary_fields || []).length; },
+        showMasterMedia: function () { return this.isMasterDetail && !!this.config.media; },
+        externalMasterMedia: function () { return this.showMasterMedia && (this.config.pattern_parameters || {}).master_workspace_relation === 'siblings'; },
+        stretchMaster: function () { return (this.config.pattern_parameters || {}).master_cross_axis === 'stretch'; },
+        separateMasterDetail: function () {
+          var parameters = this.config.pattern_parameters || {};
+          return parameters.layout_direction === 'horizontal' && parameters.container_relation === 'separate' && parameters.master_scroll === 'fixed' && parameters.detail_scroll === 'independent';
+        },
+        showPageSummary: function () { return this.isTextImageDetails && (this.config.pattern_parameters || {}).top_summary && (this.config.summary_fields || []).length; },
+        showInlineSummary: function () { return !this.showMasterSummary && !this.showPageSummary && (this.config.summary_fields || []).length; },
+        detailLayoutVertical: function () {
+          var direction = (this.config.pattern_parameters || {}).layout_direction;
+          return direction === 'vertical';
+        },
+        detailLayoutStyle: function () {
+          var parameters = this.config.pattern_parameters || {};
+          return { gap: (parameters.region_gap_px || 24) + 'px' };
+        },
+        detailMediaStyle: function () { return { flexBasis: ((this.config.pattern_parameters || {}).media_width_px || 1008) + 'px' }; },
+        detailContentStyle: function () {
+          var width = (this.config.pattern_parameters || {}).detail_panel_width_px;
+          return width && this.isTextImageDetails ? { flex: '0 0 ' + width + 'px' } : {};
+        },
+        detailRowTotal: function () {
+          var rows = this.relatedTableRows;
+          return Object.keys(rows).reduce(function (total, key) { return total + rows[key].length; }, 0);
+        },
+        activeCardTabSpec: function () {
+          var vm = this;
+          var tab = (this.config.card_tabs || []).filter(function (item) { return item.id === vm.activeCardTab; })[0] || {};
+          return Object.assign({}, tab, { rows: this.cardTabRows[tab.id] || [] });
+        },
+        activeCardProfile: function () {
+          return (this.config.card_visual_profiles || {})[this.activeCardTabSpec.card_profile] || {};
+        },
+        cardTabType: function () {
+          return this.config.card_tab_style === 'linear' ? undefined : this.config.card_tab_style;
+        },
+        activeRows: function () {
+          return this.config.page_kind === 'card-tabs' ? (this.activeCardTabSpec.rows || []) : this.rows;
+        },
+        filteredRows: function () {
+          var vm = this;
+          return this.activeRows.filter(function (row) {
+            return Object.keys(vm.appliedFilters).every(function (key) {
+              var value = vm.appliedFilters[key];
+              return !value || value === '全部' || String(row[key] || '').indexOf(value) !== -1;
+            });
+          });
+        },
+        pagedRows: function () { return this.filteredRows.slice((this.currentPage - 1) * this.pageSize, this.currentPage * this.pageSize); },
+        rowTotal: function () { return this.config.page_kind === 'card-tabs' ? this.activeRows.length : (this.total || this.activeRows.length); },
+        showTable: function () { return this.config.page_kind === 'table' || (this.config.page_kind === 'switch' && this.viewMode === 'table'); },
+        cardGridStyle: function () {
+          var layout = this.activeCardTabSpec.layout || {};
+          return { gridTemplateColumns: 'repeat(' + (layout.columns || 1) + ', minmax(0, 1fr))', gap: layout.collection_gap || '16px' };
+        },
+        knowledgeCardStyle: function () { return { height: (this.activeCardTabSpec.layout || {}).card_height }; },
+        knowledgeHeaderStyle: function () {
+          return { height: (this.activeCardTabSpec.layout || {}).header_height, padding: (this.activeCardProfile.header || {}).padding, borderBottom: '0' };
+        },
+        knowledgeBodyStyle: function () {
+          return { height: (this.activeCardTabSpec.layout || {}).body_height, padding: (this.activeCardProfile.body || {}).padding };
+        },
+        comparisonMediaStyle: function () {
+          var header = this.activeCardProfile.header || {};
+          return { height: header.media_height, columnGap: header.media_column_gap, marginBottom: header.media_gap_after };
+        },
+        comparisonTitleRowStyle: function () { return { height: (this.activeCardProfile.header || {}).title_row_height }; },
+        primaryTextStyle: function () { return { fontSize: (this.activeCardProfile.primary || {}).font_size, lineHeight: (this.activeCardProfile.primary || {}).line_height }; },
+        textContentStyle: function () {
+          var header = this.activeCardProfile.header || {};
+          return { paddingLeft: header.content_inline_padding, paddingTop: header.content_block_top, justifyContent: 'flex-start' };
+        },
+        textTitleStyle: function () {
+          var primary = this.activeCardProfile.primary || {};
+          var header = this.activeCardProfile.header || {};
+          return { fontSize: primary.font_size, lineHeight: primary.line_height, marginBottom: header.title_status_gap };
+        },
+        tagListStyle: function () { return { height: (this.activeCardProfile.status || {}).height }; },
+        metadataRowStyle: function () {
+          var body = this.activeCardProfile.body || {};
+          return { height: body.row_height || body.row_line_height, lineHeight: body.row_line_height, '--card-meta-row-gap': body.row_gap };
+        },
+        metadataIconStyle: function () {
+          var body = this.activeCardProfile.body || {};
+          return { width: body.icon_size, height: body.icon_size, marginRight: body.icon_text_gap, fontSize: body.icon_size, lineHeight: body.icon_size };
+        },
+        metricContainerStyle: function () {
+          var size = ((this.activeCardProfile.overlay || {}).container_size || '84px 32px').split(' ');
+          return { width: size[0], height: size[1] };
+        },
+        metricValueStyle: function () {
+          var metric = this.activeCardProfile.overlay || {};
+          return { padding: metric.content_padding, fontSize: metric.font_size, lineHeight: metric.line_height };
+        }
+      },
+      methods: {
+        loadPreviewFixtures: function () {
+          var fixtures = cloneRuntimeValue(PREVIEW_FIXTURES);
+          this.activeCardTab = this.config.card_tabs && this.config.card_tabs.length ? this.config.card_tabs[0].id : '';
+          this.activeDetailTab = this.config.detail_tabs && this.config.detail_tabs.length ? this.config.detail_tabs[0].id : '';
+          this.activeDetailSection = this.config.active_detail_section || ((this.config.detail_sections || [])[0] || {}).id || '';
+          this.viewMode = this.config.default_view || (this.config.page_kind === 'card' ? 'card' : 'table');
+          this.activeFormSection = ((this.config.form_sections || [])[0] || {}).id || '';
+          this.activeFormTab = ((this.config.form_tabs || [])[0] || {}).id || '';
+          this.filters = {};
+          var vm = this;
+          (this.config.filters || []).forEach(function (field) { vm.$set(vm.filters, field.key, field.kind === 'input' ? (field.default || '') : (field.default || '全部')); });
+          this.pageSize = this.config.page_size || 20;
+          this.expandedSideMenus = (this.config.portal.side_menus || []).filter(function (item) { return item.children && item.children.length; }).map(function (item) { return item.id; });
+          Object.keys(fixtures).forEach(function (key) {
+            if (key !== 'config' && Object.prototype.hasOwnProperty.call(vm.$data, key)) vm[key] = fixtures[key];
+          });
+          this.selectedDetailRow = this.rows.length ? this.rows[0] : {};
+        },
+        matchesCondition: function (condition) {
+          return !condition || this.formModel[condition.key] === condition.equals;
+        },
+        isCredentialVisual: function (field) {
+          return ['image', 'card', 'password', 'biometric'].indexOf(field.kind) !== -1;
+        },
+        formFieldSpan: function (field) {
+          var columns = Number((this.config.pattern_parameters || {}).columns) || 2;
+          return field.wide ? 24 : 24 / columns;
+        },
+        toggleSideMenu: function (id) {
+          var index = this.expandedSideMenus.indexOf(id);
+          if (index === -1) this.expandedSideMenus.push(id);
+          else this.expandedSideMenus.splice(index, 1);
+        },
+        queryRows: function () { this.appliedFilters = Object.assign({}, this.filters); this.currentPage = 1; },
+        selectDetailRow: function (row) { this.selectedDetailRow = row; },
+        detailFieldValue: function (key) { var value = this.selectedDetailRow[key]; return value === undefined || value === null || value === '' ? '—' : value; },
+        cardTabChanged: function () { this.currentPage = 1; },
+        resetFilters: function () {
+          this.filters = cloneRuntimeValue(PREVIEW_FIXTURES.filters || {});
+          if (!Object.keys(this.filters).length) {
+            var vm=this;
+            (this.config.filters||[]).forEach(function(field){ vm.$set(vm.filters,field.key,field.kind==='input'?(field.default||''):(field.default||'全部')); });
+          }
+          this.appliedFilters={}; this.currentPage=1;
+        },
+        resetForm: function () { this.formModel = cloneRuntimeValue(PREVIEW_FIXTURES.formModel || {}); },
+        activateFormSection: function (sectionId) {
+          var tab = (this.config.form_tabs || []).filter(function (item) {
+            return (item.section_ids || []).indexOf(sectionId) !== -1;
+          })[0];
+          if (tab) this.activeFormTab = tab.id;
+          this.$nextTick(function () {
+            var target = document.getElementById('form-section-' + sectionId);
+            if (target) target.scrollIntoView({ block: 'start' });
+          });
+        },
+        previousFormSection: function () {
+          var sections = this.formSections;
+          var index = sections.map(function (section) { return section.id; }).indexOf(this.activeFormSection);
+          if (index > 0) this.activeFormSection = sections[index - 1].id;
+        },
+        selectFormStep: function (index) {
+          if (this.formSections[index]) this.activeFormSection = this.formSections[index].id;
+        },
+        nextFormSection: function () {
+          var sections = this.formSections;
+          var index = sections.map(function (section) { return section.id; }).indexOf(this.activeFormSection);
+          if (index < sections.length - 1) this.activeFormSection = sections[index + 1].id;
+          else this.saveForm();
+        },
+        saveForm: function () { this.$message.success('设备权限配置已保存'); },
+        formAction: function (action) { if (action === '取消') this.resetForm(); else this.$message.success('已执行：' + action); },
+        toolbarAction: function (label) { this.$message.success('已执行：' + label); },
+        mediaAction: function (label) { this.$message.info('图片操作：' + label); },
+        openDetail: function (row) { this.selectDetailRow(row); },
+        openPreview: function (row) { this.$message.info('预览抓拍记录：' + (row.captureCode || row.deviceCode)); }
+      }
+    });
+  </script>
+</body>
+</html>

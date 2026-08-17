@@ -1,0 +1,3 @@
+<div v-if="formTabsInBreadcrumb" class="page-breadcrumb__tabs" data-zone="navigation.view-tabs" data-component="navigation.tabs">
+  <el-button v-for="tab in config.form_tabs" :key="tab.id" type="text" class="page-breadcrumb__tab" :class="{'is-active':activeFormTab===tab.id}" @click="activeFormTab=tab.id">{{ tab.label }}</el-button>
+</div>

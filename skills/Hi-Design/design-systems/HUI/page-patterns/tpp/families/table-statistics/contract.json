@@ -1,0 +1,80 @@
+{
+  "schema_version": "hui-page-pattern.v1",
+  "id": "hui.tpp.family.table-statistics",
+  "name": "统计表格页",
+  "source": {
+    "platform": "HUI-VUE典型页面",
+    "observed_at": "2026-07-31",
+    "catalog": "../../catalog.json"
+  },
+  "match": [
+    "statistics-table",
+    "带统计"
+  ],
+  "semantics": [
+    "summary-statistics",
+    "data-table",
+    "pagination"
+  ],
+  "shared_runtime_components": [
+    "el-button",
+    "el-checkbox",
+    "el-divider",
+    "el-input",
+    "el-option",
+    "el-pagination",
+    "el-progress",
+    "el-radio-button",
+    "el-radio-group",
+    "el-scrollbar",
+    "el-select",
+    "el-table",
+    "el-table-column",
+    "el-tag",
+    "el-tooltip",
+    "h-icon",
+    "h-svg-icon"
+  ],
+  "invariants": {
+    "regions": {
+      "toolbar": {
+        "display": "flex",
+        "position": "static",
+        "padding": "0px",
+        "gap": "normal",
+        "overflow_x": "visible",
+        "overflow_y": "visible",
+        "height": 56
+      },
+      "table": {
+        "display": "flex",
+        "position": "relative",
+        "padding": "0px",
+        "gap": "normal",
+        "overflow_x": "hidden",
+        "overflow_y": "hidden",
+        "height": 591.94
+      },
+      "pagination": {
+        "display": "flex",
+        "position": "static",
+        "padding": "0px 12px",
+        "gap": "normal",
+        "overflow_x": "visible",
+        "overflow_y": "visible",
+        "height": 56
+      }
+    },
+    "variant_values_must_come_from_page_contract": true
+  },
+  "variants": [
+    {
+      "id": "hui.tpp.page.table.with-statistics",
+      "name": "统计",
+      "contract": "../../pages/table/with-statistics.json",
+      "parameters": {
+        "statistics": true
+      }
+    }
+  ]
+}
