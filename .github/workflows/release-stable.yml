@@ -680,3 +680,103 @@ jobs:
           echo "publish failed after release was created; rolling back release and tag"
           gh release delete "$VERSION_TAG" --cleanup-tag --yes
           git push origin --delete "refs/tags/$VERSION_TAG" || true
+
+      # ------------------------------------------------------------------
+      # Update ybvichi.github.io/hi-design after successful release
+      # ------------------------------------------------------------------
+      - name: Checkout ybvichi.github.io submodule
+        run: |
+          set -euo pipefail
+          git submodule update --init --recursive ybvichi.github.io
+
+      - name: Update metadata.json in ybvichi.github.io
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/release-assets/metadata.json" "ybvichi.github.io/hi-design/stable/latest/metadata.json"
+          echo "Updated ybvichi.github.io/hi-design/stable/latest/metadata.json"
+
+      - name: Update VERSION_NO in index.html
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.release_version }}"
+          sed -i "s/var VERSION_NO = '[^']*';/var VERSION_NO = '$VERSION';/" "ybvichi.github.io/hi-design/index.html"
+          echo "Updated VERSION_NO to $VERSION in index.html"
+
+      - name: Add new version section to changelog.html
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.release_version }}"
+          # Generate version ID (remove dots, e.g., "0.19.2" -> "v0192")
+          VERSION_ID="v${VERSION//./}"
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # Write the new section to a temp file for Python to read
+          cat > /tmp/new_changelog_section.html <<CHANGESection
+        <!-- VERSION_SECTION -->
+        <section class="changelog-section" id="${VERSION_ID}">
+          <div class="version-header">
+            <span class="version-tag">v${VERSION}</span>
+            <span class="version-date">${TODAY}</span>
+          </div>
+          <h2><span class="badge badge-added">新增</span></h2>
+          <ul class="feature-list">
+            <li>
+              <h3>版本 v${VERSION} 发布</h3>
+              <p>本次更新包含功能改进与问题修复，详见 <a href="https://github.com/ybvichi/open-design/releases/tag/v${VERSION}" target="_blank">GitHub Release</a>。</p>
+            </li>
+          </ul>
+        </section>
+CHANGESection
+
+          python3 <<PYEOF
+import re
+
+changelog_path = "ybvichi.github.io/hi-design/changelog.html"
+with open(changelog_path, "r", encoding="utf-8") as f:
+    content = f.read()
+
+# Read the new section from temp file
+with open("/tmp/new_changelog_section.html", "r", encoding="utf-8") as f:
+    new_section_html = f.read()
+
+version_id = "${VERSION_ID}"
+version = "${VERSION}"
+
+# 1. Insert sidebar nav link after the "版本历史" group-label
+#    Find the first <a> after "版本历史" group-label and insert before it
+content = content.replace(
+    '<a href="#v0161" class="group-label">版本历史</a>\n',
+    f'<a href="#v0161" class="group-label">版本历史</a>\n<a href="#{version_id}">v{version}</a>\n'
+)
+
+# 2. Insert new section before the first <section class="changelog-section">
+#    This is more robust than matching a specific version comment
+content = content.replace(
+    '<section class="changelog-section"',
+    f'{new_section_html}\n\n    <section class="changelog-section"',
+    1  # Only replace the first occurrence
+)
+
+with open(changelog_path, "w", encoding="utf-8") as f:
+    f.write(content)
+
+print("Updated changelog.html")
+PYEOF
+
+      - name: Commit and push changes to ybvichi.github.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd ybvichi.github.io
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add hi-design/stable/latest/metadata.json
+          git add hi-design/index.html
+          git add hi-design/changelog.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update hi-design to v${{ inputs.release_version }}"
+            git push origin HEAD:main
+          fi
