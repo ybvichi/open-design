@@ -65,6 +65,16 @@
   display: inline-flex;
 }
 
+.bottomLeftVersion {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10000;
+  font-size: 12px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
 /* The updater button sits in the top-right corner of the login screen, so its
    popup must open to the LEFT (the default `.updater-popup` opens to the
    right of the button and would run off-screen here). */
