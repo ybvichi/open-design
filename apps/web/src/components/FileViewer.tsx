@@ -10788,7 +10788,7 @@ function HtmlViewer({
       });
     }
   }
-  async function deployToIux(type?:any){
+  async function deployToIux(type?:any,scope?:string){
     setDeploying(true);
     // 任何一步（取文件列表、读内容、POST 分享）抛异常都统一提示失败，
     // 并且无论如何都恢复 deploying 状态，避免卡在加载中。
@@ -10838,6 +10838,7 @@ function HtmlViewer({
         sourceProjectId:projectId,
         name,
         username,
+        scope,
         files: preparedFiles
       }
       console.log('params',params,fileData);
@@ -10850,14 +10851,24 @@ function HtmlViewer({
       });
       const cancelLabel = '';//iuxLink?'取消':'';
       if (resp.ok){
-        setExportToast({
-          message:cancelLabel+'分享成功!',
-          tone: 'success',
-        });
+        
         //if(!iuxLink){
           let result = await resp.json();
           let lastUrl = `${AI_BUILDER_WEB_PREX}${result.data.path}`
-          setIuxLink(lastUrl);
+          if(scope){
+            handleCopy(lastUrl)
+            setExportToast({
+              message:'复制链接成功',
+              tone: 'success',
+            });
+          }else{
+            setIuxLink(lastUrl);
+            setExportToast({
+              message:cancelLabel+'分享成功!',
+              tone: 'success',
+            });
+          }
+          
         // }else{
         //   setIuxLink('');
         // }
@@ -11038,19 +11049,25 @@ function HtmlViewer({
     let lastUrl;
     if(url){
      lastUrl = url;
+     handleCopy(lastUrl)
+     setExportToast({
+      message:'复制链接成功',
+      tone: 'success',
+     });
     }else{
-      let fileData = file as any;
-      const projectId = fileData.localPath.match(/projects[\\/]([a-f0-9-]{36})[\\/]/i)?.[1];
-      const fileName = fileData.name;
-      lastUrl = `${await getBaseUrl()}api/projects/${projectId}/raw/${fileName}`;
+      // let fileData = file as any;
+      // const projectId = fileData.localPath.match(/projects[\\/]([a-f0-9-]{36})[\\/]/i)?.[1];
+      // const fileName = fileData.name;
+      // lastUrl = `${await getBaseUrl()}api/projects/${projectId}/raw/${fileName}`;
+      // handleCopy(lastUrl)
+      // setExportToast({
+      //   message:'复制链接成功',
+      //   tone: 'success',
+      // });
+      void deployToIux(deployPhase,'private');
     }
-    // firePresentPopoverClick('new_tab');
-    // let url = presentNewTab(true);
-    handleCopy(lastUrl)
-    setExportToast({
-        message:'复制链接成功',
-        tone: 'success',
-      });
+    
+    
     //console.log('复制本地分享链路',file,liveArtifactPreviewUrl(projectId, liveArtifact.artifactId));
   }
   async function copyShareLink(url: string) {
