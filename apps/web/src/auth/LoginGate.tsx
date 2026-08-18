@@ -2,6 +2,8 @@ import { createContext, useContext, useLayoutEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
 import { Icon } from '../components/Icon';
+import { UpdaterPopup } from '../components/UpdaterPopup';
+import { useAppVersion } from '../analytics/provider';
 import {
   DEFAULT_PASSWORD,
   DEFAULT_USERNAME,
@@ -119,6 +121,9 @@ export function LoginGate({ children }: LoginGateProps) {
 function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fingerprint: string | null }) {
   // Pre-fill the built-in account so the default credentials are one click
   // away; the user can clear and type their own values if changed later.
+  // Version matches apps/packaged/package.json in packaged builds (the daemon
+  // pins it through OD_APP_VERSION); in dev it reflects the running daemon.
+  const appVersion = useAppVersion();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -155,9 +160,15 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
 
   return (
     <div className={styles.backdrop}>
-      <div className={styles.topLeftLogo}>
+      {/* <div className={styles.topLeftLogo}>
         <span className="od-brand-glyph" style={{ width: 80, height: 80, display: 'inline-block' }} />
+      </div> */}
+      <div className={styles.topRightUpdater}>
+        <UpdaterPopup />
       </div>
+      {appVersion && appVersion !== '0.0.0' ? (
+        <div className={styles.bottomLeftVersion}>当前版本：v{appVersion}</div>
+      ) : null}
       <div className={styles.card}>
         <div className={styles.brand}>
           <span className={styles.brandMark} aria-hidden>

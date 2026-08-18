@@ -57,6 +57,23 @@
   pointer-events: none;
 }
 
+.topRightUpdater {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: inline-flex;
+}
+
+/* The updater button sits in the top-right corner of the login screen, so its
+   popup must open to the LEFT (the default `.updater-popup` opens to the
+   right of the button and would run off-screen here). */
+.topRightUpdater :global(.updater-popup) {
+  top: 0;
+  left: auto;
+  right: calc(100% + 12px);
+}
+
 .topLeftLogoText {
   font-size: 14px;
   font-weight: 600;
