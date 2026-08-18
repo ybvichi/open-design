@@ -60,6 +60,7 @@ interface Props {
   ) => void;
   onBrowseRegistry?: () => void;
   onCancelShare?: (record: TemplateRecord) => void;
+  onToggleIux?: () => void;
   preferDefaultFacet?: boolean;
   title?: string;
   subtitle?: string;
@@ -84,6 +85,7 @@ export function PluginsHomeSection({
   onPluginShareAction,
   onBrowseRegistry,
   onCancelShare,
+  onToggleIux,
   preferDefaultFacet = true,
   title,
   subtitle,
@@ -225,6 +227,7 @@ export function PluginsHomeSection({
                 //setMode(mode === 'iux' ? 'all' : 'iux')
                 handlePickCategory(null);
                 setMode('iux');
+                onToggleIux?.();
               }}
               showAll
               query={query}

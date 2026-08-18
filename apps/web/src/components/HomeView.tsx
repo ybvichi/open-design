@@ -2291,6 +2291,7 @@ export function HomeView({
               console.warn('Failed to reload iux templates after cancel share', err);
             }
           }}
+          onToggleIux={refreshIuxTemplates}
           preferDefaultFacet
           cardLayout="gallery"
         />
