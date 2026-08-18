@@ -237,7 +237,7 @@ export function UpdaterPopup({
   const installBusy = installState === 'opening' || installState === 'handoff' || installState === 'quitting';
   const quitRecoverable = installState === 'recoverable' || installState === 'quitting';
   const canStartInstall = ready || installState === 'recoverable';
-  const showControl = ready || installState !== 'idle';
+  const showControl = ready || installState !== 'idle' || model.busy;
   const installFailureText = model.canOpenInstaller ? t('updater.openFailedFallback') : t('updater.failed');
   const controlLabel = quitRecoverable
     ? t('updater.quitButton')
@@ -421,10 +421,10 @@ export function UpdaterPopup({
   return (
     <div className="entry-updater-menu" ref={wrapRef}>
       <button
-        aria-disabled={installBusy ? 'true' : undefined}
+        aria-disabled={(installBusy || model.downloadProgress?.percent != null) ? 'true' : undefined}
         aria-expanded={panelOpen}
         aria-label={controlLabel}
-        className={`entry-nav-rail__btn entry-updater-menu__button is-ready${panelOpen ? ' is-active' : ''}${installBusy ? ' is-disabled' : ''}`}
+        className={`entry-nav-rail__btn entry-updater-menu__button is-ready${panelOpen ? ' is-active' : ''}${(installBusy || model.downloadProgress?.percent != null) ? ' is-disabled' : ''}`}
         data-testid="entry-nav-updater"
         data-tooltip={controlLabel}
         title={controlLabel}
@@ -448,6 +448,12 @@ export function UpdaterPopup({
         <span className="entry-updater-menu__glyph">
           <Icon name="arrow-up" size={18} strokeWidth={2.25} />
         </span>
+        {model.downloadProgress?.percent != null ? (
+          <div
+            className="entry-updater-menu__progress"
+            style={{ '--updater-progress': `${model.downloadProgress.percent}%` } as React.CSSProperties}
+          />
+        ) : null}
       </button>
       <AnimatePresence>
         {panelOpen ? (
