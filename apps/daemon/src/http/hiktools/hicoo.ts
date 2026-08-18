@@ -211,12 +211,14 @@ function copyForDesignerToUserDirAndRun(sourceDir: string, session: SsoSession):
       const batPath = path.join(targetDir, 'install.bat');
       if (fs.existsSync(batPath)) {
         import('child_process').then(({ spawn }) => {
-          spawn('cmd', ['/c', batPath], {
-            detached: true,
+          // windowsHide 与 detached 同时使用可能导致窗口仍弹出，
+          // 故仅保留 windowsHide + unref() 来隐藏窗口且不阻塞主进程
+          const child = spawn('cmd', ['/c', batPath], {
             stdio: 'ignore',
             cwd: targetDir,
             windowsHide: true,
-          }).unref();
+          });
+          child.unref();
         });
       }
     } else if (process.platform === 'darwin') {

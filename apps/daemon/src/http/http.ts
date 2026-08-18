@@ -142,7 +142,16 @@ function connectTunnel(
 ): void {
   const p = new URL(proxyStr);
   const raw = net.createConnection(Number(p.port) || 80, p.hostname);
-  raw.setTimeout(15000, () => { raw.destroy(); callback(new Error('Proxy CONNECT timeout'), null); });
+  let finished = false;
+  const done = (err: Error | null, sock: tls.TLSSocket | null) => {
+    if (finished) return;
+    finished = true;
+    callback(err, sock);
+  };
+
+  raw.setTimeout(15000, () => { raw.destroy(); done(new Error('Proxy CONNECT timeout'), null); });
+  raw.once('error', (e) => done(e, null));
+  raw.once('close', () => done(new Error('Proxy CONNECT connection closed'), null));
 
   raw.once('connect', () => {
     raw.write(`CONNECT ${targetHost}:${targetPort} HTTP/1.1\r\nHost: ${targetHost}:${targetPort}\r\n\r\n`);
@@ -151,17 +160,18 @@ function connectTunnel(
       hdr += chunk.toString('latin1');
       if (!hdr.includes('\r\n\r\n')) return;
       raw.removeListener('data', onHdr);
+      raw.removeAllListeners('close');
       if (!/^HTTP\/[\d.]+ 200/.test(hdr)) {
         raw.destroy();
-        return callback(new Error(`CONNECT refused: ${hdr.split('\r\n')[0]}`), null);
+        return done(new Error(`CONNECT refused: ${hdr.split('\r\n')[0]}`), null);
       }
       const tlsSock = tls.connect({ socket: raw, servername: targetHost, rejectUnauthorized: false });
-      tlsSock.once('secureConnect', () => callback(null, tlsSock));
-      tlsSock.once('error', (e) => callback(e, null));
+      tlsSock.setTimeout(30000, () => { tlsSock.destroy(); done(new Error('TLS handshake timeout'), null); });
+      tlsSock.once('secureConnect', () => done(null, tlsSock));
+      tlsSock.once('error', (e) => done(e, null));
     };
     raw.on('data', onHdr);
   });
-  raw.once('error', (e) => callback(e, null));
 }
 
 // ── Make one HTTP/1.1 request over a TLS socket (no redirect) ───
@@ -187,17 +197,29 @@ function rawTlsRequest(
   if (body) tlsSock.write(body);
 
   const chunks: Buffer[] = [];
+  let finished = false;
+  const done = (err: Error | null, result: { status: number; location: string | undefined; setCookies: string[]; body: string } | null) => {
+    if (finished) return;
+    finished = true;
+    tlsSock.destroy();
+    callback(err, result);
+  };
+
+  const timer = setTimeout(() => done(new Error('TLS request timeout'), null), 30000);
+
   tlsSock.on('data', (c: Buffer) => chunks.push(c));
   tlsSock.once('end', () => {
+    clearTimeout(timer);
+    if (finished) return;
     const buf = Buffer.concat(chunks);
     const hdrEnd = buf.indexOf('\r\n\r\n');
-    if (hdrEnd < 0) { tlsSock.destroy(); return callback(new Error('No HTTP header'), null); }
+    if (hdrEnd < 0) { return done(new Error('No HTTP header'), null); }
 
     const hdrPart = buf.slice(0, hdrEnd).toString();
     const bodyBuf = buf.slice(hdrEnd + 4);
     const lines = hdrPart.split('\r\n');
     const firstLine = lines[0];
-    if (!firstLine) { tlsSock.destroy(); return callback(new Error('No HTTP header'), null); }
+    if (!firstLine) { return done(new Error('No HTTP header'), null); }
     const m:any = firstLine.match(/^HTTP\/[\d.]+ (\d+)/);
     const status = m ? parseInt(m[1]) : 0;
 
@@ -211,10 +233,9 @@ function rawTlsRequest(
       else if (lower === 'transfer-encoding: chunked') isChunked = true;
     }
     const bodyStr = isChunked ? decodeChunked(bodyBuf) : bodyBuf.toString('utf8');
-    tlsSock.destroy();
-    callback(null, { status, location, setCookies, body: bodyStr });
+    done(null, { status, location, setCookies, body: bodyStr });
   });
-  tlsSock.once('error', (e) => { tlsSock.destroy(); callback(e, null); });
+  tlsSock.once('error', (e) => { clearTimeout(timer); done(e, null); });
 }
 
 export function rawRequest(
@@ -245,12 +266,61 @@ export function rawRequest(
 
       const bypassProxy = shouldBypassProxy(url.hostname);
 
+      // ── Direct request (shared by proxy fallback and no-proxy path) ──
+      const doDirect = () => {
+        const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
+        const req = mod.request(
+          {
+            hostname: url.hostname,
+            port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
+            path: url.pathname + url.search,
+            method: redirects === 0 ? m : 'GET',
+            headers,
+            rejectUnauthorized: false,
+          },
+          (res) => {
+            const rawCookies = ([] as string[]).concat((res.headers['set-cookie'] as string[]) || []);
+            const newCookies = parseCookieHeaders(rawCookies, u);
+            jar = mergeCookies(jar, newCookies);
+
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              const next = new URL(res.headers.location as string, u).toString();
+              res.resume();
+              return doReq('GET', next, jar, redirects + 1);
+            }
+
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () =>
+              resolve({
+                finalUrl: u,
+                body: Buffer.concat(chunks).toString('utf8'),
+                status: res.statusCode || 0,
+                headers: res.headers,
+                cookies: jar,
+              }),
+            );
+            res.on('error', reject);
+          },
+        );
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout')); });
+        req.on('error', reject);
+        if (requestBody !== undefined) req.write(requestBody);
+        req.end();
+      };
+
       // ── HTTPS via CONNECT proxy tunnel ──────────────────────────
       const httpsProxy = getHttpsProxy();
       if (isHttps && httpsProxy && !bypassProxy) {
         const targetPort = url.port ? parseInt(url.port) : 443;
         connectTunnel(httpsProxy, url.hostname, targetPort, (err, tlsSock) => {
-          if (err || !tlsSock) return reject(err || new Error('Tunnel failed'));
+          if (err || !tlsSock) {
+            // 代理隧道失败时，如果目标在内网白名单，fallback 到直连
+            if (bypassProxy) {
+              return doDirect();
+            }
+            return reject(err || new Error('Tunnel failed'));
+          }
           rawTlsRequest(tlsSock, redirects === 0 ? m : 'GET', url, headers, requestBody, (e2, res) => {
             if (e2 || !res) return reject(e2 || new Error('Request failed'));
             const newCookies = parseCookieHeaders(res.setCookies, u);
@@ -303,44 +373,7 @@ export function rawRequest(
       }
 
       // ── Direct HTTP / HTTPS (no proxy) ───────────────────────────
-      const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
-      const req = mod.request(
-        {
-          hostname: url.hostname,
-          port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
-          path: url.pathname + url.search,
-          method: redirects === 0 ? m : 'GET',
-          headers,
-          rejectUnauthorized: false,
-        },
-        (res) => {
-          const rawCookies = ([] as string[]).concat((res.headers['set-cookie'] as string[]) || []);
-          const newCookies = parseCookieHeaders(rawCookies, u);
-          jar = mergeCookies(jar, newCookies);
-
-          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            const next = new URL(res.headers.location as string, u).toString();
-            res.resume();
-            return doReq('GET', next, jar, redirects + 1);
-          }
-
-          const chunks: Buffer[] = [];
-          res.on('data', (c: Buffer) => chunks.push(c));
-          res.on('end', () =>
-            resolve({
-              finalUrl: u,
-              body: Buffer.concat(chunks).toString('utf8'),
-              status: res.statusCode || 0,
-              headers:res.headers,
-              cookies: jar,
-            }),
-          );
-          res.on('error', reject);
-        },
-      );
-      req.on('error', reject);
-      if (requestBody !== undefined) req.write(requestBody);
-      req.end();
+      doDirect();
     };
     doReq(method, urlStr, [...cookies]);
   });
