@@ -437,6 +437,7 @@
   cursor: default;
   color: color-mix(in srgb, var(--updater-accent) 42%, var(--text-faint));
   border-color: color-mix(in srgb, var(--updater-accent-strong) 22%, transparent);
+  pointer-events: none !important;
 }
 .entry-updater-menu .entry-updater-menu__button.is-disabled:hover {
   background:
