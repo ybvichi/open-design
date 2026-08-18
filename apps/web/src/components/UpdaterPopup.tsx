@@ -421,10 +421,10 @@ export function UpdaterPopup({
   return (
     <div className="entry-updater-menu" ref={wrapRef}>
       <button
-        aria-disabled={installBusy ? 'true' : undefined}
+        aria-disabled={(installBusy || model.downloadProgress?.percent != null) ? 'true' : undefined}
         aria-expanded={panelOpen}
         aria-label={controlLabel}
-        className={`entry-nav-rail__btn entry-updater-menu__button is-ready${panelOpen ? ' is-active' : ''}${installBusy ? ' is-disabled' : ''}`}
+        className={`entry-nav-rail__btn entry-updater-menu__button is-ready${panelOpen ? ' is-active' : ''}${(installBusy || model.downloadProgress?.percent != null) ? ' is-disabled' : ''}`}
         data-testid="entry-nav-updater"
         data-tooltip={controlLabel}
         title={controlLabel}
