@@ -266,12 +266,61 @@ export function rawRequest(
 
       const bypassProxy = shouldBypassProxy(url.hostname);
 
+      // ── Direct request (shared by proxy fallback and no-proxy path) ──
+      const doDirect = () => {
+        const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
+        const req = mod.request(
+          {
+            hostname: url.hostname,
+            port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
+            path: url.pathname + url.search,
+            method: redirects === 0 ? m : 'GET',
+            headers,
+            rejectUnauthorized: false,
+          },
+          (res) => {
+            const rawCookies = ([] as string[]).concat((res.headers['set-cookie'] as string[]) || []);
+            const newCookies = parseCookieHeaders(rawCookies, u);
+            jar = mergeCookies(jar, newCookies);
+
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              const next = new URL(res.headers.location as string, u).toString();
+              res.resume();
+              return doReq('GET', next, jar, redirects + 1);
+            }
+
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () =>
+              resolve({
+                finalUrl: u,
+                body: Buffer.concat(chunks).toString('utf8'),
+                status: res.statusCode || 0,
+                headers: res.headers,
+                cookies: jar,
+              }),
+            );
+            res.on('error', reject);
+          },
+        );
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout')); });
+        req.on('error', reject);
+        if (requestBody !== undefined) req.write(requestBody);
+        req.end();
+      };
+
       // ── HTTPS via CONNECT proxy tunnel ──────────────────────────
       const httpsProxy = getHttpsProxy();
       if (isHttps && httpsProxy && !bypassProxy) {
         const targetPort = url.port ? parseInt(url.port) : 443;
         connectTunnel(httpsProxy, url.hostname, targetPort, (err, tlsSock) => {
-          if (err || !tlsSock) return reject(err || new Error('Tunnel failed'));
+          if (err || !tlsSock) {
+            // 代理隧道失败时，如果目标在内网白名单，fallback 到直连
+            if (bypassProxy) {
+              return doDirect();
+            }
+            return reject(err || new Error('Tunnel failed'));
+          }
           rawTlsRequest(tlsSock, redirects === 0 ? m : 'GET', url, headers, requestBody, (e2, res) => {
             if (e2 || !res) return reject(e2 || new Error('Request failed'));
             const newCookies = parseCookieHeaders(res.setCookies, u);
@@ -324,45 +373,7 @@ export function rawRequest(
       }
 
       // ── Direct HTTP / HTTPS (no proxy) ───────────────────────────
-      const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
-      const req = mod.request(
-        {
-          hostname: url.hostname,
-          port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
-          path: url.pathname + url.search,
-          method: redirects === 0 ? m : 'GET',
-          headers,
-          rejectUnauthorized: false,
-        },
-        (res) => {
-          const rawCookies = ([] as string[]).concat((res.headers['set-cookie'] as string[]) || []);
-          const newCookies = parseCookieHeaders(rawCookies, u);
-          jar = mergeCookies(jar, newCookies);
-
-          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            const next = new URL(res.headers.location as string, u).toString();
-            res.resume();
-            return doReq('GET', next, jar, redirects + 1);
-          }
-
-          const chunks: Buffer[] = [];
-          res.on('data', (c: Buffer) => chunks.push(c));
-          res.on('end', () =>
-            resolve({
-              finalUrl: u,
-              body: Buffer.concat(chunks).toString('utf8'),
-              status: res.statusCode || 0,
-              headers:res.headers,
-              cookies: jar,
-            }),
-          );
-          res.on('error', reject);
-        },
-      );
-      req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout')); });
-      req.on('error', reject);
-      if (requestBody !== undefined) req.write(requestBody);
-      req.end();
+      doDirect();
     };
     doReq(method, urlStr, [...cookies]);
   });
