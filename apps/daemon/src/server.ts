@@ -790,6 +790,7 @@ import {
   createWorkspaceContextProviderFromEnv,
   fetchVelaWorkspaceDirectory,
   resolveVelaWorkspaceHubEventsEndpoint,
+  usesWorkspaceDirectoryAuthority,
   velaWorkspaceDirectoryIdentity,
   workspaceContextFromDirectoryItem,
 } from './collab/vela-workspace-context.js';
@@ -3188,7 +3189,7 @@ export async function startServer({
     req: any;
     requireTeam?: boolean;
   }, options: { fresh?: boolean; backgroundFresh?: boolean } = {}) => {
-    if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
+    if (usesWorkspaceDirectoryAuthority(process.env)) {
       let fetchDirectory = fetchFreshMutationWorkspaceDirectory;
       if (options.fresh === false) {
         fetchDirectory = fetchWorkspaceDirectory;
@@ -3250,7 +3251,7 @@ export async function startServer({
   const verifyWorkspaceRequestAuthority = (req: unknown) =>
     verifyExplicitWorkspaceRequestContext({ req });
   const verifyPersonalProjectDeleteLeaseAuthority =
-    process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+    usesWorkspaceDirectoryAuthority(process.env)
       ? (req: unknown) => verifyWorkspaceRequestContext({
           req,
           // A miss is intentionally returned as unavailable. The project gate
@@ -3266,7 +3267,7 @@ export async function startServer({
   // Keep this separate from read-side directory fetches so an unconfigured
   // daemon never turns ordinary local creation into a network-dependent path.
   const fetchProjectCreationWorkspaceDirectory =
-    process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+    usesWorkspaceDirectoryAuthority(process.env)
       ? fetchFreshMutationWorkspaceDirectory
       : undefined;
   const listWorkspaceDirectory = async () => {
@@ -3424,6 +3425,7 @@ export async function startServer({
     createWorkspaceContextProviderFromEnv(process.env, {
       getActiveWorkspaceId: () => activeWorkspace.get(),
       setLocalSelection: (workspaceId: string) => activeWorkspace.set(workspaceId),
+      dataDir: RUNTIME_DATA_DIR,
       // Only called after the membership directory CONFIRMS the pinned
       // workspace is gone (removed member / deleted workspace) — never on a
       // mere B outage. See resolvePinnedWorkspace in vela-workspace-context.ts.
@@ -7345,7 +7347,7 @@ export async function startServer({
     if (!binding?.workspaceId) return { workspace: null };
 
     let authority;
-    if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
+    if (usesWorkspaceDirectoryAuthority(process.env)) {
       const directory = await fetchFreshMutationWorkspaceDirectory().catch(
         () => ({ ok: false, items: [] }),
       );

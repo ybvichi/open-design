@@ -6,13 +6,17 @@ import type { WorkspaceDirectoryItem } from '@open-design/contracts';
 import {
   createCachedWorkspaceDirectoryFetcher,
   createFreshWorkspaceDirectoryFetcher,
+  createMockWorkspaceContextProvider,
   createWorkspaceDirectoryAuthorityBroker,
   createVelaWorkspaceContextProvider,
+  fetchMockWorkspaceDirectory,
   fetchVelaWorkspaceDirectory,
   mapVelaWorkspaceContext,
   resolveVelaWorkspaceHubEventsEndpoint,
+  usesWorkspaceDirectoryAuthority,
   velaWorkspaceDirectoryIdentityForSession,
   workspaceContextFromDirectoryItem,
+  workspaceContextSource,
 } from '../src/collab/vela-workspace-context.js';
 import {
   clearVelaAuthorizationState,
@@ -158,6 +162,102 @@ describe('mapVelaWorkspaceContext', () => {
     expect(mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, lifecycleState: 'frozen' })).toBeNull();
     expect(mapVelaWorkspaceContext({ ...B_TEAM_CONTEXT, workspaceMemberId: '' })).toBeNull();
     expect(mapVelaWorkspaceContext(null)).toBeNull();
+  });
+});
+
+describe('workspaceContextSource', () => {
+  it.each([
+    ['vela', 'vela'],
+    ['mock', 'mock'],
+    ['stub', 'local'],
+    [undefined, 'local'],
+  ] as const)('classifies %s as %s', (value, expected) => {
+    const env = (value === undefined
+      ? {}
+      : { OD_WORKSPACE_CONTEXT_SOURCE: value }) as NodeJS.ProcessEnv;
+    expect(workspaceContextSource(env)).toBe(expected);
+  });
+
+  it('enables directory authority for vela and mock, not local', () => {
+    expect(usesWorkspaceDirectoryAuthority({ OD_WORKSPACE_CONTEXT_SOURCE: 'vela' })).toBe(true);
+    expect(usesWorkspaceDirectoryAuthority({ OD_WORKSPACE_CONTEXT_SOURCE: 'mock' })).toBe(true);
+    expect(usesWorkspaceDirectoryAuthority({ OD_WORKSPACE_CONTEXT_SOURCE: 'stub' })).toBe(false);
+    expect(usesWorkspaceDirectoryAuthority({})).toBe(false);
+  });
+});
+
+describe('fetchMockWorkspaceDirectory', () => {
+  it('synthesizes a deterministic team directory with owner and member workspaces', () => {
+    const result = fetchMockWorkspaceDirectory();
+    expect(result.ok).toBe(true);
+    expect(result.items).toHaveLength(2);
+    const owner = result.items[0]!;
+    const member = result.items[1]!;
+    expect(owner).toMatchObject({
+      workspaceType: 'team',
+      workspaceMemberId: 'zoo',
+      role: 'owner',
+      memberStatus: 'active',
+      lifecycleState: 'active',
+    });
+    expect(member).toMatchObject({ role: 'member', memberStatus: 'active' });
+    expect(member.workspaceId).toBe(`${owner.workspaceId}_copy`);
+    expect(fetchMockWorkspaceDirectory().items[0]!.workspaceId).toBe(owner.workspaceId);
+  });
+
+  it('routes a signed-out session to the mock directory only under the mock source', async () => {
+    // Without the explicit mock source the signed-out identity stays empty.
+    await expect(
+      fetchVelaWorkspaceDirectory({ readSession: () => null }),
+    ).resolves.toEqual({ ok: true, items: [] });
+
+    vi.stubEnv('OD_WORKSPACE_CONTEXT_SOURCE', 'mock');
+    const mocked = await fetchVelaWorkspaceDirectory({ readSession: () => null });
+    expect(mocked.ok).toBe(true);
+    expect(mocked.items.length).toBeGreaterThan(0);
+    expect(mocked.items[0]!.role).toBe('owner');
+  });
+});
+
+describe('createMockWorkspaceContextProvider', () => {
+  it('bootstraps the default workspace and persists the local selection', async () => {
+    const selections: string[] = [];
+    const provider = createMockWorkspaceContextProvider({
+      setLocalSelection: (workspaceId) => {
+        selections.push(workspaceId);
+      },
+    });
+    const context = await provider.current({});
+    expect(context).not.toBeNull();
+    expect(context?.workspaceType).toBe('team');
+    expect(context?.role).toBe('owner');
+    expect(context?.workspaceId).toBe(fetchMockWorkspaceDirectory().items[0]!.workspaceId);
+    expect(selections).toEqual([context?.workspaceId]);
+  });
+
+  it('resolves an explicit request workspace and returns null for an unknown one', async () => {
+    const provider = createMockWorkspaceContextProvider();
+    const knownId = fetchMockWorkspaceDirectory().items[0]!.workspaceId;
+    const context = await provider.resolveExact!({ workspaceId: knownId });
+    expect(context?.workspaceId).toBe(knownId);
+    expect(context?.role).toBe('owner');
+    await expect(
+      provider.resolveExact!({ workspaceId: 'does-not-exist' }),
+    ).resolves.toBeNull();
+  });
+
+  it('clears a stale pin and falls back to the default pick', async () => {
+    const cleared: string[] = [];
+    const provider = createMockWorkspaceContextProvider({
+      getActiveWorkspaceId: () => 'stale-workspace',
+      clearLocalSelection: () => {
+        cleared.push('stale-workspace');
+      },
+    });
+    const context = await provider.current({});
+    expect(cleared).toEqual(['stale-workspace']);
+    expect(context).not.toBeNull();
+    expect(context?.workspaceId).toBe(fetchMockWorkspaceDirectory().items[0]!.workspaceId);
   });
 });
 

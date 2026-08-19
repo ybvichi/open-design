@@ -217,6 +217,26 @@ function mapVelaWorkspaceDirectoryItem(input: unknown): WorkspaceDirectoryItem |
 }
 
 /**
+ * Pick the best default membership out of an already-fetched directory list:
+ * the preferred id when listed, else the personal workspace, else the first
+ * active membership. Shared by the vela and mock providers so both bootstrap a
+ * fresh/absent selection the same way.
+ */
+function selectDefaultWorkspaceCandidate(
+  items: WorkspaceDirectoryItem[],
+  preferredId?: string,
+): WorkspaceDirectoryItem | undefined {
+  const candidates = items.filter(
+    (item) => item.memberStatus === 'active' && item.lifecycleState === 'active',
+  );
+  return (
+    (preferredId ? candidates.find((item) => item.workspaceId === preferredId) : undefined) ??
+    candidates.find((item) => item.workspaceType === 'personal') ??
+    candidates[0]
+  );
+}
+
+/**
  * Provider that fetches the workspace context from B using the local vela
  * session. Swap this in for the dev stub once a B-backed vela is reachable.
  */
@@ -266,21 +286,6 @@ export function createVelaWorkspaceContextProvider(
     }
   }
 
-  /** Pick the best default membership out of an already-fetched directory list. */
-  function selectDefaultCandidate(
-    items: WorkspaceDirectoryItem[],
-    preferredId: string | undefined,
-  ): WorkspaceDirectoryItem | undefined {
-    const candidates = items.filter(
-      (item) => item.memberStatus === 'active' && item.lifecycleState === 'active',
-    );
-    return (
-      (preferredId ? candidates.find((item) => item.workspaceId === preferredId) : undefined) ??
-      candidates.find((item) => item.workspaceType === 'personal') ??
-      candidates[0]
-    );
-  }
-
   /**
    * Fresh-account default pick. B's workspace selection is server-side state
    * and a new account has NO current workspace, so every workspace-scoped
@@ -304,7 +309,7 @@ export function createVelaWorkspaceContextProvider(
       prefetched ??
       (await fetchVelaWorkspaceDirectory({ fetch: fetchImpl, readSession: () => session, timeoutMs }));
     const preferredId = options.getActiveWorkspaceId?.()?.trim();
-    const pick = selectDefaultCandidate(result.items, preferredId);
+    const pick = selectDefaultWorkspaceCandidate(result.items, preferredId);
     if (!pick) {
       lastBootstrapFailureAt = Date.now();
       return null;
@@ -951,6 +956,80 @@ export function createFreshWorkspaceDirectoryFetcher(options: {
   return createWorkspaceDirectoryAuthorityBroker(options).fresh;
 }
 
+export type WorkspaceContextSource = 'vela' | 'mock' | 'local';
+
+/** Classify the configured workspace-context source for this run. */
+export function workspaceContextSource(
+  env: NodeJS.ProcessEnv = process.env,
+): WorkspaceContextSource {
+  const value = env.OD_WORKSPACE_CONTEXT_SOURCE?.trim();
+  if (value === 'vela') return 'vela';
+  if (value === 'mock') return 'mock';
+  return 'mock';
+}
+
+/**
+ * True when request authority must come from a membership directory — the real
+ * vela directory (`vela`) or the dev-only mock directory (`mock`). Distinct
+ * from a strict `'vela'` check: only real vela enables hub subscriptions and
+ * the vela CLI transports; the mock directory must never dial production.
+ */
+export function usesWorkspaceDirectoryAuthority(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const source = workspaceContextSource(env);
+  return source === 'vela' || source === 'mock';
+}
+
+/**
+ * Dev-only mock directory source (`OD_WORKSPACE_CONTEXT_SOURCE=mock`).
+ *
+ * This is the seam a future third-party cloud proxy fills: it returns the same
+ * `WorkspaceDirectoryFetchResult` the real vela directory returns, so every
+ * downstream verification/permission gate works unchanged. It synthesizes an
+ * SSO-derived team directory so a local tools-dev run can exercise the full
+ * workspace/team flow without a reachable backend. The workspace id is a
+ * deterministic hash of the department path and the member id is the SSO login
+ * name, so two runs agree on the same identity. It never runs in production:
+ * the caller only routes here when BOTH the explicit env source is `mock` AND
+ * there is no real vela session.
+ */
+export function fetchMockWorkspaceDirectory(
+  dataDir?: string,
+): WorkspaceDirectoryFetchResult {
+  const ssoSession = dataDir ? readSsoConfigFile(dataDir) : null;
+  const loginName: string = ssoSession?.userInfo?.loginName ?? 'zoo';
+  const departmentDetail: string = ssoSession?.userInfo?.departmentDetail ?? '我的动物园';
+  const dd = departmentDetail.split('/'); // 软件产品研发中心/技术平台部/用户体验部/智能设计效能组
+  const workspaceId = createHash('sha256').update(departmentDetail).digest('hex').slice(0, 32);
+  const workspaceName = dd[3] || dd[2] || dd[1] || dd[0] || '我的动物园';
+  const workspaceId2 = createHash('sha256').update('他的游乐场').digest('hex').slice(0, 32);
+  const workspaceName2 = '他的游乐场';
+  return {
+    ok: true,
+    items: [
+      {
+        workspaceId,
+        workspaceName,
+        workspaceType: 'team',
+        workspaceMemberId: loginName,
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+      },
+      {
+        workspaceId: workspaceId2,
+        workspaceName: workspaceName2,
+        workspaceType: 'team',
+        workspaceMemberId: loginName,
+        role: 'member',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+      },
+    ],
+  };
+}
+
 export async function fetchVelaWorkspaceDirectory(
   options: VelaWorkspaceContextOptions = {},
   dataDir?: string,
@@ -963,28 +1042,14 @@ export async function fetchVelaWorkspaceDirectory(
   // authority outage. Returning a successful empty directory lets clients
   // clear a previously cached Team selection instead of preserving it forever.
   if (!session || !session.controlKey || !session.apiUrl) {
-    // ===== MOCK MODE: bypass login for local dev =====
-    const ssoSession: any = dataDir ? readSsoConfigFile(dataDir) : null;
-    const loginName = ssoSession?.userInfo?.loginName ?? 'zoo';
-    const departmentDetail = ssoSession?.userInfo?.departmentDetail ?? '动物园';
-    const dd = departmentDetail.split('/'); // 软件产品研发中心/技术平台部/用户体验部/智能设计效能组
-    const workspaceId = createHash('sha256').update(departmentDetail).digest('hex').slice(0, 32);
-    const workspaceName = dd[3] || dd[2] || dd[1] || dd[0];
-    return {
-      ok: true,
-      items: [
-        {
-          workspaceId,
-          workspaceName,
-          workspaceType: 'team',
-          workspaceMemberId: loginName,
-          role: 'owner',
-          memberStatus: 'active',
-          lifecycleState: 'active',
-        },
-      ],
-    };
-    // ===================================================
+    // Mock source (dev-only): synthesize a directory so the full verification
+    // + permission path runs without a reachable backend. Never active in
+    // production — this branch requires BOTH the explicit `mock` env source
+    // AND the absence of a real session.
+    if (workspaceContextSource(process.env) === 'mock') {
+      return fetchMockWorkspaceDirectory(dataDir);
+    }
+    return { ok: true, items: [] };
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -1028,20 +1093,87 @@ export async function listVelaWorkspaceDirectory(
 }
 
 /**
+ * Dev-only mock context provider (`OD_WORKSPACE_CONTEXT_SOURCE=mock`).
+ *
+ * The mock directory is the authority: `current`/`resolveExact` resolve the
+ * caller-selected (or locally pinned) workspace against
+ * `fetchMockWorkspaceDirectory`, mirroring the vela provider's bootstrap
+ * semantics without any network I/O. It shares the vela provider's local-pin
+ * seam (`getActiveWorkspaceId` / `setLocalSelection` / `clearLocalSelection`),
+ * and `dataDir` feeds the SSO-derived identity so the provider and the
+ * directory broker agree on the same workspace ids.
+ */
+export function createMockWorkspaceContextProvider(
+  options: {
+    getActiveWorkspaceId?: () => string | null | undefined;
+    setLocalSelection?: (workspaceId: string) => void | Promise<void>;
+    clearLocalSelection?: () => void | Promise<void>;
+    dataDir?: string;
+  } = {},
+): WorkspaceContextProvider {
+  const items = (): WorkspaceDirectoryItem[] =>
+    fetchMockWorkspaceDirectory(options.dataDir).items;
+
+  const isUsable = (item: WorkspaceDirectoryItem): boolean =>
+    item.memberStatus === 'active' && item.lifecycleState !== 'deleted';
+
+  async function current(
+    req: WorkspaceContextRequest,
+  ): Promise<WorkspaceCollabContext | null> {
+    const explicitSelection = req.workspaceId?.trim() || undefined;
+    const localSelection =
+      explicitSelection ?? (options.getActiveWorkspaceId?.()?.trim() || undefined);
+    const membership = localSelection
+      ? items().find((item) => item.workspaceId === localSelection && isUsable(item))
+      : undefined;
+    if (membership) return workspaceContextFromDirectoryItem(membership);
+
+    if (localSelection) {
+      // The requested/pinned workspace is absent from the mock directory —
+      // mirror the vela provider's confirmed-stale recovery: purge the pin and
+      // fall through to the same default pick a fresh selection gets.
+      await options.clearLocalSelection?.();
+    }
+    const pick = selectDefaultWorkspaceCandidate(items());
+    if (!pick) return null;
+    await options.setLocalSelection?.(pick.workspaceId);
+    return workspaceContextFromDirectoryItem(pick);
+  }
+
+  return {
+    current,
+    resolveExact: async (req) => {
+      const workspaceId = req.workspaceId.trim();
+      const item = items().find(
+        (entry) => entry.workspaceId === workspaceId && isUsable(entry),
+      );
+      return item ? workspaceContextFromDirectoryItem(item) : null;
+    },
+  };
+}
+
+/**
  * Select the workspace-context provider for this run. `OD_WORKSPACE_CONTEXT_SOURCE
  * =vela` opts into the real B-backed provider (production / e2e against a live
- * vela); every other value keeps the dev stub, so demo and tools-dev runs — which
- * have no B and drive the context via the dev PUT — are unaffected.
+ * vela); `=mock` opts into the dev-only mock provider backed by the mock
+ * directory; every other value keeps the dev stub, so demo and tools-dev runs —
+ * which have no B and drive the context via the dev PUT — are unaffected.
  */
 export function createWorkspaceContextProviderFromEnv(
   env: NodeJS.ProcessEnv = process.env,
-  options: Pick<
-    VelaWorkspaceContextOptions,
-    'getActiveWorkspaceId' | 'setLocalSelection' | 'clearLocalSelection'
-  > = {},
+  options: {
+    getActiveWorkspaceId?: () => string | null | undefined;
+    setLocalSelection?: (workspaceId: string) => void | Promise<void>;
+    clearLocalSelection?: () => void | Promise<void>;
+    dataDir?: string;
+  } = {},
 ): WorkspaceContextProvider {
-  if (env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
+  const source = workspaceContextSource(env);
+  if (source === 'vela') {
     return createVelaWorkspaceContextProvider(options);
+  }
+  if (source === 'mock') {
+    return createMockWorkspaceContextProvider(options);
   }
   return createDevWorkspaceContextProvider();
 }
