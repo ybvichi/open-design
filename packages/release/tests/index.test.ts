@@ -54,7 +54,7 @@ describe("@open-design/release", () => {
     expect(releaseChannelDescriptor("prerelease").productName).toBe("Hi Design Prerelease");
     expect(releaseChannelDescriptor("betas").productName).toBe("Hi Design Betas");
     expect(releaseInstallIdentity("prerelease")).toEqual({
-      appId: "io.open-design.desktop.prerelease",
+      appId: "io.hi-design.desktop.prerelease",
       executableName: "Hi Design Prerelease",
       productName: "Hi Design Prerelease",
     });

@@ -46,7 +46,7 @@ function makeConfig(root: string, namespace: string): ToolPackConfig {
 describe("resolveMacInstallIdentity", () => {
   it("keeps stable builds on the canonical mac identity", () => {
     expect(resolveMacInstallIdentity(makeConfig("/work", "release-stable"))).toMatchObject({
-      appId: "io.open-design.desktop",
+      appId: "io.hi-design.desktop",
       installerTitle: "Hi Design",
       productName: "Hi Design",
       publicAppBundleName: "Hi Design.app",
@@ -58,7 +58,7 @@ describe("resolveMacInstallIdentity", () => {
     const config = makeConfig("/work", "release-beta");
 
     expect(resolveMacInstallIdentity(config)).toEqual({
-      appId: "io.open-design.desktop.beta",
+      appId: "io.hi-design.desktop.beta",
       executableName: "Hi Design Beta",
       installerTitle: "Hi Design Beta",
       productName: "Hi Design Beta",
@@ -72,7 +72,7 @@ describe("resolveMacInstallIdentity", () => {
     const config = makeConfig("/work", "release-preview");
 
     expect(resolveMacInstallIdentity(config)).toEqual({
-      appId: "io.open-design.desktop.preview",
+      appId: "io.hi-design.desktop.preview",
       executableName: "Hi Design Preview",
       installerTitle: "Hi Design Preview",
       productName: "Hi Design Preview",
@@ -90,7 +90,7 @@ describe("resolveMacInstallIdentity", () => {
     const prereleaseNamespaceConfig = makeConfig("/work", "release-prerelease");
 
     expect(resolveMacInstallIdentity(prereleaseVersionConfig)).toEqual({
-      appId: "io.open-design.desktop.prerelease",
+      appId: "io.hi-design.desktop.prerelease",
       executableName: "Hi Design Prerelease",
       installerTitle: "Hi Design Prerelease",
       productName: "Hi Design Prerelease",
