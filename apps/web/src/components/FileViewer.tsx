@@ -10861,10 +10861,13 @@ function HtmlViewer({
           let result = await resp.json();
           let lastUrl = `${AI_BUILDER_WEB_PREX}${result.data.path}`
           if(scope){
-            handleCopy(lastUrl)
-            setExportToast({
+            const ok = await handleCopy(lastUrl)
+            setExportToast(ok ? {
               message:'复制链接成功',
               tone: 'success',
+            } : {
+              message: t('useEverywhere.copyFailed'),
+              tone: 'error',
             });
           }else{
             setIuxLink(lastUrl);
@@ -11041,35 +11044,26 @@ function HtmlViewer({
       setCopiedDeployLink((current) => (current === safeUrl ? null : current));
     }, 1800);
   }
-  function handleCopy(value:string){
-    const input = document.createElement("input");
-    input.value = value;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand("copy");
-    document.body.removeChild(input);
+  // 走 Clipboard API 主路径：execCommand('copy') 在 await 之后会因丢失用户手势
+  // 激活而静默失败，navigator.clipboard 在异步上下文中仍可工作。返回是否复制
+  // 成功，让调用方决定提示文案。
+  async function handleCopy(value: string): Promise<boolean> {
+    return copyToClipboard(value);
   }
   async function copyLocalShareLink(url?:string){
     setDeployMenuOpen(false);
-    let lastUrl;
     if(url){
-     lastUrl = url;
-     handleCopy(lastUrl)
-     setExportToast({
+     const ok = await handleCopy(url);
+     setExportToast(ok ? {
       message:'复制链接成功',
       tone: 'success',
+     } : {
+      message: t('useEverywhere.copyFailed'),
+      tone: 'error',
      });
     }else{
-      // let fileData = file as any;
-      // const projectId = fileData.localPath.match(/projects[\\/]([a-f0-9-]{36})[\\/]/i)?.[1];
-      // const fileName = fileData.name;
-      // lastUrl = `${await getBaseUrl()}api/projects/${projectId}/raw/${fileName}`;
-      // handleCopy(lastUrl)
-      // setExportToast({
-      //   message:'复制链接成功',
-      //   tone: 'success',
-      // });
-      void deployToIux(deployPhase,'private');
+     // 不传链接时走部署流程生成私密分享，不在此处复制。
+     void deployToIux(deployPhase,'private');
     }
     
     
@@ -15121,14 +15115,11 @@ function ImageViewer({
     };
   }, [shareMenuOpen, pushMenuOpen]);
 
-  // 复制文本到剪贴板（与 HtmlViewer 的 handleCopy 同一实现）。
-  function handleCopyText(value: string) {
-    const input = document.createElement('input');
-    input.value = value;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand('copy');
-    document.body.removeChild(input);
+  // 走 Clipboard API 主路径：execCommand('copy') 在 await 之后会因丢失用户手势
+  // 激活而静默失败，navigator.clipboard 在异步上下文中仍可工作。返回是否复制
+  // 成功，让调用方决定提示文案。
+  async function handleCopyText(value: string): Promise<boolean> {
+    return copyToClipboard(value);
   }
 
   // 复制本地分享链接（与 HtmlViewer 的 copyLocalShareLink 一致）：分享的是
@@ -15136,8 +15127,8 @@ function ImageViewer({
   async function copyLocalShareLink() {
     setShareMenuOpen(false);
     const shareUrl = `${await getBaseUrl()}api/projects/${projectId}/raw/${file.name}`;
-    handleCopyText(shareUrl);
-    setExportToast({ message: '复制链接成功', tone: 'success' });
+    const ok = await handleCopyText(shareUrl);
+    setExportToast(ok ? { message: '复制链接成功', tone: 'success' } : { message: t('useEverywhere.copyFailed'), tone: 'error' });
   }
 
   // 推送到 Pixso：把当前图片以 base64 data URL 通过本地 WebSocket 推给 Pixso
