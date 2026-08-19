@@ -14,8 +14,11 @@
     "details_placement": "right",
     "separators": {
       "filter_toolbar": {
-        "component": "el-divider",
-        "direction": "horizontal"
+        "owner": ".query-filter::after",
+        "mechanism": "pseudo-element",
+        "placement": "filter-bottom",
+        "width": "1px",
+        "token": "--h-color-border-tertiary"
       },
       "master_details": {
         "mechanism": "border",
@@ -23,6 +26,7 @@
         "token": "--h-color-border-tertiary"
       }
     },
+    "layout_relation": "The filter bottom owns the only horizontal separator; the detail pane stays inside collection-main and owns only its left vertical separator",
     "details_spacing": {
       "content_end_padding": "24px",
       "pane_width": "455px",

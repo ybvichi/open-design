@@ -41,15 +41,22 @@
   "invariants": {
     "separators": {
       "filter_toolbar": {
-        "component": "el-divider",
-        "direction": "horizontal",
-        "placement": "between-filter-and-toolbar"
+        "owner": ".query-filter::after",
+        "mechanism": "pseudo-element",
+        "placement": "filter-bottom",
+        "width": "1px",
+        "token": "--h-color-border-tertiary"
       },
       "master_details": {
         "mechanism": "border",
         "edge": "left",
         "token": "--h-color-border-tertiary"
       }
+    },
+    "layout_relation": {
+      "shape": "T-shaped",
+      "details_scope": "inside table collection module",
+      "junction": "the filter-bottom horizontal separator sits above collection-main; when opened, the detail pane contributes only the left vertical separator"
     },
     "details_spacing": {
       "content_end_padding": "24px",

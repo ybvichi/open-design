@@ -1,5 +1,5 @@
 {
-  "schema_version": "hi-builder-rule-ownership.v1",
+  "schema_version": "hi-design-rule-ownership.v1",
   "governed_documents": [
     "SKILL.md",
     "references/architecture.md",

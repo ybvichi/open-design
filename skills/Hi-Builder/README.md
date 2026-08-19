@@ -28,7 +28,8 @@ Hi-Builder/
 │   └── rule-ownership.json                       # 规则与机器事实源的归属索引
 ├── schemas/                                      # 页面输入的机器校验结构
 │   ├── page-spec.schema.json                     # 产品业务页面输入信封
-│   └── pattern-page-spec.schema.json             # HUI典型页面族输入信封
+│   ├── pattern-page-spec.schema.json             # HUI典型页面族输入信封
+│   └── tpp-page-intent.schema.json               # TPP页面类型、语义族与选择特征合同
 ├── design-systems/                               # HUI通用与行业产品设计知识库
 │   ├── catalog.json                              # 全部设计知识的根索引
 │   ├── HUI/                                      # HUI通用知识
@@ -84,6 +85,8 @@ Hi-Builder/
 │   └── imgs/                                     # 编译结果复制或引用的本地静态图片
 ├── scripts/                                      # 知识解析、编译、导入和校验程序
 │   ├── resolve_capabilities.py                   # 为AI解析精简页面能力
+│   ├── resolve_tpp_intent.py                     # 将结构化PageIntent解析为唯一TPP Variant
+│   ├── tpp_intent.py                             # TPP确定性选择与歧义、知识缺口诊断
 │   ├── compile_page.py                           # 编译产品业务页面
 │   ├── compile_pattern_page.py                   # 编译HUI典型页面族
 │   ├── renderer_registry.py                      # Renderer、输入合同、页面种类与模板路径中央映射
@@ -131,6 +134,7 @@ Hi-Builder/
 | 公共组合模式命名 | 对应`HUI/component-patterns/<id>/contract.json` |
 | HUI通用页面模式 | `HUI/page-patterns/catalog.json` |
 | TPP典型页面 | `HUI/page-patterns/tpp/catalog.json` |
+| TPP Variant的确定性选择 | `schemas/tpp-page-intent.schema.json`、对应`tpp/mappings/<page-kind>.json`与`scripts/tpp_intent.py` |
 | 跨行业基础字段 | `HUI/common-domain/fields/catalog.json` |
 | 行业特有字段 | 对应行业`domain/fields/catalog.json` |
 | 产品Logo、身份和几何角色 | 产品`profile.json` |
@@ -179,7 +183,9 @@ Hi-Builder/
 
 产品页面知识增加不等于增加HTML模板。只有出现新的稳定渲染骨架，并且现有Renderer无法表达时，才新增Renderer与模板映射。
 
-当产品没有对应页面Composition，但Resolver命中已验证且已登记Renderer的HUI页面族时，使用`hui-pattern-fallback`：由HUI Renderer提供结构，目标产品继续提供Profile、Shell、tokens和运行资源。两者都不存在时才登记知识缺口。
+当产品没有对应页面Composition时，先把需求归一为一个结构化`PageIntent`：确定`page_kind`、`semantic_family`以及用户已明确的`features`，再由Resolver与对应批次的TPP映射比较。唯一候选才进入`hui-pattern-fallback`；多个候选会返回需要补充的区分特征，零候选表示知识缺口或参数组合错误。选中后由HUI Renderer提供结构，目标产品继续提供Profile、Shell、tokens和运行资源。
+
+表格、表单、卡片和详情页共用这套选择流程。默认只选择一个精确Variant；确需两个典型页知识时，仅允许使用组合登记中已开放的一个辅助Variant，不支持任意拼接。
 
 ## 常用命令
 
@@ -191,6 +197,16 @@ python3 scripts/resolve_capabilities.py \
   --industry general \
   --product isc \
   --page-type event-search
+
+# 以结构化PageIntent唯一选择TPP Variant并返回可编译能力包
+python3 scripts/resolve_capabilities.py \
+  --industry public-security \
+  --product pvia \
+  --intent tests/fixtures/tpp-page-intent-manual-filter.json
+
+# 只检查PageIntent的选择结果；selected成功，ambiguous或no-match阻断
+python3 scripts/resolve_tpp_intent.py \
+  --intent tests/fixtures/tpp-page-intent-manual-filter.json
 
 # 编译产品业务页面
 python3 scripts/compile_page.py \
@@ -231,4 +247,5 @@ python3 -m unittest discover -s tests -v
 - 人工事实源与派生索引没有反向混用。
 - 产品页面没有直接维护模板路径。
 - 新增产品页面已进入产品验收套件。
+- 能力、合同、工作流或命令入口发生变化时，`SKILL.md`与本README已同步。
 - Skill结构校验和完整回归通过。

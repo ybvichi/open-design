@@ -39,6 +39,9 @@ CARD_RUNTIME_CONTRACT = (
     / "others"
     / "card.json"
 )
+COMPOSITION_REGISTRY = (
+    HUI_ROOT / "page-patterns" / "tpp" / "mappings" / "composition.json"
+)
 
 
 class PatternPageError(ValueError):
@@ -53,6 +56,66 @@ def load_pattern(relative: str) -> dict[str, Any]:
     if contract.get("schema_version") != "hui-page-variant.v1":
         raise PatternPageError(f"页面模式版本无效: {relative}")
     return contract
+
+
+def resolve_knowledge_composition(
+    spec: dict[str, Any], primary: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    composition = spec.get("knowledge_composition")
+    if not composition:
+        return None
+    registry = load_json(COMPOSITION_REGISTRY)
+    page_kind = spec["page_kind"]
+    if page_kind not in registry.get("supported_page_kinds", []):
+        raise PatternPageError(f"当前页面类型不支持TPP知识组合: {page_kind}")
+    secondary_path = composition["secondary_pattern_contract"]
+    if secondary_path == spec["pattern_contract"]:
+        raise PatternPageError("主Variant与辅助Variant不得相同")
+    secondary = load_pattern(secondary_path)
+    expected_family_prefix = f"hui.tpp.family.{page_kind}-"
+    if not primary.get("family", "").startswith(expected_family_prefix):
+        raise PatternPageError("主Variant与page_kind不一致")
+    if not secondary.get("family", "").startswith(expected_family_prefix):
+        raise PatternPageError("辅助Variant必须与主Variant属于相同page_kind")
+    primary_parameters = primary.get("parameters", {})
+    secondary_parameters = secondary.get("parameters", {})
+    for key in registry.get("exclusive_parameter_keys", []):
+        if (
+            key in primary_parameters
+            and key in secondary_parameters
+            and primary_parameters[key] != secondary_parameters[key]
+        ):
+            raise PatternPageError(
+                "TPP组合参数冲突: "
+                f"{key}={primary_parameters[key]} vs {secondary_parameters[key]}"
+            )
+    rule = registry.get("secondary_exports", {}).get(secondary_path)
+    if not rule:
+        raise PatternPageError(f"辅助Variant未登记可组合能力: {secondary_path}")
+    renderer = renderer_for_pattern_kind(page_kind)
+    if rule.get("page_kind") != page_kind or rule.get("renderer") != renderer:
+        raise PatternPageError("辅助Variant与主页面Renderer不兼容")
+    expected = composition["expected_contribution"]
+    if expected != rule.get("contribution"):
+        raise PatternPageError(
+            f"辅助能力声明不一致: {expected} != {rule.get('contribution')}"
+        )
+    missing_spec = [
+        key for key in rule.get("required_spec_fields", []) if not spec.get(key)
+    ]
+    if missing_spec:
+        raise PatternPageError(
+            f"辅助Variant缺少PageSpec变量: {', '.join(missing_spec)}"
+        )
+    preview = spec.get("preview", {})
+    missing_preview = [
+        key for key in rule.get("required_preview_fields", []) if key not in preview
+    ]
+    if missing_preview:
+        raise PatternPageError(
+            f"辅助Variant缺少preview变量: {', '.join(missing_preview)}"
+        )
+    return secondary, rule
 
 
 def validate_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -86,6 +149,9 @@ def validate_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
         and not spec.get("detail_tabs")
     ):
         raise PatternPageError("详情栏表格页必须声明detail_tabs")
+    composition_resolution = resolve_knowledge_composition(spec, patterns[0])
+    if composition_resolution:
+        patterns.append(composition_resolution[0])
     if page_kind == "details":
         family = patterns[0].get("family", "")
         if not family.startswith("hui.tpp.family.details-"):
@@ -341,6 +407,21 @@ def compile_pattern_page(spec: dict[str, Any]) -> str:
     runtime_spec["pattern_geometry"] = [pattern["geometry"] for pattern in patterns]
     runtime_spec["pattern_family"] = patterns[0]["family"]
     runtime_spec["pattern_parameters"] = patterns[0].get("parameters", {})
+    composition_resolution = resolve_knowledge_composition(spec, patterns[0])
+    if composition_resolution:
+        secondary, rule = composition_resolution
+        runtime_spec["composition_resolution"] = {
+            "status": "verified",
+            "primary_pattern_id": patterns[0]["id"],
+            "secondary_pattern_id": secondary["id"],
+            "contribution": rule["contribution"],
+        }
+        runtime_spec["auxiliary_pattern_family"] = secondary["family"]
+        runtime_spec["auxiliary_pattern_parameters"] = {
+            key: secondary.get("parameters", {}).get(key)
+            for key in rule.get("merge_parameter_keys", [])
+            if key in secondary.get("parameters", {})
+        }
     if spec["page_kind"] == "card-tabs":
         card_usage = load_json(CARD_RUNTIME_CONTRACT)["d2c_usage"]
         enriched_tabs = []

@@ -39,11 +39,11 @@
                           <el-col v-for="field in section.fields" v-show="matchesCondition(field.condition)" :key="field.key" :span="formFieldSpan(field)">
                             <div class="permission-form__field" :class="{'is-conditional': field.condition}">
                             <el-form-item :label="field.label" :required="field.required">
-                            <el-input v-if="field.kind==='input'" v-model="formModel[field.key]" :placeholder="field.placeholder"><span v-if="field.unit" slot="suffix">{{ field.unit }}</span></el-input>
-                            <el-input v-else-if="field.kind==='textarea'" v-model="formModel[field.key]" type="textarea" :rows="3" :placeholder="field.placeholder"></el-input>
-                            <el-select v-else-if="field.kind==='select'" v-model="formModel[field.key]" :multiple="field.multiple || false" :placeholder="field.placeholder"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                            <el-input v-if="field.kind==='input'" v-model="formModel[field.key]" :placeholder="field.placeholder" :disabled="field.readonly"><span v-if="field.unit" slot="suffix">{{ field.unit }}</span></el-input>
+                            <el-input v-else-if="field.kind==='textarea'" v-model="formModel[field.key]" type="textarea" :rows="3" :placeholder="field.placeholder" :disabled="field.readonly"></el-input>
+                            <el-select v-else-if="field.kind==='select'" v-model="formModel[field.key]" :multiple="field.multiple || false" :placeholder="field.placeholder" :disabled="field.readonly"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
                             <el-date-picker v-else-if="field.kind==='date-range'" v-model="formModel[field.key]" type="datetimerange" start-placeholder="开始时间" end-placeholder="结束时间"></el-date-picker>
-                            <el-date-picker v-else-if="field.kind==='date'" v-model="formModel[field.key]" type="date" placeholder="请选择日期"></el-date-picker>
+                            <el-date-picker v-else-if="field.kind==='date'" v-model="formModel[field.key]" type="date" placeholder="请选择日期" :disabled="field.readonly"></el-date-picker>
                             <el-radio-group v-else-if="field.kind==='radio'" v-model="formModel[field.key]"><el-radio v-for="option in field.options" :key="option" :label="option">{{ option }}</el-radio></el-radio-group>
                             <el-checkbox-group v-else-if="field.kind==='checkbox'" v-model="formModel[field.key]"><el-checkbox v-for="option in field.options" :key="option" :label="option">{{ option }}</el-checkbox></el-checkbox-group>
                             <el-input-number v-else-if="field.kind==='input-number'" v-model="formModel[field.key]" :min="field.min" :max="field.max" :step="field.step || 1"></el-input-number>

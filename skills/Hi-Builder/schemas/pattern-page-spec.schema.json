@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hi-builder.pattern-page-spec.v2",
+  "$id": "hi-design.pattern-page-spec.v2",
   "title": "HUI TPP Pattern PageSpec",
   "type": "object",
   "additionalProperties": false,
@@ -23,6 +23,16 @@
     "title": {"type": "string", "minLength": 1},
     "page_kind": {"enum": ["form", "table", "card", "switch", "card-tabs", "details"]},
     "pattern_contract": {"type": "string", "minLength": 1},
+    "knowledge_composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secondary_pattern_contract", "reason", "expected_contribution"],
+      "properties": {
+        "secondary_pattern_contract": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "expected_contribution": {"enum": ["summary.metrics"]}
+      }
+    },
     "alternate_pattern_contract": {"type": "string", "minLength": 1},
     "default_view": {"enum": ["card", "table"]},
     "portal": {
@@ -39,8 +49,28 @@
     },
     "filters": {"type": "array", "items": {"type": "object"}},
     "toolbar_actions": {"type": "array", "items": {"type": "object"}},
+    "summary_metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label"],
+          "properties": {
+            "key": {"type": "string", "minLength": 1},
+            "label": {"type": "string", "minLength": 1},
+            "icon": {"type": "string", "minLength": 1},
+            "image_icon": {"type": "string", "minLength": 1},
+            "filter_key": {"type": "string", "minLength": 1},
+            "filter_value": {"type": "string", "minLength": 1}
+        }
+      }
+    },
     "columns": {"type": "array", "items": {"type": "object"}},
     "page_size": {"type": "integer", "minimum": 1},
+    "schedule_view_modes": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"enum": ["day", "week", "month"]}},
+    "default_schedule_presentation": {"enum": ["table", "calendar"]},
+    "default_schedule_view": {"enum": ["day", "week", "month"]},
     "detail_tabs": {
       "type": "array",
       "minItems": 1,
@@ -74,6 +104,8 @@
       }
     },
     "form_actions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "row_detail_href": {"type": "string", "minLength": 1},
+    "form_return_href": {"type": "string", "minLength": 1},
     "card_tabs": {
       "type": "array",
       "minItems": 2,
@@ -107,7 +139,9 @@
       "properties": {
         "formModel": {"type": "object"},
         "filters": {"type": "object"},
+        "summaryMetrics": {"type": "object"},
         "rows": {"type": "array", "items": {"type": "object"}},
+        "scheduleItems": {"type": "array", "items": {"type": "object"}},
         "total": {"type": "integer", "minimum": 0},
         "cardTabRows": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "object"}}},
         "detailValues": {"type": "object"},
@@ -141,7 +175,8 @@
             "required": ["id", "label"],
             "properties": {
               "id": {"type": "string", "minLength": 1},
-              "label": {"type": "string", "minLength": 1}
+              "label": {"type": "string", "minLength": 1},
+              "href": {"type": "string", "minLength": 1}
             }
           }
         }

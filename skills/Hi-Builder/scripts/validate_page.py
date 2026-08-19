@@ -655,10 +655,7 @@ def validate_list_search(
     return errors
 
 
-VALIDATORS = {
-    "hui.list-search": validate_list_search,
-    "hui.detail-workspace": validate_detail_workspace,
-}
+VALIDATORS = {}
 
 if set(VALIDATORS) != PAGE_RENDERER_IDS:
     raise RuntimeError("HTML Validator实现与Renderer Registry不一致")

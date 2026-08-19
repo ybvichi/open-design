@@ -9,7 +9,7 @@ description: 将海康安防领域的自然语言页面需求编译为稳定一�
 
 把自然语言业务需求转换为语义PageSpec，再由确定性编译器生成符合HUI通用规范、行业语义、产品外观和D2C协议的单文件HTML。
 
-AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源地址、服务API、图标注册方式或视觉数值。Compiler和Validator必须从本Skill的权威合同读取这些事实，不得引用`Hi-Builder/`之外的运行资源。
+AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源地址、服务API、图标注册方式或视觉数值。Compiler和Validator必须从本Skill的权威合同读取这些事实，不得引用本仓库之外的运行资源。
 
 ## 必读契约
 
@@ -28,7 +28,7 @@ AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源�
 
 <!-- rule-owner:skill-workflow -->
 
-1. 从需求识别`industry`、`product`和`page_type`；有业务歧义时先报告。
+1. 从需求识别`industry`、`product`和页面类型；HUI兜底时再一次性归一为`schemas/tpp-page-intent.schema.json`定义的`PageIntent`，包含语义族和已确认特征，不确定特征不填。
 2. 读取`references/knowledge-resolution.md`并解析能力：
 
 ```bash
@@ -38,7 +38,16 @@ python3 scripts/resolve_capabilities.py \
   --page-type <page_type>
 ```
 
-3. 读取`selection.compile_route`和`selection.input_contract`：产品路由生成产品页面合同；HUI兜底路由从`pattern_variants`选择最符合真实需求的精确Variant并生成页面族合同。Pattern PageSpec中的模拟业务值必须全部写入`preview`，页面结构、字段定义、选项和动作留在配置层；不得在PageSpec中写CSS值、HUI属性、资源URL或未登记扩展。
+HUI兜底的结构化入口为：
+
+```bash
+python3 scripts/resolve_capabilities.py \
+  --industry <industry> \
+  --product <product> \
+  --intent <tpp-page-intent.json>
+```
+
+3. 读取`selection.compile_route`和`selection.input_contract`：产品路由生成产品页面合同；HUI兜底必须使用Resolver返回的唯一`selection.pattern_contract`，不得由AI从候选数组随意默认。零候选是知识缺口；多候选时补充诊断列出的区分特征后重新解析。表格自然语言归一仍遵循`mappings/table.json`的`selection_strategy`。Pattern PageSpec中的模拟业务值必须全部写入`preview`，页面结构、字段定义、选项和动作留在配置层；不得在PageSpec中写CSS值、HUI属性、资源URL或未登记扩展。
 4. 读取`references/generation-contract.md`；涉及HUI标签、资源、服务或图标时同时读取`references/hui-vue-runtime-contract.md`。
 5. `compile_route=product-composition`使用产品页面编译入口：
 

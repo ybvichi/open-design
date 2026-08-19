@@ -174,6 +174,18 @@ def main() -> int:
             if region:
                 key_regions[region_name] = region
         parameters = dict(page_mapping["parameters"])
+        if page.get("statistical_cells"):
+            parameters["statistical_columns"] = [
+                {
+                    key: value
+                    for key, value in column.items()
+                    if key in {
+                        "kind", "component", "width", "props", "primary",
+                        "secondary", "shared_flood_by_row"
+                    }
+                }
+                for column in page["statistical_cells"].get("columns", [])
+            ]
         if batch == "form":
             parameters["default_label_position"] = selected_value(
                 page["inputs"], {"top", "left", "right"}

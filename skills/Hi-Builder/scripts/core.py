@@ -48,18 +48,21 @@ def resolve_hui_page_pattern(page_type: str) -> dict[str, Any]:
         DESIGN_SYSTEMS_ROOT / "HUI" / "page-patterns" / "catalog.json"
     )
     normalized = page_type.lower()
-    selected = catalog["default"]
-    selected_score = -1
-    for pattern_id, entry in catalog["patterns"].items():
-        matches = [
-            keyword
-            for keyword in entry.get("match", [])
-            if keyword.lower() in normalized
-        ]
-        score = max((len(keyword) for keyword in matches), default=-1)
-        if score > selected_score:
-            selected = pattern_id
-            selected_score = score
+    if normalized in catalog["patterns"]:
+        selected = normalized
+    else:
+        selected = catalog["default"]
+        selected_score = -1
+        for pattern_id, entry in catalog["patterns"].items():
+            matches = [
+                keyword
+                for keyword in entry.get("match", [])
+                if keyword.lower() in normalized
+            ]
+            score = max((len(keyword) for keyword in matches), default=-1)
+            if score > selected_score:
+                selected = pattern_id
+                selected_score = score
     entry = catalog["patterns"][selected]
     contract = load_json(DESIGN_SYSTEMS_ROOT / entry["contract"])
     return {
@@ -659,10 +662,7 @@ def _resolve_detail_workspace_spec(
     return resolved
 
 
-SPEC_RESOLVERS = {
-    "hui.list-search": _resolve_list_search_spec,
-    "hui.detail-workspace": _resolve_detail_workspace_spec,
-}
+SPEC_RESOLVERS = {}
 
 if set(SPEC_RESOLVERS) != PAGE_RENDERER_IDS:
     raise RuntimeError("PageSpec Resolver实现与Renderer Registry不一致")

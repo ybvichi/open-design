@@ -1,3 +1,3 @@
-<nav v-if="!isWorkOrderForm && visibleFormSections.length" class="form-anchor-nav">
+<nav v-if="isAnchoredForm && !isWorkOrderForm && visibleFormSections.length" class="form-anchor-nav">
   <a v-for="section in visibleFormSections" :key="section.id" :href="'#form-section-' + section.id" @click.prevent="activateFormSection(section.id)">{{ section.title }}</a>
 </nav>

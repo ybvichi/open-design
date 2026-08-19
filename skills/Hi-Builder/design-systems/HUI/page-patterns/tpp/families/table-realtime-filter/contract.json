@@ -35,6 +35,23 @@
     "h-svg-icon"
   ],
   "invariants": {
+    "filter_container": {
+      "padding_vertical": 16,
+      "option_interactive_tone": "brand"
+    },
+    "selected_filter_state": {
+      "visibility_when_empty": "hidden",
+      "clear_action_placement": "after-selected-items",
+      "clear_action_tone": "brand",
+      "clear_action_interactive_tone": "brand-stable",
+      "spacing_before": 24,
+      "padding_vertical": 16,
+      "bottom_spacing_compensation": -16,
+      "separator": {
+        "position": "top",
+        "style": "dashed"
+      }
+    },
     "regions": {
       "toolbar": {
         "display": "flex",

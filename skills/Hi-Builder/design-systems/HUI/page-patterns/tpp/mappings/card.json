@@ -136,7 +136,7 @@
       "family": "card-tabs",
       "variant": "card-tabs",
       "parameters": {
-        "tab_style": "linear",
+        "tab_style": "card",
         "tree": false,
         "collection_presentation": "vehicle-card"
       }

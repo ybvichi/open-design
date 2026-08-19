@@ -4,22 +4,62 @@
                   <el-tab-pane v-for="tab in config.card_tabs" :key="tab.id" :label="tab.label" :name="tab.id"></el-tab-pane>
                 </el-tabs>
                 </div>
-                <div v-if="config.filters && config.filters.length" class="query-filter" data-zone="query.filter" data-component="filter.search-form">
+                <div v-if="isRealtimeFilter" class="filter-container is-selected-tags realtime-filter" data-zone="query.filter" data-component="filter.instant-filter">
+                  <div v-for="field in config.filters" :key="field.key" class="realtime-filter__row">
+                    <span class="realtime-filter__label">{{ field.label }}</span>
+                    <div v-if="field.kind==='select'" class="realtime-filter__options">
+                      <el-checkable-tag v-for="option in field.options" :key="option" checkable :checked="filters[field.key]===option" :label="option" :value="option" @click="selectRealtimeFilter(field, option)">{{ option }}</el-checkable-tag>
+                    </div>
+                    <el-input v-else v-model="filters[field.key]" class="realtime-filter__input" size="small" :placeholder="field.placeholder" clearable @input="realtimeFilterChanged"></el-input>
+                  </div>
+                  <div v-if="selectedRealtimeFilters.length" class="realtime-filter__selected">
+                    <span class="realtime-filter__label">已选条件</span>
+                    <el-tag v-for="item in selectedRealtimeFilters" :key="item.key" closable size="small" @close="clearRealtimeFilter(item.key)">{{ item.label }}：{{ item.value }}</el-tag>
+                    <el-button class="realtime-filter__clear" type="text" @click="clearRealtimeFilters">清空条件</el-button>
+                  </div>
+                </div>
+                <div v-else-if="isRegularManualFilter && !isAllRetractableManualFilter" class="query-filter query-filter--regular" data-zone="query.filter" data-component="filter.search-form">
                   <el-form class="query-filter__form" :model="filters" label-position="top" size="small">
-                    <el-form-item v-for="field in config.filters" :key="field.key" :label="field.label">
+                    <el-form-item v-for="field in visibleFilters" :key="field.key" :label="field.label">
                       <el-input v-if="field.kind==='input'" v-model="filters[field.key]" :placeholder="field.placeholder" suffix-icon="h-icon-search" clearable></el-input>
+                      <el-date-picker v-else-if="field.kind==='date' || field.kind==='date-range'" v-model="filters[field.key]" :type="field.kind==='date-range' ? 'daterange' : 'date'" :placeholder="field.placeholder" start-placeholder="开始日期" end-placeholder="结束日期"></el-date-picker>
+                      <el-time-picker v-else-if="field.kind==='time'" v-model="filters[field.key]" :placeholder="field.placeholder"></el-time-picker>
                       <el-select v-else v-model="filters[field.key]"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
                     </el-form-item>
-                    <el-form-item class="query-filter__actions"><el-button type="primary" icon="h-icon-search" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button></el-form-item>
+                    <el-form-item class="query-filter__actions"><el-button type="primary" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button><el-button v-if="hasCollapsibleFilters" type="text" icon="h-icon-angles_down_sm" class="query-filter__toggle" :class="{'is-expanded':filterExpanded}" :title="filterExpanded ? '收起' : '展开'" :aria-label="filterExpanded ? '收起筛选条件' : '展开筛选条件'" @click="filterExpanded=!filterExpanded"></el-button></el-form-item>
                   </el-form>
-                  <el-divider v-if="showFilterToolbarDivider" class="collection-filter-divider"></el-divider>
                 </div>
-
-                <div class="collection-main" :class="{'has-details-pane':isTableDetailsPane}">
+                <div v-else-if="isHorizontalManualFilter && !isAllRetractableManualFilter" class="manual-horizontal-filter" data-zone="query.filter" data-component="filter.search-form">
+                  <div v-for="field in visibleHorizontalFilters" :key="field.key" class="manual-horizontal-filter__row">
+                    <span class="manual-horizontal-filter__label">{{ field.label }}</span>
+                    <div v-if="field.kind==='checkable-tags'" class="manual-horizontal-filter__tabs"><el-checkable-tag v-for="option in field.options" :key="option" checkable :checked="filters[field.key]===option" :label="option" :value="option" @click="filters[field.key]=option">{{ option }}</el-checkable-tag></div>
+                    <el-date-picker v-else-if="field.kind==='date-range'" v-model="filters[field.key]" type="daterange" size="small" start-placeholder="开始日期" end-placeholder="结束日期"></el-date-picker>
+                    <el-select v-else v-model="filters[field.key]" size="small" :placeholder="field.placeholder"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                  </div>
+                  <div class="manual-horizontal-filter__actions"><el-button type="primary" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button><el-button v-if="hasCollapsibleHorizontalFilters" type="text" icon="h-icon-angles_down_sm" class="query-filter__toggle" :class="{'is-expanded':filterExpanded}" @click="filterExpanded=!filterExpanded"></el-button></div>
+                </div>
+                <div class="collection-main" :class="{'has-details-pane':hasTableDetailsPane,'is-details-pane-open':isTableDetailsPane}">
+                <aside v-if="isSidebarManualFilter" class="manual-filter-sidebar" data-zone="query.filter" data-component="filter.search-form">
+                  <div class="manual-filter-sidebar__title">筛选条件</div>
+                  <div v-for="field in config.filters" :key="field.key" class="manual-filter-sidebar__item">
+                    <div class="manual-filter-sidebar__label">{{ field.label }}</div>
+                    <el-input v-if="field.kind==='input'" v-model="filters[field.key]" size="small" :placeholder="field.placeholder" clearable></el-input>
+                    <el-select v-else v-model="filters[field.key]" size="small"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                  </div>
+                  <div class="manual-filter-sidebar__actions"><el-button type="primary" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button></div>
+                </aside>
                 <div class="collection-list">
                 <div class="page-toolbar" data-zone="page.actions" data-component="toolbar.action-toolbar">
-                  <div class="page-toolbar__left"><el-button v-for="action in config.toolbar_actions" :key="action.label" type="text" size="small" :icon="action.icon" @click="toolbarAction(action.label)">{{ action.label }}</el-button></div>
+                  <div class="page-toolbar__left"><el-button v-for="action in config.toolbar_actions" :key="action.label" type="text" size="small" :icon="action.icon" @click="toolbarAction(action)">{{ action.label }}</el-button></div>
                   <div class="page-toolbar__right">
+                    <el-button v-if="isAllRetractableManualFilter" type="ghost" class="manual-filter-toggle" :class="{'is-active':filterExpanded}" @click="filterExpanded=!filterExpanded">筛选条件<i class="h-icon-angles_down_sm"></i></el-button>
+                    <span v-if="hasScheduleCalendar">展示方式</span>
+                    <el-radio-group v-if="hasScheduleCalendar" v-model="schedulePresentation" class="view-switch" size="small">
+                      <el-radio-button label="table">表格</el-radio-button><el-radio-button label="calendar">日历</el-radio-button>
+                    </el-radio-group>
+                    <el-radio-group v-if="hasScheduleCalendar && schedulePresentation==='calendar'" v-model="scheduleView" class="view-switch schedule-granularity-switch" size="small">
+                      <el-radio-button label="day">日</el-radio-button><el-radio-button label="week">周</el-radio-button><el-radio-button label="month">月</el-radio-button>
+                    </el-radio-group>
                     <span v-if="config.page_kind==='switch'">展示方式</span>
                     <el-radio-group v-if="config.page_kind==='switch'" v-model="viewMode" class="view-switch" size="small">
                       <el-radio-button label="card">卡片</el-radio-button><el-radio-button label="table">列表</el-radio-button>
@@ -27,12 +67,59 @@
                   </div>
                 </div>
 
+                <div v-if="isRegularManualFilter && isAllRetractableManualFilter && filterExpanded" class="query-filter query-filter--boxed" data-zone="query.filter" data-component="filter.search-form">
+                  <el-form class="query-filter__form" :model="filters" label-position="top" size="small">
+                    <el-form-item v-for="field in config.filters" :key="field.key" :label="field.label">
+                      <el-input v-if="field.kind==='input'" v-model="filters[field.key]" :placeholder="field.placeholder" clearable></el-input>
+                      <el-date-picker v-else-if="field.kind==='date' || field.kind==='date-range'" v-model="filters[field.key]" :type="field.kind==='date-range' ? 'daterange' : 'date'" :placeholder="field.placeholder" start-placeholder="开始日期" end-placeholder="结束日期"></el-date-picker>
+                      <el-time-picker v-else-if="field.kind==='time'" v-model="filters[field.key]" :placeholder="field.placeholder"></el-time-picker>
+                      <el-select v-else v-model="filters[field.key]"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                    </el-form-item>
+                    <el-form-item class="query-filter__actions"><el-button type="primary" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button></el-form-item>
+                  </el-form>
+                </div>
+                <div v-if="isHorizontalManualFilter && isAllRetractableManualFilter && filterExpanded" class="manual-horizontal-filter manual-horizontal-filter--boxed" data-zone="query.filter" data-component="filter.search-form">
+                  <div v-for="field in config.filters" :key="field.key" class="manual-horizontal-filter__row">
+                    <span class="manual-horizontal-filter__label">{{ field.label }}</span>
+                    <div v-if="field.kind==='checkable-tags'" class="manual-horizontal-filter__tabs"><el-checkable-tag v-for="option in field.options" :key="option" checkable :checked="filters[field.key]===option" :label="option" :value="option" @click="filters[field.key]=option">{{ option }}</el-checkable-tag></div>
+                    <el-date-picker v-else-if="field.kind==='date-range'" v-model="filters[field.key]" type="daterange" size="small" start-placeholder="开始日期" end-placeholder="结束日期"></el-date-picker>
+                    <el-select v-else v-model="filters[field.key]" size="small" :placeholder="field.placeholder"><el-option v-for="option in field.options" :key="option" :label="option" :value="option"></el-option></el-select>
+                  </div>
+                  <div class="manual-horizontal-filter__actions"><el-button type="primary" @click="queryRows">查询</el-button><el-button @click="resetFilters">重置</el-button></div>
+                </div>
+
                 <div class="data-region" data-zone="data.results">
-                  <div v-if="showTable" class="data-table-pattern" data-component="table.data-table">
+                  <div v-if="hasScheduleCalendar && schedulePresentation==='calendar'" class="schedule-calendar" :class="'schedule-calendar--'+scheduleView" data-component="collection.calendar-grid">
+                    <div class="schedule-calendar__heading">
+                      <el-button type="text" icon="h-icon-angle_left" @click="moveSchedule(-1)"></el-button>
+                      <strong>{{ scheduleRangeTitle }}</strong>
+                      <el-button type="text" icon="h-icon-angle_right" @click="moveSchedule(1)"></el-button>
+                    </div>
+                    <div v-if="scheduleView!=='day'" class="schedule-calendar__weekdays"><span v-for="name in weekDayNames" :key="name">{{ name }}</span></div>
+                    <div class="schedule-calendar__grid">
+                      <el-card v-for="day in visibleScheduleDays" :key="day.date" class="schedule-day" shadow="never" :class="{'is-today':day.isToday,'is-other-month':day.isOtherMonth}">
+                        <div slot="header" class="schedule-day__date"><span>{{ day.dayLabel }}</span><em v-if="day.isToday">今天</em></div>
+                        <div v-if="day.items.length" class="schedule-day__items">
+                          <div v-for="item in day.items" :key="item.id" class="schedule-item">
+                            <div><el-tag size="mini">{{ item.shift }}</el-tag><strong>{{ item.person }}</strong></div>
+                            <span>{{ item.role }} · {{ item.department }}</span>
+                          </div>
+                        </div>
+                        <div v-else class="schedule-day__empty">暂无排班</div>
+                      </el-card>
+                    </div>
+                  </div>
+                  <div v-else-if="showTable" class="data-table-pattern" data-component="table.data-table">
                   <el-table :data="pagedRows" height="100%" stripe row-key="id" @selection-change="selectedRows=$event" @row-click="selectDetailRow">
                     <el-table-column type="selection" width="48" align="center" header-align="center"></el-table-column>
-                    <el-table-column v-for="column in config.columns" :key="column.prop" :prop="column.prop" :label="column.label" :min-width="column.min_width">
-                      <template slot-scope="scope"><span v-if="column.prop==='status'" :class="scope.row.status==='在线'?'status-online':'status-offline'">{{ scope.row[column.prop] }}</span><span v-else>{{ scope.row[column.prop] }}</span></template>
+                    <el-table-column v-for="column in config.columns" :key="column.prop" :prop="column.prop" :label="column.label" :width="column.fixed_width" :min-width="column.min_width">
+                      <template slot-scope="scope">
+                        <el-progress v-if="column.kind==='progress'" :percentage="Number(scope.row[column.prop])" :stroke-width="12" stroke-linecap="square"></el-progress>
+                        <span v-else-if="column.kind==='tag-pair'" class="table-stat-tag-pair">
+                          <el-tag data-variant="primary" :data-flood="scope.row[column.tone_prop] || 'blue'">{{ scope.row[column.status_prop] }}</el-tag><el-tag data-variant="secondary" :data-flood="scope.row[column.tone_prop] || 'blue'">{{ scope.row[column.metric_prop] }}</el-tag>
+                        </span>
+                        <span v-else-if="column.prop==='status'" :class="scope.row.status==='在线'?'status-online':'status-offline'">{{ scope.row[column.prop] }}</span><span v-else>{{ scope.row[column.prop] }}</span>
+                      </template>
                     </el-table-column>
                     <el-table-column label="操作" width="120" fixed="right"><template slot-scope="scope"><el-button type="link" size="mini" @click.stop="openDetail(scope.row)">详情</el-button><el-button type="link" size="mini" @click.stop="openPreview(scope.row)">预览</el-button></template></el-table-column>
                   </el-table>
@@ -79,7 +166,7 @@
                   </div>
                 </div>
 
-                <div class="page-pagination" data-zone="page.pagination" data-component="pagination.page-navigation"><el-pagination :current-page.sync="currentPage" :page-size="pageSize" :page-sizes="[10,20,50,100]" layout="total, sizes, ->, prev, pager, next, jumper" :total="rowTotal" @size-change="pageSize=$event"></el-pagination></div>
+                <div v-if="!hasScheduleCalendar || schedulePresentation==='table'" class="page-pagination" data-zone="page.pagination" data-component="pagination.page-navigation"><el-pagination :current-page.sync="currentPage" :page-size="pageSize" :page-sizes="[10,20,50,100]" layout="total, sizes, ->, prev, pager, next, jumper" :total="rowTotal" @size-change="pageSize=$event"></el-pagination></div>
                 </div>
                 <aside v-if="isTableDetailsPane" class="table-detail-pane" :class="{'has-master-divider':showMasterDetailsDivider}" data-zone="detail.content" data-component="detail.details-pane">
                   <el-tabs v-model="activeDetailTab">

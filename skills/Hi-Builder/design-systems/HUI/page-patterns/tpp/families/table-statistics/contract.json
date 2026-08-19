@@ -36,6 +36,22 @@
     "h-svg-icon"
   ],
   "invariants": {
+    "statistical_cells": {
+      "placement": "table-columns",
+      "top_summary_strip": true,
+      "column_kinds": ["progress", "tag-pair"],
+      "progress_component": "el-progress",
+      "tag_component": "el-tag"
+    },
+    "statistics_strip": {
+      "placement": "before-table-layout",
+      "root_class": "statisticsStyle",
+      "component": "h-stats",
+      "card_count_observed": 5,
+      "clickable_active_state": true,
+      "gap": 16,
+      "padding": 16
+    },
     "regions": {
       "toolbar": {
         "display": "flex",
@@ -73,7 +89,8 @@
       "name": "统计",
       "contract": "../../pages/table/with-statistics.json",
       "parameters": {
-        "statistics": true
+        "statistics": true,
+        "statistical_columns": ["progress", "tag-pair"]
       }
     }
   ]

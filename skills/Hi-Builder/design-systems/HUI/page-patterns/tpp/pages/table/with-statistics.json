@@ -11,7 +11,36 @@
     "evidence": "../../evidence/table/with-statistics.json"
   },
   "parameters": {
-    "statistics": true
+    "statistics": true,
+    "statistics_style": {
+      "root_class": "statisticsStyle",
+      "placement": "after-breadcrumb-before-table-layout",
+      "card_count_observed": 5,
+      "card_component": "h-stats",
+      "card_width": "calc(20% - 13px)",
+      "card_height": 120,
+      "image_size": 96,
+      "clickable_active_state": true,
+      "title_prefix_icon": true,
+      "value_suffix_icon": "h-icon-edit"
+    },
+    "statistical_columns": [
+      {
+        "kind": "progress",
+        "component": "el-progress",
+        "width": 240,
+        "stroke_width": 12,
+        "stroke_linecap": "square",
+        "show_text": true
+      },
+      {
+        "kind": "tag-pair",
+        "component": "el-tag",
+        "width": 120,
+        "variants": ["primary", "secondary"],
+        "shared_flood_by_row": true
+      }
+    ]
   },
   "geometry": {
     "viewport": {
@@ -33,6 +62,14 @@
       }
     },
     "key_regions": {
+      "statistics": {
+        "class": "statisticsStyle",
+        "rect": {"x": 240, "y": 95.765625, "width": 1680, "height": 152},
+        "display": "flex",
+        "padding": "16px",
+        "gap": "16px",
+        "effective_background": "var(--h-color-bg-primary)"
+      },
       "toolbar": {
         "class": "bar-search-row",
         "rect": {
@@ -92,6 +129,7 @@
       "el-tooltip": 11,
       "el-checkbox": 21,
       "h-svg-icon": 21,
+      "h-stats": 5,
       "el-scrollbar": 2,
       "el-progress": 20,
       "el-tag": 40,

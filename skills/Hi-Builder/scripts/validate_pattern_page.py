@@ -62,6 +62,18 @@ def validate_pattern_html(
         errors.append("HTML缺少可解析的PREVIEW_FIXTURES")
     elif preview_fixtures != spec.get("preview"):
         errors.append("PREVIEW_FIXTURES必须原样来自Pattern PageSpec.preview")
+    composition = spec.get("knowledge_composition")
+    if composition and page_config is not None:
+        resolution = page_config.get("composition_resolution", {})
+        if resolution.get("status") != "verified":
+            errors.append("组合页面缺少已验证的composition_resolution")
+        if resolution.get("contribution") != composition.get("expected_contribution"):
+            errors.append("组合页面运行配置未记录AI声明的辅助能力")
+        if len(page_config.get("pattern_ids", [])) != 2:
+            errors.append("组合页面必须记录一个主Variant和一个辅助Variant")
+        if composition.get("expected_contribution") == "summary.metrics":
+            if 'data-zone="summary.metrics"' not in source or "<h-stats" not in source:
+                errors.append("统计辅助Variant未生成summary.metrics区域")
     for marker, message in (
         (
             "Object.prototype.hasOwnProperty.call(vm.$data, key)",
@@ -88,24 +100,25 @@ def validate_pattern_html(
         errors.append("HTML未使用产品Profile登记的Logo资源")
     if "portal-logo-mark" in source:
         errors.append("HTML不得使用通用占位Logo替代产品Logo")
-    if matched_product:
+    uses_product_shell = '"product_shell_source": "product:' in source
+    if uses_product_shell:
         for shell_marker in (
             "portal-pill", "portal-side-collapse", "portal-side-submenu"
         ):
             if shell_marker not in source:
-                errors.append(f"HTML缺少ISC标准Portal Shell结构: {shell_marker}")
+                errors.append(f"HTML缺少产品Portal Shell结构: {shell_marker}")
         for icon_class in (
             "h-icon-menu_leftbar", "h-icon-qrcode", "h-icon-share"
         ):
             if icon_class not in source:
-                errors.append(f"HTML缺少ISC标准Portal Shell图标: {icon_class}")
+                errors.append(f"HTML缺少产品Portal Shell图标: {icon_class}")
         if "text-decoration: none !important;" not in source:
-            errors.append("ISC侧栏菜单必须清除HUI文本按钮的悬浮下划线")
+            errors.append("产品侧栏菜单必须清除HUI文本按钮的悬浮下划线")
     else:
         if "hui-tpp-shell product-context" not in source:
-            errors.append("未匹配产品时必须使用HUI默认Portal Shell")
+            errors.append("未提供产品专属Shell时必须使用HUI默认Portal Shell")
         if '"product_shell_source": "HUI"' not in source:
-            errors.append("未匹配产品时必须登记HUI Shell来源")
+            errors.append("使用HUI默认Portal Shell时必须登记Shell来源")
         leaf_menu_with_manual_icon = re.search(
             r"<el-nav-item\b[^>]*>(?:(?!</el-nav-item>).)*<i\b[^>]*\bitem\.icon\b",
             source,
@@ -119,6 +132,45 @@ def validate_pattern_html(
         if ".query-filter__form .el-form-item { margin-bottom: 0; }" not in source:
             errors.append("query.filter必须清除表单项底部间距，避免与容器内边距叠加")
     pattern = load_pattern(spec["pattern_contract"])
+    if pattern.get("family") == "hui.tpp.family.table-manual-filter":
+        parameters = pattern.get("parameters", {})
+        placement = parameters.get("filter_placement")
+        collapse_mode = parameters.get("collapse_mode")
+        filters = spec.get("filters", [])
+        filter_kinds = {item.get("kind") for item in filters}
+        if placement == "regular-box":
+            unsupported = filter_kinds - {"input", "select", "date", "date-range", "time"}
+            if unsupported:
+                errors.append(f"常规过滤不得使用水平Tab变量类型: {sorted(unsupported)}")
+            if collapse_mode == "high-low-frequency" and len(filters) <= 4:
+                errors.append("常规高低频过滤必须提供超过4个条件以验证换行和展开收起")
+            if collapse_mode == "all-retractable" and len(filters) != 4:
+                errors.append("全量可收起常规过滤盒必须匹配证据中的4项单行控件")
+            if "query-filter--regular" not in source or "query-filter--boxed" not in source:
+                errors.append("表格Renderer缺少常规过滤与过滤盒的独立结构")
+            if "this.config.filters.slice(0, 3)" not in source:
+                errors.append("常规过滤收起态必须保留3个条件，并由查询/重置占据第4列")
+            if "grid-template-columns: repeat(4, minmax(0, 1fr))" not in source:
+                errors.append("常规过滤必须使用包含查询操作位的四列栅格")
+            if ".query-filter__actions { display: flex; grid-column: 4;" not in source:
+                errors.append("常规过滤查询/重置必须固定在最后一行第4列")
+        elif placement == "horizontal-bar":
+            if "checkable-tags" not in filter_kinds:
+                errors.append("水平栏过滤必须使用checkable-tags表达Tab选项")
+            if "radio" in filter_kinds:
+                errors.append("水平栏过滤不得使用radio变量冒充Tab选项")
+            if "date-range" not in filter_kinds:
+                errors.append("水平栏过滤必须包含证据登记的日期范围控件")
+            if "manual-horizontal-filter__tabs" not in source or "el-checkable-tag" not in source:
+                errors.append("表格Renderer缺少水平栏Tab选项过滤结构")
+            if collapse_mode == "all-retractable" and "manual-horizontal-filter--boxed" not in source:
+                errors.append("全量可收起水平栏必须使用带背景过滤容器")
+        elif placement == "left-sidebar":
+            unsupported = filter_kinds - {"input", "select"}
+            if unsupported:
+                errors.append(f"侧边栏过滤只允许输入与选择控件: {sorted(unsupported)}")
+            if "manual-filter-sidebar" not in source:
+                errors.append("表格Renderer缺少独立左侧手动过滤栏")
     if pattern.get("family") == "hui.tpp.family.form-anchored":
         anchor_rules = {
             "margin-right: calc(-1 * var(--d2c-page-form-content-inline-padding))": "表单滚动条必须延伸到form-area__content最右侧",
@@ -150,10 +202,15 @@ def validate_pattern_html(
         if "--d2c-page-table-details-width: 431px" not in source:
             errors.append("详情栏表格页未使用Variant合同登记的详情栏宽度")
         separators = pattern.get("parameters", {}).get("separators", {})
-        if separators.get("filter_toolbar", {}).get("component") != "el-divider":
-            errors.append("详情栏Variant未登记筛选栏与工具栏的HUI分隔组件")
-        if '<el-divider v-if="showFilterToolbarDivider" class="collection-filter-divider"></el-divider>' not in source:
-            errors.append("详情栏表格页未渲染筛选栏与工具栏分隔线")
+        filter_separator = separators.get("filter_toolbar", {})
+        if (
+            filter_separator.get("owner") != ".query-filter::after"
+            or filter_separator.get("mechanism") != "pseudo-element"
+            or filter_separator.get("token") != "--h-color-border-tertiary"
+        ):
+            errors.append("详情栏Variant未正确登记筛选栏底部分割线")
+        if ".query-filter::after" not in source:
+            errors.append("详情栏表格页未渲染筛选栏底部分割线")
         master_separator = separators.get("master_details", {})
         if master_separator.get("token") != "--h-color-border-tertiary":
             errors.append("详情栏Variant未登记主列表与详情栏的边框token")
@@ -187,6 +244,43 @@ def validate_pattern_html(
             errors.append("详情栏不得插入典型页知识未登记的额外摘要卡")
         if "margin: 0; padding: var(--d2c-page-table-details-pane-padding" not in source:
             errors.append("详情栏必须使用内部padding，不得用外部margin模拟典型页间距")
+    if pattern.get("family") == "hui.tpp.family.table-realtime-filter":
+        if pattern.get("parameters", {}).get("filter_container_padding_vertical") != "16px":
+            errors.append("即时过滤Variant必须登记过滤容器上下16px内间距")
+        if pattern.get("parameters", {}).get("filter_option_interactive_tone") != "brand":
+            errors.append("即时过滤Variant必须登记过滤选项悬浮与选中态使用品牌色")
+        if pattern.get("parameters", {}).get("selected_filter_state_separator") != "dashed-top":
+            errors.append("即时过滤Variant必须登记已选条件区顶部虚线分割规则")
+        if pattern.get("parameters", {}).get("selected_filter_state_spacing_before") != "24px":
+            errors.append("即时过滤Variant必须登记已选条件区与筛选条件的24px间距")
+        if pattern.get("parameters", {}).get("selected_filter_state_padding_vertical") != "16px":
+            errors.append("即时过滤Variant必须登记已选条件区上下16px内间距")
+        if pattern.get("parameters", {}).get("selected_filter_state_bottom_spacing_compensation") != "-16px":
+            errors.append("即时过滤Variant必须抵消父子容器叠加的底部16px间距")
+        if pattern.get("parameters", {}).get("selected_filter_state_visibility_when_empty") != "hidden":
+            errors.append("即时过滤Variant必须登记无已选条件时隐藏已选条件区")
+        if pattern.get("parameters", {}).get("selected_filter_clear_action_placement") != "after-selected-items":
+            errors.append("即时过滤Variant必须登记清空操作紧跟已选条件项")
+        if pattern.get("parameters", {}).get("selected_filter_clear_action_tone") != "brand":
+            errors.append("即时过滤Variant必须登记清空操作使用品牌色")
+        if pattern.get("parameters", {}).get("selected_filter_clear_action_interactive_tone") != "brand-stable":
+            errors.append("即时过滤Variant必须保持清空操作交互态品牌色稳定")
+        if 'v-if="selectedRealtimeFilters.length" class="realtime-filter__selected"' not in source:
+            errors.append("即时过滤已选条件区在无条件时未隐藏")
+        if ".realtime-filter__selected .el-button { margin-left: 0; }" not in source:
+            errors.append("即时过滤清空操作未紧跟已选条件项")
+        if ".realtime-filter__selected .realtime-filter__clear { color: var(--h-color-brand) !important; }" not in source:
+            errors.append("即时过滤清空操作未使用主题品牌色")
+        if ".realtime-filter__selected .realtime-filter__clear:active { color: var(--h-color-brand) !important; }" not in source:
+            errors.append("即时过滤清空操作交互态未保持主题品牌色")
+        if ".realtime-filter { flex: none; margin: 0 24px; padding: 16px 0; border-bottom: 1px solid var(--h-color-border-tertiary); }" not in source:
+            errors.append("即时过滤容器未使用上下16px内间距")
+        if ".realtime-filter__options .el-tag.is-checkable:not(.is-checked):hover { color: var(--h-color-brand); border-color: var(--h-color-brand); }" not in source:
+            errors.append("即时过滤选项悬浮态未使用主题品牌色")
+        if ".realtime-filter__options .el-tag.is-checkable.is-checked:hover { color: #fff; border-color: var(--h-color-brand); background-color: var(--h-color-brand) !important; }" not in source:
+            errors.append("即时过滤选项选中态未使用主题品牌色")
+        if ".realtime-filter__selected { gap: 8px; margin-top: 24px; margin-bottom: -16px; padding: 16px 0; border-top: 1px dashed var(--h-color-border-tertiary); }" not in source:
+            errors.append("即时过滤已选条件区缺少顶部虚线分割线")
     if spec["page_kind"] == "table":
         for renderer_variable in (
             "--d2c-renderer-table-content-margin: 0px 12px",

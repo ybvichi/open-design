@@ -1,6 +1,6 @@
 # HUI Vue HTML运行契约
 
-生成或修改HUI Vue单HTML前读取。所有路径均相对于`Hi-Builder/`，禁止读取或引用父项目资源。
+生成或修改HUI Vue单HTML前读取。所有路径均相对于Hi-Builder技能仓库根目录，禁止读取或引用父项目资源。
 
 ## 运行资源
 

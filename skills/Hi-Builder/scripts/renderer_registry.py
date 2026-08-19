@@ -5,18 +5,6 @@ from typing import Any
 
 
 RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
-    "hui.list-search": {
-        "pipeline": "page",
-        "input_contract": "page-spec.v2",
-        "pattern_kinds": ["list-search"],
-        "template": "assets/templates/event-search.html",
-    },
-    "hui.detail-workspace": {
-        "pipeline": "page",
-        "input_contract": "page-spec.v2",
-        "pattern_kinds": ["detail-workspace"],
-        "template": "assets/templates/device-detail.html",
-    },
     "hui.tpp.form": {
         "pipeline": "pattern-page",
         "input_contract": "pattern-page-spec.v2",
@@ -39,13 +27,13 @@ RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
         "hui_pattern_prefixes": ["hui.tpp.family.table-"],
         "allowed_zone_ids": [
             "portal.header", "portal.sidebar", "query.filter", "page.actions",
-            "navigation.view-tabs", "data.results", "detail.content",
+            "navigation.view-tabs", "summary.metrics", "data.results", "detail.content",
             "page.pagination"
         ],
         "allowed_component_pattern_ids": [
             "portal.global-header", "portal.app-sidebar", "filter.search-form",
-            "toolbar.action-toolbar", "navigation.tabs", "table.data-table",
-            "detail.details-pane", "pagination.page-navigation"
+            "toolbar.action-toolbar", "summary.metric-strip", "navigation.tabs", "table.data-table",
+            "collection.calendar-grid", "detail.details-pane", "pagination.page-navigation"
         ],
         "layout_roles": {
             "table-content-margin": "0px 12px",

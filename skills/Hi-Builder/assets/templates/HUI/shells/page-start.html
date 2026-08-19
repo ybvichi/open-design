@@ -46,6 +46,17 @@
         <section class="content-shell">
           <div class="page-frame" :class="{'has-external-master-media':externalMasterMedia}" :data-page-kind="config.page_kind" :data-pattern-id="config.pattern_ids.join(',')">
             <div class="page-breadcrumb"><span>{{ config.portal.section }}</span><!-- @include ../fragments/navigation/page-tabs.html --><template v-if="!formTabsInBreadcrumb"><i class="h-icon-angle_right_sm"></i><strong>{{ config.title }}</strong></template></div>
+            <section v-if="config.summary_metrics && config.summary_metrics.length" class="statisticsStyle collection-summary-metrics" data-zone="summary.metrics" data-component="summary.metric-strip">
+              <div v-for="item in config.summary_metrics" :key="item.key" class="card" :class="{'is-active':activeSummaryMetric===item.key}" role="button" :aria-pressed="activeSummaryMetric===item.key?'true':'false'" tabindex="0" @click="selectSummaryMetric(item)" @keyup.enter="selectSummaryMetric(item)">
+                <div class="image"><i :class="item.image_icon || item.icon || 'h-icon-menu'"></i></div>
+                <div class="content">
+                  <h-stats :title="item.label" :value="summaryMetrics[item.key]">
+                    <i slot="titlePrefix" :class="item.icon || 'h-icon-menu'"></i>
+                    <i slot="valueSuffix" class="h-icon-edit"></i>
+                  </h-stats>
+                </div>
+              </div>
+            </section>
             <section v-if="externalMasterMedia" class="details-master-photo is-external" data-zone="media.preview" data-component="media.image-viewer">
               <img :src="detailMedia.src" :alt="config.media.alt">
               <div class="details-master-photo__name">{{ detailValues.personName }}</div>

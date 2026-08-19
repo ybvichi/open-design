@@ -3,24 +3,5 @@
   "industry": "general",
   "product": "isc",
   "output_root": "output/product-tests/isc",
-  "cases": [
-    {
-      "id": "event-search.default",
-      "page_type": "event-search",
-      "spec": "tests/fixtures/event-search.default.json",
-      "output": "event-search.default.html"
-    },
-    {
-      "id": "event-search.extended",
-      "page_type": "event-search",
-      "spec": "tests/fixtures/event-search.extended.json",
-      "output": "event-search.extended.html"
-    },
-    {
-      "id": "device-detail.default",
-      "page_type": "device-detail",
-      "spec": "tests/fixtures/device-detail.default.json",
-      "output": "device-detail.default.html"
-    }
-  ]
+  "cases": []
 }

@@ -22,8 +22,17 @@
     "composite": "由多个不同Vue控件组合成一个业务区域",
     "repeat-item": "由多个同类单项Vue组件重复组成"
   },
-  "entry_count": 23,
+  "entry_count": 24,
   "entries": {
+    "collection.calendar-grid": {
+      "name": "日历排班集合",
+      "split_mode": "repeat-item",
+      "vue_component": "CalendarGrid",
+      "description": "按日、周、月时间范围展示日期与排班事项集合",
+      "use_when": [
+        "用户需要按日历时间范围浏览排班或日程安排"
+      ]
+    },
     "collection.card-grid": {
       "name": "卡片集合",
       "split_mode": "repeat-item",
@@ -208,7 +217,7 @@
       "name": "指标摘要条",
       "split_mode": "repeat-item",
       "vue_component": "MetricStrip",
-      "description": "使用多个同类指标项横向展示关键聚合数据",
+      "description": "典型页 statisticsStyle：使用可点击统计卡片在主要内容之前展示关键聚合数据",
       "use_when": [
         "页面需要在主要内容之前概览多个关键指标"
       ]

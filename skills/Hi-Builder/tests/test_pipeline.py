@@ -910,6 +910,36 @@ class PipelineTest(unittest.TestCase):
             },
             expected,
         )
+        mapping = load_json(
+            ROOT
+            / "design-systems"
+            / "HUI"
+            / "page-patterns"
+            / "tpp"
+            / "mappings"
+            / "table.json"
+        )
+        strategy = mapping["selection_strategy"]
+        self.assertTrue(strategy["selection_required_before_render"])
+        self.assertEqual(strategy["required_variant_count"], 18)
+        self.assertEqual(len(mapping["pages"]), 18)
+        self.assertEqual(
+            [item["order"] for item in strategy["priority"]],
+            list(range(1, 9)),
+        )
+        self.assertEqual(strategy["priority"][-1]["family"], "table-basic")
+        filter_dimensions = strategy["filter_dimensions"]
+        self.assertEqual(
+            filter_dimensions["evaluation_order"],
+            [
+                "trigger_mode",
+                "option_density",
+                "control_shape",
+                "collapse_behavior",
+            ],
+        )
+        self.assertIn("5个及以上选项", filter_dimensions["option_density"]["dense"])
+        self.assertIn("horizontal-bar", filter_dimensions["option_density"]["dense"])
 
     def test_tpp_table_variant_preserves_filter_geometry(self) -> None:
         contract = load_json(
@@ -1212,6 +1242,21 @@ class PipelineTest(unittest.TestCase):
             "h-page-content",
             contract["composition"]["page_framework_components"],
         )
+
+    def test_form_anchor_navigation_requires_anchored_family(self) -> None:
+        spec = load_json(
+            ROOT / "tests" / "generation" / "device-permission-form.json"
+        )
+        html = compile_pattern_page(spec)
+        self.assertIn(
+            'v-if="isAnchoredForm && !isWorkOrderForm && visibleFormSections.length"',
+            html,
+        )
+        self.assertIn(
+            "isAnchoredForm: function () { return this.config.pattern_family === 'hui.tpp.family.form-anchored'; }",
+            html,
+        )
+        self.assertIn('"pattern_family": "hui.tpp.family.form-complex"', html)
 
     def test_grouped_form_resolves_to_tpp_family(self) -> None:
         resolution = resolve_design_system(
@@ -1661,6 +1706,22 @@ class PipelineTest(unittest.TestCase):
                 "HUI叶子菜单不得手工渲染图标；一级分组图标必须通过el-subnav的icon API输出",
                 validate_pattern_html(spec, html_path),
             )
+
+    def test_pvia_profile_uses_product_logo_with_hui_shell(self) -> None:
+        spec = load_json(
+            ROOT / "tests" / "generation" / "pvia-face-alarm-regular-high-low.json"
+        )
+        html = compile_pattern_page(spec)
+        self.assertIn('"product_shell_source": "HUI"', html)
+        self.assertIn("hui-tpp-shell product-context", html)
+        self.assertIn(
+            '"product_logo": "../assets/imgs/hik-product-logos/logo_视频图像综合应用平台Infovision_PVIA.svg"',
+            html,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            html_path = Path(directory) / "pvia-face-alarm.html"
+            html_path.write_text(html, encoding="utf-8")
+            self.assertEqual(validate_pattern_html(spec, html_path), [])
 
     def test_pattern_page_requires_explicit_product_context(self) -> None:
         spec = load_json(

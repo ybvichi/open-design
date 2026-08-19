@@ -8,7 +8,7 @@
   "category": "table",
   "status": "active",
   "use_when": ["数据具有稳定列结构并需要对比浏览"],
-  "hui_components": ["el-table", "el-table-column", "el-button"],
+  "hui_components": ["el-table", "el-table-column", "el-button", "el-progress", "el-tag"],
   "geometry_roles": {
     "card-min-width": "280px",
     "card-label-width": "70px",

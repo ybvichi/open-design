@@ -35,6 +35,83 @@
       "overflow": "visible"
     }
   },
+  "statistics_strip": {
+    "observed_at": "2026-08-17",
+    "root_class": "statisticsStyle",
+    "placement": "after-breadcrumb-before-table-layout",
+    "component": "h-stats",
+    "card_count": 5,
+    "root_rect": {"x": 240, "y": 95.765625, "width": 1680, "height": 152},
+    "root_style": {"display": "flex", "flex_wrap": "wrap", "gap": "16px", "padding": "16px", "computed_background": "transparent", "effective_background": "var(--h-color-bg-primary) from page container"},
+    "card": {
+      "class": "card",
+      "width": "calc(20% - 13px)",
+      "observed_rect": {"width": 316.59375, "height": 120},
+      "padding": "10px",
+      "display": "flex",
+      "border": "2px solid transparent",
+      "background_color": "var(--h-color-blue-10)",
+      "background_image": "/tpp/img/texture.e77dd5e1.png",
+      "border_radius": "4px",
+      "interaction": "click toggles is-active"
+    },
+    "image": {"width": 96, "height": 96, "object_fit": "contain"},
+    "content": {"flex": 1, "padding_left": "10px", "display": "flex", "align_items": "center"},
+    "h_stats": {
+      "title_prefix_icons": ["h-icon-histogram", "h-icon-chart", "h-icon-pie-chart", "h-icon-line-chart", "h-icon-bar-chart"],
+      "title_prefix_font_size": "20px",
+      "value_suffix_icon": "h-icon-copy"
+    },
+    "observed_items": [
+      {"title": "数据标题1", "value": "112893"},
+      {"title": "数据标题2", "value": "85642"},
+      {"title": "数据标题3", "value": "45678"},
+      {"title": "数据标题4", "value": "98765"},
+      {"title": "数据标题5", "value": "34567"}
+    ]
+  },
+  "statistical_cells": {
+    "observed_at": "2026-08-17",
+    "table_header_height": 40,
+    "table_row_height": 41,
+    "columns": [
+      {
+        "label": "进度",
+        "kind": "progress",
+        "width": 240,
+        "sortable": true,
+        "component": "el-progress",
+        "component_count": 20,
+        "component_rect": {"width": 216, "height": 14},
+        "props": {
+          "type": "line",
+          "stroke_width": 12,
+          "stroke_linecap": "square",
+          "show_text": true,
+          "text_font_size": 14
+        }
+      },
+      {
+        "label": "表格标题",
+        "kind": "tag-pair",
+        "width": 120,
+        "component": "el-tag",
+        "component_count": 40,
+        "pair_gap": 0,
+        "tag_height": 24,
+        "tag_padding": "0px 8px",
+        "tag_border_radius": 2,
+        "tag_font_size": 14,
+        "primary": {"variant": "primary", "content": "status"},
+        "secondary": {"variant": "secondary", "content": "percentage"},
+        "shared_flood_by_row": true,
+        "observed_examples": [
+          {"status": "未知", "percentage": "35%", "flood": "blue"},
+          {"status": "异常", "percentage": "65%", "flood": "orange"}
+        ]
+      }
+    ]
+  },
   "runtime_components": {
     "h-page-content": 3,
     "h-page-button-group": 1,

@@ -10,5 +10,11 @@
   "use_when": ["页面需要一组并列操作入口"],
   "hui_components": ["el-button", "el-button-group", "el-radio-group", "el-radio-button"],
   "geometry_roles": {"table-toolbar-height": "44px"},
+  "collection_geometry": {
+    "height": "56px",
+    "horizontal_padding": "24px",
+    "top_separator": false,
+    "separator_ownership": "filter.search-form owns the separator at the filter bottom"
+  },
   "owner": "hui-common"
 }

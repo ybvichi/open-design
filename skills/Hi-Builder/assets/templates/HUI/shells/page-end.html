@@ -27,15 +27,22 @@
           activeFormSection: '',
           activeFormTab: '',
           viewMode: 'table',
+          schedulePresentation: 'table',
+          scheduleView: 'month',
+          scheduleCursor: '2026-08-17',
           formModel: {},
           filters: {},
+          filterExpanded: true,
           appliedFilters: {},
           selectedRows: [],
           selectedDetailRow: {},
+          detailPaneVisible: false,
           currentPage: 1,
           pageSize: 20,
           rows: [],
+          scheduleItems: [],
           total: 0,
+          summaryMetrics: {}, activeSummaryMetric: '',
           cardTabRows: {},
           detailValues: {},
           relatedTableRows: {},
@@ -44,6 +51,7 @@
       },
       created: function () {
         this.loadPreviewFixtures();
+        this.filterExpanded = (this.config.pattern_parameters || {}).collapse_mode === 'all-retractable';
       },
       computed: {
         huiShellOpenMenus: function () { return (this.config.portal.side_menus || []).filter(function (item) { return item.children && item.children.length; }).map(function (item) { return item.id; }); },
@@ -78,9 +86,12 @@
         isSimulationFile: function () { return (this.config.pattern_family || '').indexOf('details-simulation-file') !== -1; },
         isMasterDetail: function () { return (this.config.pattern_family || '').indexOf('details-master-detail') !== -1; },
         isParallelDetails: function () { return (this.config.pattern_family || '').indexOf('details-parallel') !== -1; },
-        isTableDetailsPane: function () { return this.config.pattern_family === 'hui.tpp.family.table-details-pane'; },
-        showFilterToolbarDivider: function () { return !!(((this.config.pattern_parameters || {}).separators || {}).filter_toolbar) && !!(this.config.filters || []).length; },
-        showMasterDetailsDivider: function () { return !!(((this.config.pattern_parameters || {}).separators || {}).master_details); },
+        hasTableDetailsPane: function () { return !!(this.config.detail_tabs || []).length; },
+        isTableDetailsPane: function () { return this.hasTableDetailsPane && this.detailPaneVisible; },
+        showMasterDetailsDivider: function () {
+          var separators = (this.config.pattern_parameters || {}).separators || {};
+          return !!separators.master_details || !!(this.config.detail_tabs || []).length;
+        },
         anchorHorizontal: function () { return (this.config.pattern_parameters || {}).anchor_position === 'sticky-top'; },
         showMasterSummary: function () { return (this.isMasterDetail || this.isParallelDetails) && (this.config.summary_fields || []).length; },
         showMasterMedia: function () { return this.isMasterDetail && !!this.config.media; },
@@ -120,20 +131,76 @@
         cardTabType: function () {
           return this.config.card_tab_style === 'linear' ? undefined : this.config.card_tab_style;
         },
+        hasScheduleCalendar: function () { return !!(this.config.schedule_view_modes || []).length; },
+        hasCollapsibleFilters: function () { return (this.config.filters || []).length > 3; },
+        hasCollapsibleHorizontalFilters: function () { return (this.config.filters || []).length > 3; },
+        isRealtimeFilter: function () { return (this.config.pattern_parameters || {}).trigger === 'realtime'; },
+        isRegularManualFilter: function () { var p=this.config.pattern_parameters || {}; return (p.filter_placement==='regular-box' && p.trigger!=='realtime') || (this.config.pattern_family==='hui.tpp.family.table-details-pane' && (this.config.filters || []).length>0); },
+        isHorizontalManualFilter: function () { var p=this.config.pattern_parameters || {}; return p.filter_placement==='horizontal-bar' && p.trigger!=='realtime'; },
+        isSidebarManualFilter: function () { var p=this.config.pattern_parameters || {}; return p.filter_placement==='left-sidebar' && p.trigger==='manual'; },
+        isAllRetractableManualFilter: function () { return (this.config.pattern_parameters || {}).collapse_mode==='all-retractable'; },
+        selectedRealtimeFilters: function () {
+          var vm = this;
+          return (this.config.filters || []).map(function (field) {
+            return { key: field.key, label: field.label, value: vm.filters[field.key] };
+          }).filter(function (item) { return item.value && item.value !== '全部'; });
+        },
+        visibleFilters: function () { return this.hasCollapsibleFilters && !this.filterExpanded ? this.config.filters.slice(0, 3) : (this.config.filters || []); },
+        visibleHorizontalFilters: function () { return this.hasCollapsibleHorizontalFilters && !this.filterExpanded ? this.config.filters.slice(0, 3) : (this.config.filters || []); },
+        weekDayNames: function () { return ['周一','周二','周三','周四','周五','周六','周日']; },
+        scheduleRangeTitle: function () {
+          var d = new Date(this.scheduleCursor + 'T00:00:00');
+          if (this.scheduleView === 'day') return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日';
+          if (this.scheduleView === 'week') {
+            var start = new Date(d); start.setDate(d.getDate() - ((d.getDay()+6)%7));
+            var end = new Date(start); end.setDate(start.getDate()+6);
+            return (start.getMonth()+1) + '月' + start.getDate() + '日 - ' + (end.getMonth()+1) + '月' + end.getDate() + '日';
+          }
+          return d.getFullYear() + '年' + (d.getMonth()+1) + '月';
+        },
+        visibleScheduleDays: function () {
+          var cursor = new Date(this.scheduleCursor + 'T00:00:00');
+          var dates = [];
+          if (this.scheduleView === 'day') dates = [new Date(cursor)];
+          else if (this.scheduleView === 'week') {
+            var weekStart = new Date(cursor); weekStart.setDate(cursor.getDate()-((cursor.getDay()+6)%7));
+            for (var w=0; w<7; w++) { var wd=new Date(weekStart); wd.setDate(weekStart.getDate()+w); dates.push(wd); }
+          } else {
+            var monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+            var gridStart = new Date(monthStart); gridStart.setDate(1-((monthStart.getDay()+6)%7));
+            for (var m=0; m<42; m++) { var md=new Date(gridStart); md.setDate(gridStart.getDate()+m); dates.push(md); }
+          }
+          var vm=this, today='2026-08-17';
+          return dates.map(function(d){
+            var key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+            return {date:key,dayLabel:d.getDate(),isToday:key===today,isOtherMonth:d.getMonth()!==cursor.getMonth(),items:vm.scheduleItems.filter(function(item){return item.date===key;})};
+          });
+        },
         activeRows: function () {
           return this.config.page_kind === 'card-tabs' ? (this.activeCardTabSpec.rows || []) : this.rows;
         },
         filteredRows: function () {
           var vm = this;
+          var activeMetric = (this.config.summary_metrics || []).filter(function (item) {
+            return item.key === vm.activeSummaryMetric;
+          })[0] || {};
           return this.activeRows.filter(function (row) {
-            return Object.keys(vm.appliedFilters).every(function (key) {
-              var value = vm.appliedFilters[key];
+            var activeFilters = vm.isRealtimeFilter ? vm.filters : vm.appliedFilters;
+            var matchesForm = Object.keys(activeFilters).every(function (key) {
+              var value = activeFilters[key];
               return !value || value === '全部' || String(row[key] || '').indexOf(value) !== -1;
             });
+            var matchesMetric = !activeMetric.filter_key || !activeMetric.filter_value || String(row[activeMetric.filter_key] || '') === activeMetric.filter_value;
+            return matchesForm && matchesMetric;
           });
         },
         pagedRows: function () { return this.filteredRows.slice((this.currentPage - 1) * this.pageSize, this.currentPage * this.pageSize); },
-        rowTotal: function () { return this.config.page_kind === 'card-tabs' ? this.activeRows.length : (this.total || this.activeRows.length); },
+        rowTotal: function () {
+          var metricFiltered = (this.config.summary_metrics || []).some(function (item) {
+            return item.key === this.activeSummaryMetric && item.filter_key && item.filter_value;
+          }, this);
+          return metricFiltered || (this.isRealtimeFilter && this.selectedRealtimeFilters.length) ? this.filteredRows.length : (this.config.page_kind === 'card-tabs' ? this.activeRows.length : (this.total || this.activeRows.length));
+        },
         showTable: function () { return this.config.page_kind === 'table' || (this.config.page_kind === 'switch' && this.viewMode === 'table'); },
         cardGridStyle: function () {
           var layout = this.activeCardTabSpec.layout || {};
@@ -186,6 +253,9 @@
           this.activeDetailTab = this.config.detail_tabs && this.config.detail_tabs.length ? this.config.detail_tabs[0].id : '';
           this.activeDetailSection = this.config.active_detail_section || ((this.config.detail_sections || [])[0] || {}).id || '';
           this.viewMode = this.config.default_view || (this.config.page_kind === 'card' ? 'card' : 'table');
+          this.schedulePresentation = this.config.default_schedule_presentation || 'table';
+          this.scheduleView = this.config.default_schedule_view || 'month';
+          this.scheduleCursor = (fixtures.scheduleItems && fixtures.scheduleItems[0] && fixtures.scheduleItems[0].date) || '2026-08-17';
           this.activeFormSection = ((this.config.form_sections || [])[0] || {}).id || '';
           this.activeFormTab = ((this.config.form_tabs || [])[0] || {}).id || '';
           this.filters = {};
@@ -213,10 +283,25 @@
           if (index === -1) this.expandedSideMenus.push(id);
           else this.expandedSideMenus.splice(index, 1);
         },
+        navigateSideMenu: function (item) {
+          if (item && item.href && item.id !== this.config.portal.active_side_menu) window.location.href = item.href;
+        },
         queryRows: function () { this.appliedFilters = Object.assign({}, this.filters); this.currentPage = 1; },
+        selectSummaryMetric: function (item) {
+          this.activeSummaryMetric = this.activeSummaryMetric === item.key ? '' : item.key;
+          this.currentPage = 1;
+        },
         selectDetailRow: function (row) { this.selectedDetailRow = row; },
         detailFieldValue: function (key) { var value = this.selectedDetailRow[key]; return value === undefined || value === null || value === '' ? '—' : value; },
         cardTabChanged: function () { this.currentPage = 1; },
+        selectRealtimeFilter: function (field, option) { this.$set(this.filters, field.key, option); this.currentPage = 1; },
+        realtimeFilterChanged: function () { this.currentPage = 1; },
+        clearRealtimeFilter: function (key) {
+          var field = (this.config.filters || []).filter(function (item) { return item.key === key; })[0] || {};
+          this.$set(this.filters, key, field.kind === 'input' ? '' : '全部');
+          this.currentPage = 1;
+        },
+        clearRealtimeFilters: function () { this.resetFilters(); },
         resetFilters: function () {
           this.filters = cloneRuntimeValue(PREVIEW_FIXTURES.filters || {});
           if (!Object.keys(this.filters).length) {
@@ -251,10 +336,39 @@
           else this.saveForm();
         },
         saveForm: function () { this.$message.success('设备权限配置已保存'); },
-        formAction: function (action) { if (action === '取消') this.resetForm(); else this.$message.success('已执行：' + action); },
-        toolbarAction: function (label) { this.$message.success('已执行：' + label); },
+        formAction: function (action) {
+          if (action === '取消') {
+            if (this.config.form_return_href) window.location.href = this.config.form_return_href;
+            else this.resetForm();
+            return;
+          }
+          this.$message.success('已执行：' + action);
+          if (this.config.form_return_href) window.location.href = this.config.form_return_href;
+        },
+        toolbarAction: function (action) {
+          if (action && action.href) window.location.href = action.href;
+          else this.$message.success('已执行：' + (action.label || action));
+        },
+        moveSchedule: function (direction) {
+          var d=new Date(this.scheduleCursor+'T00:00:00');
+          if(this.scheduleView==='day') d.setDate(d.getDate()+direction);
+          else if(this.scheduleView==='week') d.setDate(d.getDate()+direction*7);
+          else d.setMonth(d.getMonth()+direction);
+          this.scheduleCursor=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        },
         mediaAction: function (label) { this.$message.info('图片操作：' + label); },
-        openDetail: function (row) { this.selectDetailRow(row); },
+        openDetail: function (row) {
+          if (this.config.row_detail_href) {
+            window.location.href = this.config.row_detail_href + '?id=' + encodeURIComponent(row.id);
+            return;
+          }
+          if (this.detailPaneVisible && this.selectedDetailRow && this.selectedDetailRow.id === row.id) {
+            this.detailPaneVisible = false;
+            return;
+          }
+          this.selectDetailRow(row);
+          this.detailPaneVisible = true;
+        },
         openPreview: function (row) { this.$message.info('预览抓拍记录：' + (row.captureCode || row.deviceCode)); }
       }
     });

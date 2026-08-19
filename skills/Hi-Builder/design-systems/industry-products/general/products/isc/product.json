@@ -18,8 +18,5 @@
   "profile": "profile.json",
   "theme": "theme/tokens.json",
   "portal_shell": "portal-shell/contract.json",
-  "pages": {
-    "event-search": "pages/event-search/page.json",
-    "device-detail": "pages/device-detail/page.json"
-  }
+  "pages": {}
 }

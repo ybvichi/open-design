@@ -420,10 +420,7 @@ def compile_list_search(spec: dict, context: dict) -> str:
     return template
 
 
-RENDERERS = {
-    "hui.list-search": compile_list_search,
-    "hui.detail-workspace": compile_detail_workspace,
-}
+RENDERERS = {}
 
 if set(RENDERERS) != PAGE_RENDERER_IDS:
     raise RuntimeError("HTML Renderer实现与Renderer Registry不一致")

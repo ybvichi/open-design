@@ -9,7 +9,7 @@
           <nav class="h-page-menu" :class="{'is-collapsed':sidebarCollapsed}" data-zone="portal.sidebar" data-component="portal.app-sidebar">
             <el-scrollbar class="hui-tpp-menu-scrollbar">
               <el-nav mode="vertical" :collapse="sidebarCollapsed" :collapse-btn="true" :default-active="config.portal.active_side_menu" :default-openeds="huiShellOpenMenus" :wrap-scroll="true" @click-collapse="sidebarCollapsed=!sidebarCollapsed">
-                <template v-for="item in config.portal.side_menus"><el-subnav v-if="item.children" :key="item.id" :index="item.id" :title="item.label" :icon="item.icon"><el-nav-item v-for="child in item.children" :key="child.id" :index="child.id">{{ child.label }}</el-nav-item></el-subnav><el-nav-item v-else :key="item.id" :index="item.id">{{ item.label }}</el-nav-item></template>
+                <template v-for="item in config.portal.side_menus"><el-subnav v-if="item.children" :key="item.id" :index="item.id" :title="item.label" :icon="item.icon"><el-nav-item v-for="child in item.children" :key="child.id" :index="child.id" @click="navigateSideMenu(child)">{{ child.label }}</el-nav-item></el-subnav><el-nav-item v-else :key="item.id" :index="item.id" @click="navigateSideMenu(item)">{{ item.label }}</el-nav-item></template>
               </el-nav>
             </el-scrollbar>
           </nav>

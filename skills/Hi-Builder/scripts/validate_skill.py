@@ -102,8 +102,8 @@ def validate_rule_ownership(root: Path = ROOT) -> list[str]:
     except (OSError, json.JSONDecodeError) as exc:
         return [f"规则归属索引无效: {exc}"]
 
-    if ownership.get("schema_version") != "hi-builder-rule-ownership.v1":
-        errors.append("规则归属索引版本必须是hi-builder-rule-ownership.v1")
+    if ownership.get("schema_version") != "hi-design-rule-ownership.v1":
+        errors.append("规则归属索引版本必须是hi-design-rule-ownership.v1")
 
     governed = ownership.get("governed_documents")
     if not isinstance(governed, list) or not governed:
@@ -412,18 +412,6 @@ def main() -> int:
         "design-systems/industry-products/general/products/isc/profile.json",
         "design-systems/industry-products/general/products/isc/theme/tokens.json",
         "design-systems/industry-products/general/products/isc/portal-shell/contract.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/capabilities.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/payload.schema.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/page.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/composition.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/fixture.json",
-        "design-systems/industry-products/general/products/isc/pages/event-search/golden.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/capabilities.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/payload.schema.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/page.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/composition.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/fixture.json",
-        "design-systems/industry-products/general/products/isc/pages/device-detail/golden.json",
         "design-systems/industry-products/public-security/industry.json",
         "design-systems/industry-products/public-security/products/pvia/product.json",
         "scripts/resolve_capabilities.py",
@@ -441,7 +429,6 @@ def main() -> int:
         "tests/generation/device-capture-card.json",
         "tests/generation/device-capture-switch.json",
         "tests/generation/capture-card-tabs.json",
-        "tests/fixtures/device-detail.default.json",
         "tests/product-pages/isc/cases.json",
     ]
     for relative in required:
@@ -495,7 +482,16 @@ def main() -> int:
                 f"Renderer模板必须位于assets/templates且真实存在: "
                 f"{renderer_id} -> {contract['template']}"
             )
-    for page_type in ("event-search", "device-detail"):
+    isc_product = load_json(
+        ROOT
+        / "design-systems"
+        / "industry-products"
+        / "general"
+        / "products"
+        / "isc"
+        / "product.json"
+    )
+    for page_type in isc_product.get("pages", {}):
         page_root = (
             ROOT
             / "design-systems"
@@ -944,38 +940,6 @@ def main() -> int:
                         "TPP页面族变体反向关联不一致: "
                         f"{family_id} -> {variant_id} -> {page_contract.get('family')}"
                     )
-
-    template_path = ROOT / RENDERER_CONTRACTS["hui.list-search"]["template"]
-    if template_path.exists():
-        template = template_path.read_text(encoding="utf-8")
-        template_without_resource_slots = template
-        for slot in ("__HUI_CSS__", "__VUE_JS__", "__HUI_JS__"):
-            template_without_resource_slots = template_without_resource_slots.replace(slot, "")
-        if re.search(r"__[A-Z_]+__", template_without_resource_slots):
-            errors.append("HTML模板仍包含破坏语法的裸占位符")
-        expected_sentinels = {
-            "PRODUCT_SHELL_STYLES",
-            "PRODUCT_SHELL_START",
-            "PRODUCT_SHELL_END",
-            "FILTER_FIELDS",
-            "TOOLBAR_ACTIONS",
-            "VIEW_SWITCH",
-            "VIDEO_MODE_SWITCH",
-            "EXTENSIONS_AFTER_TOOLBAR",
-            "TABLE_COLUMNS",
-            "CARD_FIELDS",
-            "CARD_ACTIONS",
-            "PRODUCT_TOKENS",
-            "GEOMETRY_ROLES",
-            "COMPACT_BREAKPOINT",
-            "VUE_DATA",
-        }
-        actual_sentinels = set(re.findall(r"D2C:([A-Z_]+)", template))
-        missing = sorted(expected_sentinels - actual_sentinels)
-        if missing:
-            errors.append(f"HTML模板缺少编译哨兵: {missing}")
-        if "data-d2c-page-title" not in template:
-            errors.append("HTML模板缺少页面标题标记")
 
     if errors:
         print("[FAIL] Hi-Builder")

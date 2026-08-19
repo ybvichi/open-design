@@ -68,6 +68,7 @@ import {
   fetchProjectFilePreview,
   fetchProjectFiles,
   fetchProjectFileText,
+  fetchProjectFileBase64,
   fetchProjectFileTextPreview,
   uploadProjectFiles,
   liveArtifactPreviewUrl,
@@ -10790,6 +10791,7 @@ function HtmlViewer({
   }
   async function deployToIux(type?:any,scope?:string){
     setDeploying(true);
+    setExportToast({ message: '正在生成链接...', tone: 'loading' });
     // 任何一步（取文件列表、读内容、POST 分享）抛异常都统一提示失败，
     // 并且无论如何都恢复 deploying 状态，避免卡在加载中。
     const showFailure = () => setExportToast({
@@ -10807,8 +10809,8 @@ function HtmlViewer({
       const files = await fetchProjectFiles(projectId);
       let name = fileName;
       const htmlFiles = files
-        .filter((entry) => /\.html?$/i.test(entry.name))
-        .filter(f=>f.name===fileName)
+        //.filter((entry) => /\.html?$/i.test(entry.name))
+        //.filter(f=>f.name===fileName)
         .map(f=>{
         let isHome=f.name===fileName;
         let obj:any = {};
@@ -10817,7 +10819,10 @@ function HtmlViewer({
         }
         obj.name=f.name;
         return new Promise(async (resolve)=>{
-              let content = await fetchProjectFileText(projectId,f.name)
+              const isImageFile = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(f.name);
+              let content = isImageFile
+                ? await fetchProjectFileBase64(projectId, f.name)
+                : await fetchProjectFileText(projectId, f.name)
               obj.content = content;
               if(isHome){
                 obj.home=true;

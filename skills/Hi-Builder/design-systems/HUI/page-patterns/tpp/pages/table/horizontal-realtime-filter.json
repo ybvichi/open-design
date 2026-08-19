@@ -12,7 +12,17 @@
   },
   "parameters": {
     "filter_placement": "horizontal-bar",
-    "trigger": "realtime"
+    "trigger": "realtime",
+    "filter_container_padding_vertical": "16px",
+    "filter_option_interactive_tone": "brand",
+    "selected_filter_state_separator": "dashed-top",
+    "selected_filter_state_spacing_before": "24px",
+    "selected_filter_state_padding_vertical": "16px",
+    "selected_filter_state_bottom_spacing_compensation": "-16px",
+    "selected_filter_state_visibility_when_empty": "hidden",
+    "selected_filter_clear_action_placement": "after-selected-items",
+    "selected_filter_clear_action_tone": "brand",
+    "selected_filter_clear_action_interactive_tone": "brand-stable"
   },
   "geometry": {
     "viewport": {

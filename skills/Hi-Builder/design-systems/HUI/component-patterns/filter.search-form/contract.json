@@ -21,5 +21,11 @@
     "actions_move_to_second_row_when_expanded": true,
     "action_gap": "var(--h-space-xs)"
   },
+  "collection_geometry": {
+    "margin": "0 24px",
+    "padding": "16px 0",
+    "placement": "before collection toolbar",
+    "bottom_separator": {"owner": ".query-filter::after", "width": "1px", "left": "0", "right": "0", "token": "--h-color-border-tertiary"}
+  },
   "owner": "hui-common"
 }
