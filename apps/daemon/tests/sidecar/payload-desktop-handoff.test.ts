@@ -107,7 +107,7 @@ describe("legacy payload desktop handoff", () => {
         pid: 4321,
         stamp: {
           app: APP_KEYS.DESKTOP,
-          ipc: "/tmp/open-design/ipc/release-beta/desktop.sock",
+          ipc: "/tmp/hi-design/ipc/release-beta/desktop.sock",
           mode: "runtime",
           namespace,
           source: SIDECAR_SOURCES.PACKAGED,
@@ -210,7 +210,7 @@ describe("legacy payload desktop handoff", () => {
         pid: 4321,
         stamp: {
           app: APP_KEYS.DESKTOP,
-          ipc: "/tmp/open-design/ipc/release-beta/desktop.sock",
+          ipc: "/tmp/hi-design/ipc/release-beta/desktop.sock",
           mode: "runtime",
           namespace,
           source: SIDECAR_SOURCES.TOOLS_PACK,
@@ -347,7 +347,7 @@ describe("legacy payload desktop handoff", () => {
       pid: 4321,
       stamp: {
         app: APP_KEYS.DESKTOP,
-        ipc: "/tmp/open-design/ipc/release-beta/desktop.sock",
+        ipc: "/tmp/hi-design/ipc/release-beta/desktop.sock",
         mode: "runtime",
         namespace,
         source: SIDECAR_SOURCES.PACKAGED,

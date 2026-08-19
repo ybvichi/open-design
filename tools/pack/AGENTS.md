@@ -67,10 +67,10 @@ The runtime updater reads `https://releases.open-design.ai/<channel>/latest/meta
 
 Channel identity must be stable across install, update install, shortcuts, registry entries, and app data:
 
-- Stable: `Open Design`, namespace `default` or stable release namespace.
-- Beta Windows: `Open Design Beta`, namespace `release-beta-win`, uninstall key `Open Design-release-beta-win`.
-- Prerelease Windows: `Open Design Prerelease`, namespace `release-prerelease-win`, uninstall key `Open Design-release-prerelease-win`.
-- Preview Windows: `Open Design Preview`, namespace `release-preview-win`, uninstall key `Open Design-release-preview-win`.
+- Stable: `Hi Design`, namespace `default` or stable release namespace.
+- Beta Windows: `Hi Design Beta`, namespace `release-beta-win`, uninstall key `Hi Design-release-beta-win`.
+- Prerelease Windows: `Hi Design Prerelease`, namespace `release-prerelease-win`, uninstall key `Hi Design-release-prerelease-win`.
+- Preview Windows: `Hi Design Preview`, namespace `release-preview-win`, uninstall key `Hi Design-release-preview-win`.
 - Beta-like ad hoc namespaces such as `beta-local-flow` are test namespaces, not the beta channel. They must not be used for user-flow beta validation because they create a different registry key while sharing a confusing display name/path.
 
 If a local release-channel package is meant to be updated by a real feed, build it with the matching release namespace and an older matching `--app-version` such as `--namespace release-beta-win --app-version 0.10.0-beta.1` or `--namespace release-prerelease-win --app-version 0.10.0-prerelease.1`. Otherwise the installed package and the downloaded package can appear as separate registry entries even though they target the same display name.

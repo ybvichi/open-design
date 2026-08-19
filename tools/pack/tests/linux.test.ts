@@ -823,7 +823,7 @@ describe("createLinuxDesktopLaunchEnv", () => {
     const config = makeConfig();
     const stamp = {
       app: APP_KEYS.DESKTOP,
-      ipc: "/tmp/open-design/ipc/default/desktop.sock",
+      ipc: "/tmp/hi-design/ipc/default/desktop.sock",
       mode: SIDECAR_MODES.RUNTIME,
       namespace: "default",
       source: SIDECAR_SOURCES.TOOLS_PACK,

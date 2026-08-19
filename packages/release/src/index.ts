@@ -51,8 +51,13 @@ export const RELEASE_PLATFORM_NAMESPACE_SUFFIXES = Object.freeze({
   win: "win",
 } as const satisfies Record<ReleasePlatform, string>);
 
+// Release namespaces keep the upstream `release-*` scheme (they are channel
+// identifiers, not product branding). Coexistence with upstream Open Design on
+// the same machine is provided by the product-scoped IPC base / Windows pipe
+// prefix and the product identity in `packages/sidecar-proto`, which are the
+// surfaces that were actually branded `open-design`.
 const PRODUCT_NAME = "Hi Design";
-const DEFAULT_NAMESPACE = "open-design";
+const DEFAULT_NAMESPACE = "hi-design";
 
 const descriptors: Record<ReleaseChannel, ReleaseChannelDescriptor> = {
   beta: {
