@@ -49,7 +49,7 @@ import {
   measurePreviewBlockOffsets,
 } from './markdown-scroll-sync';
 import { useT, useI18n } from '../i18n';
-import { getStoredUsername } from '../auth/auth';
+import { getStoredUserInfo, getStoredUsername } from '../auth/auth';
 import type { Dict, Locale } from '../i18n/types';
 import {
   fetchLiveArtifact,
@@ -225,6 +225,10 @@ import { manualEditTooltip } from '../edit-mode/shortcuts';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
 
 import { AI_BUILDER_WEB_PREX } from './workspace-context';
+
+// HTML 方案评审工具基址。发起新评审（POST /api/projects）与新开评审页都基于此地址。
+// name 查询参数会被评审页读取并预填为当前评审人姓名（App.jsx 中 searchParams.get("name")）。
+const REVIEW_TOOL_BASE = 'http://10.17.68.13:9525';
 
 import {partialHtmlToIframeWeb} from '../utils/formatDsl'
 
@@ -10789,9 +10793,14 @@ function HtmlViewer({
       });
     }
   }
-  async function deployToIux(type?:any,scope?:string){
+  async function deployToIux(type?:any,scope?:string,isReview?:boolean){
     setDeploying(true);
-    setExportToast({ message: '正在生成链接...', tone: 'loading' });
+    if(isReview){
+      setExportToast({ message: '正在生成评审地址...', tone: 'loading' });
+    }else{
+      setExportToast({ message: '正在生成链接...', tone: 'loading' });
+    }
+    
     // 任何一步（取文件列表、读内容、POST 分享）抛异常都统一提示失败，
     // 并且无论如何都恢复 deploying 状态，避免卡在加载中。
     const showFailure = () => setExportToast({
@@ -10861,14 +10870,51 @@ function HtmlViewer({
           let result = await resp.json();
           let lastUrl = `${AI_BUILDER_WEB_PREX}${result.data.path}`
           if(scope){
-            const ok = await handleCopy(lastUrl)
-            setExportToast(ok ? {
-              message:'复制链接成功',
-              tone: 'success',
-            } : {
-              message: t('useEverywhere.copyFailed'),
-              tone: 'error',
-            });
+            if(isReview){
+                let reviewUrl = `${AI_BUILDER_WEB_PREX}/public/webresources/od/templates/${projectId}_private/${fileName}`
+                console.log('我的review的地址',reviewUrl);
+                // 发起新评审：reviewUrl 不允许重复，先按 sourceUrl 查重。
+                // 已存在则直接跳转已有评审页；否则 POST /api/projects 创建后跳转。
+                const userInfo = getStoredUserInfo();
+                const displayName = userInfo?.displayName ?? getStoredUsername() ?? '';
+                const reviewPageUrl = (id: string) => `${REVIEW_TOOL_BASE}/?review=${encodeURIComponent(id)}`;
+                try {
+                  const listResp = await fetch(`${REVIEW_TOOL_BASE}/api/projects`, { cache: 'no-store' });
+                  if (!listResp.ok) throw new Error('fetch projects failed');
+                  const existing = (await listResp.json()).find((project: any) => project.sourceUrl === reviewUrl);
+                  if (existing) {
+                    window.open(reviewPageUrl(existing.id), '_blank', 'noopener');
+                    setExportToast({ message: '已有评审数据，已在新页面打开', tone: 'success' });
+                    return;
+                  }
+                  const createResp = await fetch(`${REVIEW_TOOL_BASE}/api/projects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: name ?? fileName,
+                      sourceUrl: reviewUrl,
+                      creator: displayName,
+                      note: '',
+                    }),
+                  });
+                  if (!createResp.ok) throw new Error('create review failed');
+                  const created = await createResp.json();
+                  window.open(reviewPageUrl(created.id), '_blank', 'noopener');
+                  setExportToast({ message: '评审已发起，已在新页面打开', tone: 'success' });
+                } catch (err) {
+                  console.warn('[review] create failed:', err);
+                  setExportToast({ message: '发起评审失败!', tone: 'error' });
+                }
+            }else{
+                const ok = await handleCopy(lastUrl)
+                setExportToast(ok ? {
+                  message:'复制链接成功',
+                  tone: 'success',
+                } : {
+                  message: t('useEverywhere.copyFailed'),
+                  tone: 'error',
+                });
+            }
           }else{
             setIuxLink(lastUrl);
             setExportToast({
@@ -11049,6 +11095,10 @@ function HtmlViewer({
   // 成功，让调用方决定提示文案。
   async function handleCopy(value: string): Promise<boolean> {
     return copyToClipboard(value);
+  }
+  async function copyLocalShareLinkAndReview(){
+     void deployToIux(deployPhase,'private',true);
+    //console.log('复制本地分享链路',file,liveArtifactPreviewUrl(projectId, liveArtifact.artifactId));
   }
   async function copyLocalShareLink(url?:string){
     setDeployMenuOpen(false);
@@ -13238,6 +13288,17 @@ function HtmlViewer({
             <div className="chrome-file-action-menus" ref={shareRef}>
               {canShare ? (
                 <div className="share-menu chrome-share-menu">
+                <button
+                    type="button"
+                    className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
+                    aria-haspopup="menu"
+                    disabled={exportToast?true:undefined}
+                    onClick={() => {
+                      void copyLocalShareLinkAndReview();
+                    }}
+                  >
+                    <span>评审</span>
+                  </button>
                   <button
                     type="button"
                     className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
