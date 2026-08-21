@@ -18,6 +18,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   ok: true | false;
   username: string;
+  userInfo?: any;
 }
 
 /** Successful response from `POST /api/auth/logout`. */

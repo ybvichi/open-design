@@ -32,6 +32,14 @@ export interface SsoSession {
   departmentName?: string;
   loginAt?: number;
   deviceHash?: string;
+  /** 羽点（uedro）门户登录信息，SSO 登录成功后顺带写入。 */
+  uedro?: {
+    cookies?: Cookie[] | undefined;
+    serviceUrl?: string | undefined;
+    casJwt?: string | undefined;
+    basicInfo?: any;
+    loginAt?: number | undefined;
+  };
 }
 
 export interface SsoLoginResult {
@@ -47,9 +55,9 @@ export interface SsoLogoutResult {
 
 export interface SsoValidResult {
   ok: boolean;
+  isValid:boolean;
   username?: string;
-  userInfo?: any;
-  cache?: boolean;
+  userInfo?:any
 }
 
 export interface SsoUserInfo {
@@ -306,12 +314,35 @@ export async function hicooLogin(username: string, password: string): Promise<Ss
     throw new Error('invalid username or password');
   }
 
-  return {
+  let result =  {
     ok: true,
     username,
     cookies: step2.cookies,
     userInfo: null,
   };
+  const token = generateToken(username || '');
+  const cookieStr = (step2.cookies || [])
+    .map((c: Cookie) => `${c.name}=${c.value}`)
+    .join('; ');
+
+  const checkResult: any = await rawRequest(
+    'GET',
+    'http://hicoo.hikvision.com.cn/ai/gateway/user/userService/v1/user/casInfo/query?_=' + Math.random(),
+    [],
+    {
+      extraHeaders: {
+        Cookie: cookieStr,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain, */*',
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': UA,
+        token,
+        username: username || '',
+      },
+    },
+  );
+  result.userInfo = JSON.parse(checkResult?.body).data;
+  return result;
 }
 
 /**
@@ -367,55 +398,47 @@ export async function hicooValidate(
   if (jwtToken && userInfo) {
     return {
       ok: true,
+      isValid:true,
       username: username || '',
-      userInfo,
-      cache: true,
+      userInfo
     };
   }
 
   // 有 jwtToken，访问 hicoo 验证会话是否仍然有效
-  const token = generateToken(username || '');
-  const cookieStr = (cookies || [])
-    .map((c: Cookie) => `${c.name}=${c.value}`)
-    .join('; ');
+  // const token = generateToken(username || '');
+  // const cookieStr = (cookies || [])
+  //   .map((c: Cookie) => `${c.name}=${c.value}`)
+  //   .join('; ');
 
-  const checkResult: any = await rawRequest(
-    'GET',
-    'http://hicoo.hikvision.com.cn/ai/gateway/user/userService/v1/user/casInfo/query?_=' + Math.random(),
-    [],
-    {
-      extraHeaders: {
-        Cookie: cookieStr,
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/plain, */*',
-        'X-Requested-With': 'XMLHttpRequest',
-        'User-Agent': UA,
-        token,
-        username: username || '',
-      },
-    },
-  );
+  // const checkResult: any = await rawRequest(
+  //   'GET',
+  //   'http://hicoo.hikvision.com.cn/ai/gateway/user/userService/v1/user/casInfo/query?_=' + Math.random(),
+  //   [],
+  //   {
+  //     extraHeaders: {
+  //       Cookie: cookieStr,
+  //       'Content-Type': 'application/json',
+  //       Accept: 'application/json, text/plain, */*',
+  //       'X-Requested-With': 'XMLHttpRequest',
+  //       'User-Agent': UA,
+  //       token,
+  //       username: username || '',
+  //     },
+  //   },
+  // );
 
-  // 如果最终 URL 跳转到 sso.hikvision.com.cn，说明会话已失效
-  if (checkResult.finalUrl.includes('sso.hikvision.com')) {
-    return {
-      ok: false,
-      username: username || '',
-    };
-  }
-
-  // 会话有效，解析用户信息并更新 session
-  const newUserInfo: any = JSON.parse(checkResult?.body).data;
-  const updatedSession: SsoSession = {
-    ...session,
-    userInfo: newUserInfo,
-    loginAt: Date.now(),
-  };
-  writeSsoConfigFile(dataDir, updatedSession, forDesignerDir);
+  // // 如果最终 URL 跳转到 sso.hikvision.com.cn，说明会话已失效
+  // if (checkResult.finalUrl.includes('sso.hikvision.com')) {
+  //   return {
+  //     ok: false,
+  //     isValid: false,
+  //     username: username || '',
+  //   };
+  // }
 
   return {
     ok: true,
-    username: username || '',
-    userInfo: newUserInfo,
+    isValid:true,
+    username: username || ''
   };
 }

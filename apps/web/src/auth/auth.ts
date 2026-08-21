@@ -64,14 +64,14 @@ export function isAuthenticated(): boolean {
 
 /** 获取当前存储在浏览器中的用户名（用于服务端验证） */
 export function getStoredUsername(): string | null {
-  const session:any =
+  const session: any =
     (typeof sessionStorage !== 'undefined' && readSessionFrom(sessionStorage)) ||
     (typeof localStorage !== 'undefined' && readSessionFrom(localStorage));
   return session?.username ?? null;
 }
 /** 获取当前存储在浏览器中的用户名（用于服务端验证） */
 export function getStoredUserInfo(): any {
-  const session:any =
+  const session: any =
     (typeof sessionStorage !== 'undefined' && readSessionFrom(sessionStorage)) ||
     (typeof localStorage !== 'undefined' && readSessionFrom(localStorage));
   return session?.userInfo ?? {};
@@ -95,13 +95,7 @@ export async function checkAuthStatus(): Promise<
     const data = (await response.json()) as { ok: boolean; username: string; userInfo?: any };
     if (data.ok && typeof data.username === 'string' && data.username.length > 0) {
       // 同步保存 username 到 sessionStorage，确保 FileViewer 等组件能获取
-      let {displayName,departmentDetail,work_post} = data.userInfo;
-      syncUsernameToStorage(data.username,{
-        displayName,
-        departmentDetail,
-        work_post
-      });
-      return { ok: true, username: data.username, userInfo: data.userInfo };
+      return { ok: true, username: data.username };
     }
   } catch {
     // 网络错误，视为未登录
@@ -111,7 +105,7 @@ export async function checkAuthStatus(): Promise<
 }
 
 /** 将 username 同步到 sessionStorage（不覆盖已有的 localStorage 记住状态） */
-function syncUsernameToStorage(username: string,userInfo:any): void {
+function syncUsernameToStorage(username: string, userInfo: any): void {
   if (typeof sessionStorage === 'undefined') return;
   try {
     const session: AuthSession = {
@@ -178,15 +172,20 @@ export async function login(username: string, password: string, remember: boolea
   } catch {
     return { ok: false, error: 'unavailable' };
   }
-  syncUsernameToStorage(sessionUsername,{});
-  return { ok: true, username: sessionUsername,userInfo:payload?.userInfo };
+  let { displayName, departmentDetail, work_post } = payload?.userInfo;
+  syncUsernameToStorage(sessionUsername, {
+    displayName,
+    departmentDetail,
+    work_post
+  });
+  return { ok: true, username: sessionUsername, userInfo: payload?.userInfo };
 }
 
 /** Clear the session from every storage the gate could have written to, and notify the server. */
 export async function logout(): Promise<any> {
   try {
     return await fetch('/api/auth/logout', { method: 'POST' });
-  } catch(e) {
+  } catch (e) {
     // 服务端登出失败时仍继续清除本地状态
   }
 }

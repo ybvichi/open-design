@@ -9,7 +9,13 @@ import {
   hicooLogout,
   hicooValidate,
   type SsoSession,
-} from '../http/hiktools/hicoo.js';
+} from '../http/hik_logins/hicoo.js';
+import {
+  uedroLogin,
+  uedroLogout,
+  uedroValidate,
+  type UedroInfo,
+} from '../http/hik_logins/uedro.js';
 
 /**
  * Web login gate endpoint.
@@ -42,13 +48,24 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
     return session;
   }
 
-  function setSsoSession(username: string, userInfo?: any, cookies?: Cookie[]) {
-    writeSsoConfigFile(dataDir, {
+  function setSsoSession(
+    username: string,
+    userInfo?: any,
+    cookies?: Cookie[],
+    uedro?: UedroInfo,
+  ) {
+    const session: SsoSession = {
       cookies: cookies || [],
       username: username,
       userInfo,
       loginAt: Date.now(),
-    }, FOR_DESIGNER_DIR);
+    };
+    if (uedro) {
+      session.uedro = {
+        cookies: uedro.cookies
+      };
+    }
+    writeSsoConfigFile(dataDir, session, FOR_DESIGNER_DIR);
   }
 
   function clearSsoSession() {
@@ -66,12 +83,31 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
 
     // 2. 尝试海康 SSO 登录
     try {
-      const result = await hicooLogin(username, password);
+      const result:any = await hicooLogin(username, password);
 
-      // 将 SSO cookie 存入内存
-      setSsoSession(result.username, result.userInfo, result.cookies);
-
-      const response: LoginResponse = { ok: true, username: result.username };
+      // a. 接入羽点登录，https://uedro.hikvision.com.cn/portal/ui/login?service=https%3A%2F%2Fuedro.hikvision.com.cn%3A443%2Fportal%2F
+      // SSO 登录成功后，用同一账号顺带登录羽点门户，写入登录后信息。
+      // 羽点登录失败不阻断主登录流程，仅记录告警，保证 SSO 会话可用。
+      try {
+        const uedroResult = await uedroLogin(username, password);
+        if(uedroResult.ok){
+          result.uedro=uedroResult
+        }
+      } catch (uedroErr: any) {
+        console.warn('uedro login failed:', uedroErr?.message || uedroErr);
+      }
+      // 将 SSO cookie 及羽点登录信息写入本地 session
+      setSsoSession(
+        result.username, 
+        result.userInfo, 
+        result.cookies, 
+        result.uedro
+      );
+      const response: LoginResponse = { 
+        ok: true, 
+        username:result.username,
+        userInfo:result.userInfo 
+      };
       res.json(response);
     } catch (err: any) {
       if (err.message === 'SSO login page unavailable') {
@@ -94,6 +130,10 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
       clearSsoSession();
 
       await hicooLogout(session);
+      // 羽点登出：失败不影响本地清退结果
+      if (session.uedro?.cookies?.length) {
+        await uedroLogout(session.uedro.cookies);
+      }
 
       const response: LogoutResponse = { ok: true };
       return res.json(response);
@@ -115,13 +155,11 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
         const response: GetUserNameResponse = { ok: false, username: result.username || '' };
         return res.json(response);
       }
-
       // 会话有效
       const response: any = {
         ok: true,
         username: result.username,
-        userInfo: result.userInfo,
-        cache: result.cache,
+        userInfo: result.userInfo
       };
       return res.json(response);
     } catch (err) {
