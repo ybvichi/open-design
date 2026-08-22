@@ -80,46 +80,59 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
     if (!username || !password) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'username and password are required');
     }
-
-    // 2. 尝试海康 SSO 登录
-    try {
-      const result:any = await hicooLogin(username, password);
-
+    async function done_uedproLogin() {
       // a. 接入羽点登录，https://uedro.hikvision.com.cn/portal/ui/login?service=https%3A%2F%2Fuedro.hikvision.com.cn%3A443%2Fportal%2F
       // SSO 登录成功后，用同一账号顺带登录羽点门户，写入登录后信息。
       // 羽点登录失败不阻断主登录流程，仅记录告警，保证 SSO 会话可用。
+      let uedro = null;
       try {
         const uedroResult = await uedroLogin(username, password);
-        if(uedroResult.ok){
-          result.uedro=uedroResult
+        if (uedroResult.ok) {
+          uedro = uedroResult
         }
       } catch (uedroErr: any) {
         console.warn('uedro login failed:', uedroErr?.message || uedroErr);
       }
+      return uedro;
+    }
+    let result: any = null;
+    let error = null;
+    // 2. 尝试海康 SSO 登录
+    try {
+      result = await hicooLogin(username, password);
+    } catch (err: any) {
+      error = err;
+
+    }
+    let uedro: any = await done_uedproLogin()
+    if (result || uedro) {
       // 将 SSO cookie 及羽点登录信息写入本地 session
       setSsoSession(
-        result.username, 
-        result.userInfo, 
-        result.cookies, 
-        result.uedro
+        result?.username || username,
+        result?.userInfo || uedro?.userInfo,
+        result?.cookies,
+        uedro
       );
-      const response: LoginResponse = { 
-        ok: true, 
-        username:result.username,
-        userInfo:result.userInfo 
+      const response: LoginResponse = {
+        ok: true,
+        username,
+        userInfo: result?.userInfo||uedro?.userInfo
       };
       res.json(response);
-    } catch (err: any) {
-      if (err.message === 'SSO login page unavailable') {
-        return sendApiError(res, 401, 'UNAUTHORIZED', 'SSO login page unavailable');
+    } else {
+      if (error) {
+        if (error.message === 'SSO login page unavailable') {
+          return sendApiError(res, 401, 'UNAUTHORIZED', 'SSO login page unavailable');
+        }
+        if (error.message === 'SSO form fields not found') {
+          return sendApiError(res, 401, 'UNAUTHORIZED', 'SSO form fields not found');
+        }
+        if (error.message === 'invalid username or password') {
+          return sendApiError(res, 401, 'UNAUTHORIZED', 'invalid username or password');
+        }
+        return sendApiError(res, 500, 'INTERNAL_ERROR', 'SSO login failed,' + JSON.stringify(error));
       }
-      if (err.message === 'SSO form fields not found') {
-        return sendApiError(res, 401, 'UNAUTHORIZED', 'SSO form fields not found');
-      }
-      if (err.message === 'invalid username or password') {
-        return sendApiError(res, 401, 'UNAUTHORIZED', 'invalid username or password');
-      }
-      return sendApiError(res, 500, 'INTERNAL_ERROR', 'SSO login failed,'+JSON.stringify(err));
+      res.json({ok:false,username});
     }
   });
 

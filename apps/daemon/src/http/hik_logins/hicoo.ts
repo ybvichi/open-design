@@ -39,7 +39,7 @@ export interface SsoSession {
     casJwt?: string | undefined;
     basicInfo?: any;
     loginAt?: number | undefined;
-  };
+  } | any;
 }
 
 export interface SsoLoginResult {
@@ -391,11 +391,11 @@ export async function hicooValidate(
   dataDir: string,
   forDesignerDir?: string,
 ): Promise<SsoValidResult> {
-  const { cookies, username, userInfo } = session;
+  const { cookies, username, userInfo, uedro } = session;
   const jwtToken = extractJwtToken(cookies || []);
 
-  // 有 jwtToken 和 userInfo，直接返回缓存
-  if (jwtToken && userInfo) {
+  // 有 userInfo，直接返回缓存
+  if (userInfo) {
     return {
       ok: true,
       isValid:true,
@@ -437,8 +437,8 @@ export async function hicooValidate(
   // }
 
   return {
-    ok: true,
-    isValid:true,
+    ok: false,
+    isValid:false,
     username: username || ''
   };
 }

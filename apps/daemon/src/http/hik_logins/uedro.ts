@@ -31,8 +31,8 @@ const UEDRO_IS_LOGIN_URL = UEDRO_API_BASE + '/front/common/isLogin';
 /** 基础信息：GET /portal/front/common/basicInfo */
 const UEDRO_BASIC_INFO_URL = UEDRO_API_BASE + '/front/common/basicInfo';
 
-/** 取用户信息：GET /uedro/web/login/v1/userInfo（uedro 应用侧，非 /portal 前缀） */
-const UEDRO_USER_INFO_URL = UEDRO_BASE + '/uedro/web/login/v1/userInfo';
+/** 取用户信息：GET '/uedro/web/user/v1/list（uedro 应用侧，非 /portal 前缀） */
+const UEDRO_USER_INFO_URL = UEDRO_BASE + '/uedro/web/user/v1/list';
 
 /** 登出：POST /portal/cas/logout */
 const UEDRO_LOGOUT_URL = UEDRO_API_BASE + '/cas/logout';
@@ -56,7 +56,8 @@ export interface UedroInfo {
 export interface UedroLoginResult {
   ok: boolean;
   cookies?: Cookie[];
-  username?:string
+  username?:string;
+  userInfo?:any;
 }
 
 export interface UedroValidResult {
@@ -211,23 +212,34 @@ export async function uedroLogin(
   // 仅凭门户会话 cookie 鉴权，不带 token 头。
   let userInfo: any;
   try {
-    const step4 = await rawRequest('GET', UEDRO_USER_INFO_URL, mergedCookies, {
+    const step4 = await rawRequest('POST', UEDRO_USER_INFO_URL, mergedCookies, {
+      body:JSON.stringify({
+        pageNo: 1,
+        pageSize: 15,
+        userName: username
+      }),
       extraHeaders: uedroHeaders(mergedCookies),
     });
     // if (step4) {
     //   mergedCookies = step4.cookies;
     // }
-    userInfo = JSON.parse(step4.body);
+    userInfo = JSON.parse(step4.body).data?.list?.[0];
   } catch(err) {
     // 取用户信息失败不阻断主流程
     userInfo = {
       err
     };
   }
-
+  if(!userInfo.displayName){
+     userInfo.displayName = userInfo.name;
+  }
+  if(!userInfo.departmentDetail){
+    userInfo.departmentDetail = userInfo.userDeptPath.replace(/(\\)/g,'/');
+  }
   return {
     ok: true,
     username,
+    userInfo,
     cookies: mergedCookies
   };
 }
