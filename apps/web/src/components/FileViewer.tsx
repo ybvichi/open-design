@@ -173,6 +173,7 @@ import { Icon } from './Icon';
 import { RemixIcon } from './RemixIcon';
 import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
+import { ReviewListModal } from './ReviewListModal';
 import { PreviewDrawOverlay, type DrawToolbarElement } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
@@ -6225,6 +6226,7 @@ function HtmlViewer({
       | 'download_dropdown'
       | 'download_dropdown_pixso'
       | 'share_dropdown'
+      | 'review_dropdown'
       | 'settings',
   ) => {
     trackArtifactHeaderClick(analytics.track, {
@@ -6315,6 +6317,10 @@ function HtmlViewer({
   const [deployMenuOpen, setDeployMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [downloadMenuOpenForPixso, setDownloadMenuOpenForPixso] = useState(false);
+  // 评审下拉与历史评审 Modal。下拉与「分享」「推送」共用 chrome-actions；
+  // 历史 Modal 封装在独立组件 ReviewListModal，由 reviewListModalOpen 控制。
+  const [reviewMenuOpen, setReviewMenuOpen] = useState(false);
+  const [reviewListModalOpen, setReviewListModalOpen] = useState(false);
   // False when closed; otherwise records which entry opened the modal so the
   // surface_view impression can carry entry_from.
   const [versionModalOpen, setVersionModalOpen] = useState<false | 'toolbar' | 'more_menu'>(false);
@@ -10436,19 +10442,21 @@ function HtmlViewer({
   }, [agentToolsOpen]);
 
   useEffect(() => {
-    if (!deployMenuOpen && !downloadMenuOpen && !downloadMenuOpenForPixso) return;
+    if (!deployMenuOpen && !downloadMenuOpen && !downloadMenuOpenForPixso && !reviewMenuOpen) return;
     const onDocClick = (e: MouseEvent) => {
       if (!shareRef.current) return;
       if (shareRef.current.contains(e.target as Node)) return;
       setDeployMenuOpen(false);
       setDownloadMenuOpen(false);
-      setDownloadMenuOpenForPixso(false)
+      setDownloadMenuOpenForPixso(false);
+      setReviewMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setDeployMenuOpen(false);
       setDownloadMenuOpen(false);
-      setDownloadMenuOpenForPixso(false)
+      setDownloadMenuOpenForPixso(false);
+      setReviewMenuOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
@@ -10456,7 +10464,7 @@ function HtmlViewer({
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [deployMenuOpen, downloadMenuOpen,downloadMenuOpenForPixso]);
+  }, [deployMenuOpen, downloadMenuOpen,downloadMenuOpenForPixso, reviewMenuOpen]);
 
   useEffect(() => {
     if (!inTabPresent) return;
@@ -11097,6 +11105,7 @@ function HtmlViewer({
     return copyToClipboard(value);
   }
   async function copyLocalShareLinkAndReview(){
+     setReviewMenuOpen(false);
      void deployToIux(deployPhase,'private',true);
     //console.log('复制本地分享链路',file,liveArtifactPreviewUrl(projectId, liveArtifact.artifactId));
   }
@@ -11772,14 +11781,29 @@ function HtmlViewer({
     markExportReadyNudgeSeen(projectId, file.name);
     setDownloadMenuOpen(false);
     setDownloadMenuOpenForPixso(false);
+    setReviewMenuOpen(false);
     setDeployMenuOpen((v) => {
       if(!v){
         checkIuxLink()
       }
       return !v;
     });
-    
+
   };
+  const openReviewMenu = () => {
+    fireArtifactHeaderClick('review_dropdown');
+    setExportReadyNudge(false);
+    markExportReadyNudgeSeen(projectId, file.name);
+    setDeployMenuOpen(false);
+    setDownloadMenuOpen(false);
+    setDownloadMenuOpenForPixso(false);
+    setReviewMenuOpen((v) => !v);
+  };
+  // 打开历史评审 Modal。列表数据由独立组件 ReviewListModal 自行拉取。
+  async function openReviewListModal() {
+    setReviewMenuOpen(false);
+    setReviewListModalOpen(true);
+  }
   const captureExportImageSnapshot = useCallback(async (
     options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
   ) => {
@@ -13292,13 +13316,38 @@ function HtmlViewer({
                     type="button"
                     className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
                     aria-haspopup="menu"
+                    aria-expanded={reviewMenuOpen}
                     disabled={exportToast?true:undefined}
-                    onClick={() => {
-                      void copyLocalShareLinkAndReview();
-                    }}
+                    onClick={openReviewMenu}
                   >
                     <span>评审</span>
                   </button>
+                  {reviewMenuOpen ? (
+                    <div className="share-menu-popover" role="menu">
+                      <button
+                        type="button"
+                        className="share-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          void copyLocalShareLinkAndReview();
+                        }}
+                      >
+                        <span className="share-menu-icon"><RemixIcon name="chat-new-line" size={15} /></span>
+                        <span className="share-menu-text"><span>发起评审</span></span>
+                      </button>
+                      <button
+                        type="button"
+                        className="share-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          void openReviewListModal();
+                        }}
+                      >
+                        <span className="share-menu-icon"><RemixIcon name="history-line" size={15} /></span>
+                        <span className="share-menu-text"><span>历史评审</span></span>
+                      </button>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
@@ -14847,6 +14896,7 @@ function HtmlViewer({
         </div>,
         document.body,
       ) : null}
+      <ReviewListModal open={reviewListModalOpen} onClose={() => setReviewListModalOpen(false)} />
       {deploySavedToast && typeof document !== 'undefined' ? createPortal(
         <Toast
           message={deploySavedToast.message}

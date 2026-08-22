@@ -1159,6 +1159,7 @@ export interface ArtifactHeaderClickProps {
     | 'download_dropdown'
     | 'download_dropdown_pixso'
     | 'share_dropdown'
+    | 'review_dropdown'
     | 'settings';
   artifact_id?: string;
   artifact_kind?: TrackingArtifactKind;
