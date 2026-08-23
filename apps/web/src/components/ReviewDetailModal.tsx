@@ -3,8 +3,10 @@ import styles from './ReviewDetailModal.module.css';
 import {
   pick,
   computeRemainDays,
+  formatDateTime,
+  formatVersion,
+  collectVersions,
   reviewTypeMeta,
-  reviewTypeLabel,
 } from './reviewMeta';
 
 /**
@@ -15,17 +17,16 @@ import {
  * 渲染要求：父组件需把本组件放在 `position: relative` 的容器内（ReviewListModal
  * 的 .shell 已是相对定位），本组件用 absolute 锚定到该容器的右侧。
  *
- * 数据来自后端 4 个透传路由（apps/daemon/src/routes/hik_routes/uedro.ts）：
- *   - POST /api/hik/uedro/reviewProcess      主数据（评审对象 + 稿件 + 评委名单）
- *   - POST /api/hik/uedro/reviewProgress     评委评审进度
- *   - POST /api/hik/uedro/commentList        缺陷/意见列表（按稿件+评委分组）
- *   - POST /api/hik/uedro/commentQuantity    缺陷统计（按稿件）
+ * 数据来自后端 4 个透传路由（apps/daemon/src/routes/hik_routes/uedro.ts），
+ * 数据的唯一来源就是这四个接口，综合生成详情信息展示：
+ *   - GET  /api/hik/uedro/reviewOne          评审主数据（oneByReviewId）
+ *   - POST /api/hik/uedro/subProcess          稿件列表（聚合全部版本 + 喂给统计）
+ *   - POST /api/hik/uedro/reviewProgress      评委评审进度
+ *   - POST /api/hik/uedro/progressQuantity    评审统计（按 reviewId + version）
  *
  * open 变 true 时触发加载：
- *   1. 并行拉 reviewProcess + reviewProgress；
- *   2. reviewProcess 回来后取 data.list[0] 得到 manuscriptDtos[]，默认选首份稿件，
- *      再拉 commentList + commentQuantity（依赖 manuscriptId，串在主数据之后）。
- *   3. 切换稿件时只重拉 commentList + commentQuantity。
+ *   1. 并行拉 reviewOne（主数据）+ subProcess（稿件列表）+ reviewProgress（评委进度）；
+ *   2. subProcess 回来后聚合全部版本，默认选中第一个版本，再拉 progressQuantity。
  *
  * 抽屉常驻 DOM：open 用 CSS class 控制 translateX 与遮罩显隐，保留退出动画。
  */
@@ -40,87 +41,80 @@ export function ReviewDetailDrawer({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 评审主数据（process.data.list[0]）：含 manuscriptDtos / repeat / 基本信息。
+  // 评审主数据（reviewOne.data）：reviewName / reviewType / creator / 截止时间 / roles 等。
   const [detail, setDetail] = useState<any | null>(null);
+  // 稿件列表（subProcess.data.list[]）：聚合出全部版本供版本下拉选择。
+  const [manuscripts, setManuscripts] = useState<any[]>([]);
   // 评委评审进度（reviewProgress.data[]）。
   const [reviewers, setReviewers] = useState<any[]>([]);
-  // 缺陷/意见分组（commentList.data.mapList[] = [{ name, commentDtos[] }]）。
-  const [commentGroups, setCommentGroups] = useState<any[]>([]);
-  // 缺陷统计（commentQuantity.data = { all, toSolve, toVerify, closed, ... }）。
+  // 评审统计（progressQuantity.data = { all, toSolve, toVerify, closed, ... }）。
   const [quantity, setQuantity] = useState<any | null>(null);
-  // 当前选中的稿件 id（默认首份稿件）。
-  const [manuscriptId, setManuscriptId] = useState<string>('');
+  // 全部可选版本（数字升序）；默认选中第一个。
+  const [versions, setVersions] = useState<number[]>([]);
+  // 当前选中的版本（下拉切换）。
+  const [version, setVersion] = useState<number | null>(null);
 
   // 弹窗关闭 / 组件卸载后不再写状态；过期请求丢弃。
   const aliveRef = useRef(true);
   const reqIdRef = useRef(0);
 
   const reviewId = pick(review?.reviewId, review?.id);
-  const manuscripts: any[] = Array.isArray(detail?.manuscriptDtos) ? detail.manuscriptDtos : [];
 
-  /** 拉主数据 + 评委进度（两者并行，都不依赖 manuscriptId）。 */
+  /** 拉主数据 + 稿件列表 + 评委进度（三者并行，都不依赖 version）。 */
   async function loadCore(reqId: number, rid: string) {
-    const [procRes, progRes] = await Promise.all([
-      fetch('/api/hik/uedro/reviewProcess', {
+    const [oneRes, subRes, progRes] = await Promise.all([
+      fetch(`/api/hik/uedro/reviewOne?reviewId=${encodeURIComponent(rid)}`).then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(`reviewOne HTTP ${r.status}`)),
+      ),
+      fetch('/api/hik/uedro/subProcess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewId: rid, pageNo: 1, pageSize: 50 }),
-      }),
+        body: JSON.stringify({ reviewId: rid, pageNo: 1, pageSize: 10000 }),
+      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`subProcess HTTP ${r.status}`)))),
       fetch('/api/hik/uedro/reviewProgress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewId: rid }),
-      }),
+      }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`reviewProgress HTTP ${r.status}`)))),
     ]);
-    if (!procRes.ok) throw new Error(`reviewProcess HTTP ${procRes.status}`);
-    if (!progRes.ok) throw new Error(`reviewProgress HTTP ${progRes.status}`);
-    const procJson = await procRes.json();
-    const progJson = await progRes.json();
-    if (!procJson.ok) throw new Error(procJson?.msg || 'reviewProcess failed');
-    if (!progJson.ok) throw new Error(progJson?.msg || 'reviewProgress failed');
+    if (!oneRes.ok) throw new Error(oneRes?.msg || 'reviewOne failed');
+    if (!subRes.ok) throw new Error(subRes?.msg || 'subProcess failed');
+    if (!progRes.ok) throw new Error(progRes?.msg || 'reviewProgress failed');
     if (!aliveRef.current || reqId !== reqIdRef.current) return;
 
-    const reviewDetail = procJson.data ?? null;
-    setDetail(reviewDetail);
-    setReviewers(Array.isArray(progJson.data) ? progJson.data : []);
+    setDetail(oneRes.data ?? null);
+    const list: any[] = Array.isArray(subRes.data?.list) ? subRes.data.list : [];
+    setManuscripts(list);
+    setReviewers(Array.isArray(progRes.data) ? progRes.data : []);
 
-    // 默认选中首份稿件；有稿件才拉缺陷列表/统计。
-    const firstMid = reviewDetail?.manuscriptDtos?.[0]?.manuscriptId;
-    if (firstMid) {
-      setManuscriptId(firstMid);
-      await loadComments(reqId, rid, firstMid);
+    // 聚合全部版本；默认选中第一个并拉其评审统计。
+    const vs = collectVersions(list);
+    setVersions(vs);
+    const first = vs[0];
+    if (first !== undefined) {
+      setVersion(first);
+      await loadQuantity(reqId, rid, first);
     } else {
-      setManuscriptId('');
-      setCommentGroups([]);
+      setVersion(null);
       setQuantity(null);
     }
   }
 
-  /** 拉缺陷列表 + 缺陷统计（依赖 manuscriptId，切换稿件时重拉）。 */
-  async function loadComments(reqId: number, rid: string, mid: string) {
-    const [listRes, qtyRes] = await Promise.all([
-      fetch('/api/hik/uedro/commentList', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewId: rid, manuscriptId: mid, pageNo: 1, pageSize: 100 }),
-      }),
-      fetch('/api/hik/uedro/commentQuantity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewId: rid, manuscriptId: mid }),
-      }),
-    ]);
-    if (!listRes.ok) throw new Error(`commentList HTTP ${listRes.status}`);
-    if (!qtyRes.ok) throw new Error(`commentQuantity HTTP ${qtyRes.status}`);
-    const listJson = await listRes.json();
-    const qtyJson = await qtyRes.json();
+  /** 拉评审统计（按当前选中版本）。 */
+  async function loadQuantity(reqId: number, rid: string, ver: number) {
+    const resp = await fetch('/api/hik/uedro/progressQuantity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewId: rid, version: ver }),
+    });
+    if (!resp.ok) throw new Error(`progressQuantity HTTP ${resp.status}`);
+    const json = await resp.json();
     if (!aliveRef.current || reqId !== reqIdRef.current) return;
-    // commentList/commentQuantity 上游失败不阻断详情展示，仅清空对应区。
-    setCommentGroups(listJson.ok && Array.isArray(listJson.data?.mapList) ? listJson.data.mapList : []);
-    setQuantity(qtyJson.ok ? qtyJson.data : null);
+    // progressQuantity 上游失败不阻断详情展示，仅清空统计区。
+    setQuantity(json.ok ? json.data : null);
   }
 
-  // 每次打开（或切换 reviewId）时重新拉取主数据 + 评委进度。
+  // 每次打开（或切换 reviewId）时重新拉取主数据 + 稿件列表 + 评委进度。
   useEffect(() => {
     if (!open) return;
     if (!reviewId || reviewId === '—') {
@@ -132,10 +126,11 @@ export function ReviewDetailDrawer({
     setLoading(true);
     setError(null);
     setDetail(null);
+    setManuscripts([]);
     setReviewers([]);
-    setCommentGroups([]);
     setQuantity(null);
-    setManuscriptId('');
+    setVersions([]);
+    setVersion(null);
     void loadCore(reqId, reviewId).catch((err: any) => {
       if (!aliveRef.current || reqId !== reqIdRef.current) return;
       setError('评审详情加载失败: ' + (err?.message || String(err)));
@@ -148,16 +143,15 @@ export function ReviewDetailDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reviewId]);
 
-  // 切换稿件：只重拉 commentList + commentQuantity。
-  function switchManuscript(mid: string) {
-    if (!mid || mid === manuscriptId) return;
+  // 切换版本：只重拉 progressQuantity（按该版本）。
+  function switchVersion(ver: number) {
+    if (ver === version) return;
     const reqId = reqIdRef.current;
-    setManuscriptId(mid);
-    setCommentGroups([]);
+    setVersion(ver);
     setQuantity(null);
-    void loadComments(reqId, reviewId, mid).catch((err: any) => {
+    void loadQuantity(reqId, reviewId, ver).catch((err: any) => {
       if (!aliveRef.current || reqId !== reqIdRef.current) return;
-      setError('缺陷列表加载失败: ' + (err?.message || String(err)));
+      setError('评审统计加载失败: ' + (err?.message || String(err)));
     });
   }
 
@@ -200,10 +194,13 @@ export function ReviewDetailDrawer({
             </div>
           ) : (
             <>
-              <ReviewerSection reviewers={reviewers} />
-              <ManuscriptSection manuscripts={manuscripts} current={manuscriptId} onSwitch={switchManuscript} />
+              <VersionSection
+                versions={versions}
+                current={version}
+                onSwitch={switchVersion}
+              />
               <QuantitySection quantity={quantity} />
-              <CommentSection groups={commentGroups} />
+              <ReviewerSection reviewers={reviewers} />
             </>
           )}
         </div>
@@ -219,9 +216,8 @@ function DetailHead({ review, onClose }: { review: any; onClose: () => void }) {
   const typeMeta = reviewTypeMeta(review);
   const reviewName = pick(review?.reviewName, review?.name);
   const creator = pick(review?.creator, review?.creatorName);
-  const typeLabel = reviewTypeLabel(review);
-  const createTime = pick(review?.createTime, review?.createdAt, review?.createDate);
-  const endTime = pick(review?.preReviewEndTime, review?.endTime, review?.deadline);
+  const createTime = formatDateTime(review?.createTimeDate ?? review?.createTime ?? review?.createdAt ?? review?.createDate);
+  const endTime = formatDateTime(review?.preReviewEndTimeDate ?? review?.preReviewEndTime ?? review?.endTime ?? review?.deadline);
   const remainDays = computeRemainDays(review?.preReviewEndTimeDate, review?.preReviewEndTime);
   const urgent = remainDays === null ? false : remainDays <= 0;
   const remainLabel = remainDays === null ? null : `剩余 ${Math.max(0, remainDays)} 天`;
@@ -242,10 +238,6 @@ function DetailHead({ review, onClose }: { review: any; onClose: () => void }) {
         </div>
         <div className={styles.headMeta}>
           <span className={styles.metaItem}>
-            <span className={styles.metaLabel}>类型：</span>
-            <span className={styles.metaValue}>{typeLabel}</span>
-          </span>
-          <span className={styles.metaItem}>
             <span className={styles.metaLabel}>创建人：</span>
             <span className={styles.metaValue}>{creator}</span>
           </span>
@@ -262,6 +254,39 @@ function DetailHead({ review, onClose }: { review: any; onClose: () => void }) {
       <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="关闭">
         ×
       </button>
+    </div>
+  );
+}
+
+/** 设计稿版本切换区：独占一行，下拉切换版本，切换后重拉评审统计。 */
+function VersionSection({
+  versions,
+  current,
+  onSwitch,
+}: {
+  versions: number[];
+  current: number | null;
+  onSwitch: (ver: number) => void;
+}) {
+  if (versions.length === 0) return null;
+  return (
+    <div className={styles.versionRow}>
+      <span className={styles.versionLabel}>设计稿版本：</span>
+      <select
+        className={styles.versionSelect}
+        value={current ?? ''}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onSwitch(n);
+        }}
+        aria-label="选择设计稿版本"
+      >
+        {versions.map((v) => (
+          <option key={v} value={v}>
+            {formatVersion(v)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -293,11 +318,11 @@ function ReviewerCard({ rv }: { rv: any }) {
   const status = rv?.status;
   const { label, tone } =
     status === 1
-      ? { label: '待评审', tone: '' }
+      ? { label: '未评审', tone: '' }
       : status === 2
-        ? { label: '评审中', tone: styles.doing }
+        ? { label: '未完成验证', tone: styles.doing }
         : status === 3
-          ? { label: '已提交', tone: styles.done }
+          ? { label: '完成验证', tone: styles.done }
           : { label: pick(status), tone: '' };
   const committed = pick(rv?.committedTime);
   const defectNum = rv?.defectNum ?? 0;
@@ -321,59 +346,20 @@ function ReviewerCard({ rv }: { rv: any }) {
   );
 }
 
-/** 稿件切换区：manuscriptDtos[] 的 fileName 做下拉，切换时重拉缺陷列表/统计。 */
-function ManuscriptSection({
-  manuscripts,
-  current,
-  onSwitch,
-}: {
-  manuscripts: any[];
-  current: string;
-  onSwitch: (mid: string) => void;
-}) {
-  if (manuscripts.length === 0) return null;
-  return (
-    <div className={styles.section}>
-      <div className={styles.sectionHead}>
-        <span className={styles.sectionTitle}>稿件</span>
-        <span className={styles.sectionCount}>{manuscripts.length} 份</span>
-      </div>
-      <div className={styles.manuscriptPicker}>
-        <span className={styles.pickerLabel}>当前稿件：</span>
-        <select
-          className={styles.manuscriptSelect}
-          value={current}
-          onChange={(e) => onSwitch(e.target.value)}
-          aria-label="选择稿件"
-        >
-          {manuscripts.map((m: any, i: number) => {
-            const mid = m?.manuscriptId ?? '';
-            const label = pick(m?.fileName, m?.manuscriptId, `稿件 ${i + 1}`);
-            return (
-              <option key={mid || i} value={mid}>
-                {label}
-              </option>
-            );
-          })}
-        </select>
-      </div>
-    </div>
-  );
-}
-
-/** 缺陷统计区：commentQuantity.data → 4 个小卡片。 */
+/** 评审统计区：progressQuantity.data → 5 个小卡片。 */
 function QuantitySection({ quantity }: { quantity: any }) {
   if (!quantity) return null;
   const cards: { label: string; value: any; muted?: boolean }[] = [
     { label: '全部', value: quantity.all },
     { label: '待解决', value: quantity.toSolve },
+    { label: '待解决', value: quantity.toSolveByMySelf },
     { label: '待验证', value: quantity.toVerify },
     { label: '已关闭', value: quantity.closed },
   ];
   return (
     <div className={styles.section}>
       <div className={styles.sectionHead}>
-        <span className={styles.sectionTitle}>缺陷统计</span>
+        <span className={styles.sectionTitle}>评审统计</span>
       </div>
       <div className={styles.statGrid}>
         {cards.map((c) => (
@@ -382,67 +368,6 @@ function QuantitySection({ quantity }: { quantity: any }) {
             <span className={styles.statLabel}>{c.label}</span>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-/** 缺陷/意见列表区：commentList.data.mapList[] 按评委分组。 */
-function CommentSection({ groups }: { groups: any[] }) {
-  const total = groups.reduce((sum, g) => sum + (g?.commentDtos?.length ?? 0), 0);
-  return (
-    <div className={styles.section}>
-      <div className={styles.sectionHead}>
-        <span className={styles.sectionTitle}>缺陷 / 意见</span>
-        <span className={styles.sectionCount}>共 {total} 条</span>
-      </div>
-      {total === 0 ? (
-        <div className={styles.emptyHint}>暂无缺陷 / 意见</div>
-      ) : (
-        <div className={styles.commentGroups}>
-          {groups.map((g: any, i: number) => (
-            <CommentGroup key={g?.name ?? i} group={g} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** 单个评委分组：name + commentDtos[]。 */
-function CommentGroup({ group }: { group: any }) {
-  const name = pick(group?.name);
-  const dtos: any[] = Array.isArray(group?.commentDtos) ? group.commentDtos : [];
-  return (
-    <div className={styles.commentGroup}>
-      <div className={styles.commentGroupHead}>
-        <span>{name}</span>
-        <span className={styles.commentGroupCount}>{dtos.length} 条</span>
-      </div>
-      <div className={styles.commentList}>
-        {dtos.map((c: any, i: number) => (
-          <CommentItem key={c?.id ?? c?.commentId ?? i} comment={c} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** 单条缺陷/意见。字段对齐上游 commentDtos（content / createTime / defectType / status）。 */
-function CommentItem({ comment }: { comment: any }) {
-  const content = pick(comment?.content, comment?.text, comment?.description);
-  const creator = pick(comment?.creator, comment?.userName, comment?.createUser);
-  const time = pick(comment?.createTime, comment?.createdAt);
-  const isDefect = comment?.defectType === '1' || comment?.defectType === 1 || comment?.type === 'defect';
-  const solved = comment?.status === '3' || comment?.status === 3 || comment?.status === 'solved';
-  return (
-    <div className={styles.commentItem}>
-      <div className={styles.commentContent}>{content}</div>
-      <div className={styles.commentMeta}>
-        {isDefect ? <span className={`${styles.commentTag} ${styles.defect}`}>缺陷</span> : null}
-        {solved ? <span className={`${styles.commentTag} ${styles.solved}`}>已关闭</span> : null}
-        {creator !== '—' ? <span>{creator}</span> : null}
-        {time !== '—' ? <span>{time}</span> : null}
       </div>
     </div>
   );

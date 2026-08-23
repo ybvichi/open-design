@@ -1,0 +1,510 @@
+/* ReviewAddModal — 发起评审 Modal 自包含样式。
+ *
+ * 复用 ReviewListModal 的画框结构与全局 token / 关键帧。表单分两栏：
+ * 左栏基本信息（评审类型 / 项目 / 评审名称 / 子类型 / 结束时间 / 备注 / 评审稿），
+ * 右栏人员（组长 / 作者 / 核心评委 / 团队评委 / 抄送）。
+ * 底部确定 / 取消。z-index 高于 ReviewListModal（1700）以叠加。 */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1750;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(28, 27, 26, 0.42);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  -webkit-app-region: no-drag;
+  animation: fade-in 160ms ease-out;
+}
+
+.shell {
+  width: 92vw;
+  height: 90vh;
+  max-width: 1280px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: pop-in 220ms cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+
+.head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.headMain {
+  min-width: 0;
+}
+.kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.title {
+  margin: 4px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+.closeBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.closeBtn:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+/* ── 表单区：两栏，纵向滚动 ── */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  scrollbar-width: thin;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ── form-item：label 在上、控件在下 ── */
+.item {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  min-width: 0;
+}
+.itemLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.req {
+  color: #d14343;
+}
+.itemHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.itemError {
+  font-size: 11px;
+  color: #d14343;
+}
+
+/* radio 组 */
+.radioRow {
+  display: flex;
+  gap: 16px;
+}
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.radio input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* 通用 input / textarea / select */
+.input,
+.textarea,
+.select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  box-sizing: border-box;
+}
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--border-strong, var(--border));
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-muted);
+}
+.textarea {
+  height: auto;
+  min-height: 70px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+.select {
+  cursor: pointer;
+  appearance: none;
+}
+
+/* ── autocomplete 下拉：项目 / 人员 ── */
+.acWrap {
+  position: relative;
+  min-width: 0;
+}
+.acInput {
+  width: 100%;
+  height: 34px;
+  padding: 0 32px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.acInput:focus {
+  border-color: var(--border-strong, var(--border));
+}
+.acInput::placeholder {
+  color: var(--text-muted);
+}
+.acSpinner {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: rlmSpin 700ms linear infinite;
+}
+@keyframes rlmSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.acDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+  scrollbar-width: thin;
+}
+.acItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+  width: 100%;
+}
+.acItem:hover,
+.acItemActive {
+  background: var(--bg-subtle);
+}
+.acItemName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.acItemSub {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acEmpty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ── 人员已选框（输入框下方的独立容器）──
+ * 始终渲染一个带边框的框，空态显占位提示，有选中项时平铺标签。
+ * 单选（评审组长）与多选共用同一容器，仅 add 行为不同。 */
+.selectedBox {
+  margin-top: 6px;
+  min-height: 38px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.selectedBox:focus-within {
+  border-color: var(--border-strong, var(--border));
+}
+.selectedEmpty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 3px 5px;
+}
+
+/* ── 人员标签：头像首字 + 姓名 + 部门 + X ── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 4px 2px 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-size: 12px;
+  color: var(--text);
+  animation: rlmTagIn 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes rlmTagIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.tagAvatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+  user-select: none;
+}
+.tagBody {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.tagName {
+  font-weight: 500;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tagSub {
+  font-size: 10px;
+  color: var(--text-muted);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tagRemove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 120ms ease-out,
+    color 120ms ease-out;
+}
+.tagRemove:hover {
+  background: color-mix(in srgb, #d14343 22%, transparent);
+  color: #d14343;
+}
+
+/* ── 评审稿上传区 ── */
+.uploadArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.uploadDrop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  text-align: center;
+}
+.uploadDrop:hover {
+  border-color: var(--border-strong, var(--border));
+  background: var(--bg-subtle);
+}
+.uploadIcon {
+  font-size: 20px;
+}
+.uploadFileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  font-size: 12px;
+}
+.uploadFileName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.uploadReplace {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.uploadReplace:hover {
+  background: var(--bg-subtle);
+}
+
+/* ── 底栏：错误提示 + 确定 / 取消 ── */
+.foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+}
+.footMsg {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.footMsgErr {
+  color: #d14343;
+}
+.footMsgOk {
+  color: #2f9e6f;
+}
+.footActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 140ms ease-out;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong, var(--border));
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btnPrimary {
+  background: var(--text);
+  color: var(--bg-elevated);
+  border-color: var(--text);
+}
+.btnPrimary:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.9;
+}

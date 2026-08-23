@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './ReviewListModal.module.css';
-import { pick, computeRemainDays, withTotal, reviewTypeMeta } from './reviewMeta';
+import { pick, computeRemainDays, withTotal, reviewTypeMeta, formatVersion, buildManuscriptPreviewUrl } from './reviewMeta';
 import { ReviewDetailDrawer } from './ReviewDetailModal';
 
 /** 卡片「更多」下拉的操作。评审详情为第一项（打开右侧抽屉，非异步操作），
@@ -34,7 +34,7 @@ interface CardActionState {
  * 抽屉叠加在列表画框之上，从右边缘滑入；关闭即回到列表。
  *
  * 宽高弹性固定为视口 80%（加载/错误/空态共用同一画框）；卡片网格布局，
- * 底部翻页（上一页 / 下一页，按返回条数判断是否还有后续页）。
+ * 列表区纵向滚动到底自动加载下一页（无翻页栏），末页显示「没有更多了」。
  */
 const PAGE_SIZE = 9;
 
@@ -58,8 +58,13 @@ const REVIEW_TYPES: { value: string; label: string }[] = [
 ];
 
 export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // loading 区分两种语义：首屏/筛选切换的整屏 loading，和滚动到底的「加载更多」loading。
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 加载更多失败：不冲掉已渲染卡片，只在列表底部显示并允许重试，故独立于 error。
+  const [moreError, setMoreError] = useState<string | null>(null);
+  // 累积式列表：滚动加载下一页时追加到末尾，而不是替换。
   const [items, setItems] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   // 本页返回条数 < PAGE_SIZE 视为已到末页（上游未提供 total 字段）。
@@ -88,7 +93,7 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
   }, [reviewName]);
 
   /** 拉取一页评审列表。仅做请求与解析，不写状态——状态由调用方写入，
-   *  这样首屏加载、翻页、筛选切换都能在 aliveRef 失效时安全跳过回填。 */
+   *  这样首屏加载、滚动加载更多、筛选切换都能在 aliveRef 失效时安全跳过回填。 */
   async function fetchPage(
     pageNo: number,
     filters: { processType: number; reviewType: string; reviewName: string },
@@ -113,8 +118,8 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
     return { list, reachedEnd: list.length < PAGE_SIZE };
   }
 
-  // 翻页 / 首屏加载统一入口：拉取指定页码并归一写入列表状态。
-  // 用闭包捕获的 filters 保证请求参数与写入时机一致。
+  // 首屏 / 筛选切换：重置列表，整屏 loading。
+  // 滚动加载更多用单独的 loadMore，这里始终整表替换（清空上一组筛选的结果）。
   async function loadPage(
     pageNo: number,
     filters: { processType: number; reviewType: string; reviewName: string },
@@ -123,6 +128,7 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
     const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
+    setMoreError(null);
     setPage(pageNo);
     try {
       const { list, reachedEnd } = await fetchPage(pageNo, filters);
@@ -139,7 +145,40 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
     }
   }
 
-  // 打开时 / 筛选条件变化时，重置到第 1 页重新拉取。
+  // 滚动加载更多：把下一页追加到列表末尾，不重置已渲染内容。
+  // loadingMore 独立于 loading，避免触发整屏 loading 把已加载的卡片冲掉。
+  // loadingMoreRef 是同步守卫：IntersectionObserver 可能在同一 tick 内连续
+  // 回调，此时 setLoadingMore 尚未刷新，闭包里的 loadingMore 仍是 false，
+  // 没有 ref 守卫就会并发发两次请求。
+  const loadingMoreRef = useRef(false);
+  async function loadMore() {
+    if (loading || loadingMoreRef.current || reachedEnd || !aliveRef.current) return;
+    const next = page + 1;
+    const filters = { processType, reviewType, reviewName: debouncedName };
+    const reqId = ++reqIdRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setMoreError(null);
+    setPage(next);
+    try {
+      const { list, reachedEnd } = await fetchPage(next, filters);
+      if (!aliveRef.current || reqId !== reqIdRef.current) return;
+      setItems((prev) => [...prev, ...list]);
+      setReachedEnd(reachedEnd);
+    } catch (err: any) {
+      if (!aliveRef.current || reqId !== reqIdRef.current) return;
+      // 加载更多失败不冲掉已加载内容，仅退回页码并在列表底部提示可重试。
+      setPage(page);
+      setMoreError('加载更多失败: ' + (err?.message || String(err)));
+    } finally {
+      if (aliveRef.current && reqId === reqIdRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }
+
+  // 打开时 / 筛选条件变化时，重置到第 1 页重新拉取（列表替换，整屏 loading）。
   useEffect(() => {
     if (!open) return;
     aliveRef.current = true;
@@ -151,10 +190,26 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, processType, reviewType, debouncedName]);
 
-  // 单纯翻页（不重置筛选）。
-  function gotoPage(pageNo: number) {
-    void loadPage(pageNo, { processType, reviewType, reviewName: debouncedName });
-  }
+  // 滚动到底自动加载下一页：body 滚动接近底部时触发 loadMore。
+  // 用哨兵 div + IntersectionObserver，比监听 scroll 事件更省、更稳。
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // 列表区滚动容器 ref：IntersectionObserver 的 root。
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const el = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!el || !root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMore();
+      },
+      { root, rootMargin: '120px', threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, items.length, reachedEnd, loadingMore, page]);
 
   // Esc 关闭。
   useEffect(() => {
@@ -224,13 +279,13 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
           </div>
         </div>
 
-        <div className={styles.body}>
+        <div className={styles.body} ref={scrollRef}>
           {loading ? (
             <div className={styles.stateWrap}>
               <div className={styles.spinner} />
               <span>加载中…</span>
             </div>
-          ) : error ? (
+          ) : error && items.length === 0 ? (
             <div className={styles.stateWrap}>
               <span className={styles.errorText}>{error}</span>
             </div>
@@ -252,66 +307,42 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
               ))}
             </div>
           )}
+
+          {/* 哨兵：滚动进入视口即触发 loadMore；末页时改显「没有更多了」。
+           * 末页或无内容时不渲染哨兵，避免重复触发；loadingMore 显「加载更多中…」。
+           * 已渲染卡片但滚动条尚短不到底部时，哨兵一进入视口也会自动加载。 */}
+          {!loading && items.length > 0 ? (
+            <div className={styles.listFoot} ref={sentinelRef}>
+              {moreError ? (
+                <button
+                  type="button"
+                  className={styles.retryBtn}
+                  onClick={() => void loadMore()}
+                >
+                  {moreError} · 点击重试
+                </button>
+              ) : loadingMore ? (
+                <span className={styles.listFootHint}>
+                  <span className={styles.spinnerSmall} />
+                  加载更多中…
+                </span>
+              ) : reachedEnd ? (
+                <span className={styles.listFootHint}>没有更多了</span>
+              ) : (
+                <span className={styles.listFootHint}>向下滚动加载更多</span>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.foot}>
-          <div className={styles.pager}>
-            <button
-              type="button"
-              className={styles.pagerBtn}
-              onClick={() => gotoPage(1)}
-              disabled={loading || page <= 1}
-              aria-label="第一页"
-            >
-              «
-            </button>
-            <button
-              type="button"
-              className={styles.pagerBtn}
-              onClick={() => gotoPage(page - 1)}
-              disabled={loading || page <= 1}
-              aria-label="上一页"
-            >
-              ‹
-            </button>
-            <div className={styles.pageNums}>
-              {renderPageNumbers(page, reachedEnd, loading, gotoPage)}
-            </div>
-            <button
-              type="button"
-              className={styles.pagerBtn}
-              onClick={() => gotoPage(page + 1)}
-              disabled={loading || reachedEnd}
-              aria-label="下一页"
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              className={styles.pagerBtn}
-              onClick={() => gotoPage(1)}
-              disabled={loading || reachedEnd}
-              aria-label="末页"
-              title="末页（未知总数）"
-            >
-              »
-            </button>
-            <span className={styles.pageJump}>
-              <span className={styles.pageJumpLabel}>第</span>
-              <input
-                type="number"
-                className={styles.pageInput}
-                min={1}
-                value={page}
-                onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  if (!Number.isNaN(n) && n >= 1) gotoPage(n);
-                }}
-                aria-label="跳转到指定页"
-              />
-              <span className={styles.pageJumpLabel}>页</span>
-            </span>
-          </div>
+          <span className={styles.footHint}>
+            {loading || items.length === 0
+              ? ''
+              : reachedEnd
+                ? `共 ${items.length} 条 · 已全部加载`
+                : `已加载 ${items.length} 条`}
+          </span>
           <button type="button" className={styles.pagerBtn} onClick={onClose}>
             关闭
           </button>
@@ -325,83 +356,6 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
     </div>,
     document.body,
   );
-}
-
-/**
- * 渲染页码按钮序列：当前页左右各展开若干页，超出用省略号收口。
- *
- * 因为上游 reviewList 不返回 total，无法知道确切末页——`reachedEnd`
- * 仅标识「当前是最后一页」，所以末页侧始终保留一个省略号占位，不渲染
- * 具体末页码。当前页接近第 1 页时左侧不显示省略号。
- *
- * @param current 当前页码（1-based）
- * @param reachedEnd 是否到达末页（本页返回 < PAGE_SIZE）
- * @param loading 是否加载中（loading 时禁用所有页码按钮）
- * @param gotoPage 跳页回调
- */
-const PAGE_SIBLINGS = 2; // 当前页左右各显示几个页码
-
-function renderPageNumbers(
-  current: number,
-  reachedEnd: boolean,
-  loading: boolean,
-  gotoPage: (n: number) => void,
-): ReactNode {
-  const nodes: ReactNode[] = [];
-  // 起始页码：当前页左侧展开 SIBLINGS 个，但不小于 1。
-  const start = Math.max(1, current - PAGE_SIBLINGS);
-  // 结束页码：当前页右侧展开 SIBLINGS 个。因为不知道末页，右侧始终多留一个，
-  // 让用户看到「后面还有」的预期——reachedEnd 时才不延伸。
-  const end = reachedEnd ? current : current + PAGE_SIBLINGS;
-
-  // 左侧省略号 + 第 1 页：当前页离第 1 页够远时显示。
-  if (start > 1) {
-    nodes.push(
-      <button
-        key="p1"
-        type="button"
-        className={styles.pageNum}
-        onClick={() => gotoPage(1)}
-        disabled={loading}
-      >
-        1
-      </button>,
-    );
-    if (start > 2) {
-      nodes.push(
-        <span key="left-ellipsis" className={styles.pageEllipsis} aria-hidden>
-          …
-        </span>,
-      );
-    }
-  }
-
-  // 中间连续页码区。
-  for (let p = start; p <= end; p++) {
-    nodes.push(
-      <button
-        key={`p${p}`}
-        type="button"
-        className={`${styles.pageNum} ${p === current ? styles.pageNumActive : ''}`}
-        onClick={() => gotoPage(p)}
-        disabled={loading || p === current}
-        aria-current={p === current ? 'page' : undefined}
-      >
-        {p}
-      </button>,
-    );
-  }
-
-  // 右侧省略号：未到末页时显示，提示后面还有更多页。
-  if (!reachedEnd) {
-    nodes.push(
-      <span key="right-ellipsis" className={styles.pageEllipsis} aria-hidden>
-        …
-      </span>,
-    );
-  }
-
-  return nodes;
 }
 
 /** 评审卡片：一个评审项 = 一张卡片，分层展示核心字段。
@@ -440,13 +394,32 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
   // 缺陷数量：上游 defectsNum，缺失回退稿件 defectNums。
   const defects = pick(r?.defectsNum, r?.manuscriptDtos?.[0]?.defectNums, r?.defectNum, r?.defectCount);
 
-  // 剩余天数：由截止时间计算，已过期 clamp 到 0，并标红（urgent）。
+  // 卡片右上角单状态徽标：按优先级只显示一个——
+  //   待解决（有缺陷）> 待验证（无缺陷但有待验证）> 已完成（endStatus===3）> 剩余 N 天。
+  // 待解决 / 待验证 用红色样式；已完成 / 剩余天数 用普通徽标（剩余 0 天时 urgent 标红）。
+  // 用数值比较：0 视为「无」，缺失字段当作 0。
+  const defectsCount = Number(r?.defectsNum ?? r?.manuscriptDtos?.[0]?.defectNums ?? r?.defectNum ?? r?.defectCount ?? 0);
+  const verifyCount = Number(r?.verifyNum ?? r?.verifyCount ?? 0);
+  const reviewEnded = Number(r?.endStatus) === 3;
   const remainDays = computeRemainDays(r?.preReviewEndTimeDate, r?.preReviewEndTime);
   const urgent = remainDays === null ? false : remainDays <= 0;
   const remainLabel = remainDays === null ? '—' : `剩余 ${Math.max(0, remainDays)} 天`;
 
+  const statusBadge = defectsCount > 0
+    ? { text: '待解决', cls: styles.statusBadge }
+    : verifyCount > 0
+      ? { text: '待验证', cls: styles.statusBadgeOk }
+      : reviewEnded
+        ? { text: '已完成', cls: styles.remainBadge }
+        : remainLabel !== '—'
+          ? { text: remainLabel, cls: urgent ? `${styles.remainBadge} ${styles.urgent}` : styles.remainBadge }
+          : null;
+
   // 评审类型头像：圆形首字 + 类型色，显示在创建人前。
   const typeMeta = reviewTypeMeta(r);
+
+  // 设计稿版本：取首份稿件 version，格式化为「V1.0」显示在卡片右上角。
+  const versionLabel = formatVersion(r?.manuscriptDtos?.[0]?.version);
 
   // 「更多」下拉菜单 + 三项操作（下载资源 / 一键提醒 / 开启通知）。
   const [menu, setMenu] = useState<CardActionState>({
@@ -479,6 +452,11 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
   const manuscriptId = r?.manuscriptDtos?.[0]?.manuscriptId;
   const hasManuscript = Boolean(manuscriptId);
 
+  // 点击整张卡片新开羽点稿件预览页（按 reviewType 走对应前端路由）。
+  // 无 manuscriptId 或无对应预览页类型时返回 null，卡片不响应点击的「打开预览」语义
+  //（卡片本身仍可被「更多」菜单等内部交互正常使用，故此处不阻断事件冒泡）。
+  const previewUrl = buildManuscriptPreviewUrl(r?.reviewType, manuscriptId);
+
   /** 统一发起一项卡片操作：置 pending、调路由、回写 toast。 */
   async function runAction(action: CardAction) {
     setMenu((m) => ({ ...m, open: false, pending: action, toast: null }));
@@ -501,9 +479,18 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
         }
         const blob = await resp.blob();
         // 文件名：优先 content-disposition，退到稿件 fileName，再退 reviewName。
+        // daemon 已把头规整成 `filename*=UTF-8''<pct>`，优先取该段并解码；
+        // 它后面没有时再退到裸 filename= 段（可能是乱码，仅作兜底）。
         const cd = resp.headers.get('content-disposition') || '';
-        const cdName = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i)?.[1];
-        const fname = decodeURIComponent(cdName || manuscriptFile || `${reviewName || 'manuscript'}.bin`);
+        const cdName =
+          cd.match(/filename\*\s*=\s*UTF-8''([^";]+)/i)?.[1] ??
+          cd.match(/filename\s*=\s*"?([^";]+)/i)?.[1];
+        let fname: string;
+        try {
+          fname = decodeURIComponent(cdName || manuscriptFile || `${reviewName || 'manuscript'}.bin`);
+        } catch {
+          fname = cdName || manuscriptFile || `${reviewName || 'manuscript'}.bin`;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -555,7 +542,14 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
   }
 
   return (
-    <div className={styles.card}>
+    <div
+      className={styles.card}
+      onClick={() => {
+        // 点击整张卡片：打开对应 reviewType 的羽点稿件预览页（新标签）。
+        // 卡片内交互（更多菜单 / 各操作按钮）自行 stopPropagation，避免误触发新开页。
+        if (previewUrl) window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      }}
+    >
       <div className={styles.cardHead}>
         <span className={styles.creator}>
           {typeMeta ? (
@@ -565,12 +559,15 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
           ) : null}
           <span className={styles.creatorText}>{creator}</span>
         </span>
-        {remainLabel !== '—' ? (
-          <span className={`${styles.remainBadge} ${urgent ? styles.urgent : ''}`}>{remainLabel}</span>
-        ) : null}
+        <span style={{display:"flex",gap:"4px"}}>
+        {statusBadge ? <span className={statusBadge.cls}>{statusBadge.text}</span> : null}
+        {versionLabel !== '—' ? <span className={styles.versionBadge}>{versionLabel}</span> : null}
+        </span>
       </div>
 
-      <div className={styles.cardTitle}>{title}</div>
+      <div className={styles.cardTitle}>
+        <span className={styles.cardTitleText}>{title}</span>
+      </div>
 
       <div className={styles.fields}>
         <div className={styles.field}>
@@ -607,7 +604,11 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
 
       <div className={styles.cardFoot}>
         {/* 卡片左下角「更多」下拉：评审详情（首位） / 下载资源 / 一键提醒 / 开启通知。 */}
-        <div className={styles.moreWrap} ref={menuRef}>
+        <div
+          className={styles.moreWrap}
+          ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             className={`${styles.moreBtn} ${menu.open ? styles.moreBtnActive : ''}`}

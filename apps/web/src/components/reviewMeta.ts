@@ -31,6 +31,55 @@ export function computeRemainDays(iso?: unknown, fallback?: unknown): number | n
 }
 
 /**
+ * 把时间串统一格式化为 `YYYY/MM/DD HH:mm:ss`。
+ *
+ * oneByReviewId 的 `createTimeDate` / `preReviewEndTimeDate` 是带 +08:00 偏移的
+ * ISO 串（如 `2024-11-06T11:38:14.997+08:00`），直接展示不友好；这里按本地时区
+ * 解析后格式化为 `2024/11/06 11:38:14`。已是该格式的串（如 reviewList 列表项的
+ * `createTime`）会被 `Date.parse` 解析后重新格式化，结果一致。解析失败回退原串；
+ * 空值回退「—」。
+ */
+export function formatDateTime(val: unknown): string {
+  if (val === undefined || val === null || val === '') return '—';
+  const s = typeof val === 'string' ? val : String(val);
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return s;
+  const d = new Date(t);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/**
+ * 把稿件版本号格式化为 `V1.0` 样式。
+ *
+ * subProcess 稿件项的 `version` 上游是数字或字符串（如 `1` / `"1"` / `2`），
+ * 列表卡片右上角与详情都需展示「V1.0」这种带一位小数的形式；这里统一补
+ * 成 `V<major>.0`。缺省或无法解析时回退「—」。
+ */
+export function formatVersion(val: unknown): string {
+  if (val === undefined || val === null || val === '') return '—';
+  const n = Number(val);
+  if (!Number.isFinite(n)) return String(val);
+  return `V${n}.0`;
+}
+
+/**
+ * 从稿件列表里聚合出全部不重复版本号（数字升序）。
+ *
+ * 详情的版本下拉需要展示一份评审下所有稿件的版本集合（同一版本可能有多份稿件），
+ * 这里从 subProcess `data.list[]` 抽取并去重排序，供下拉选择。
+ */
+export function collectVersions(list: any[]): number[] {
+  if (!Array.isArray(list)) return [];
+  const set = new Set<number>();
+  for (const m of list) {
+    const n = Number(m?.version);
+    if (Number.isFinite(n)) set.add(n);
+  }
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+/**
  * 评审类型 → 头像首字 + 背景色，显示在创建人前。
  *
  * reviewType 取值（对齐 `apps/daemon/src/routes/hik_routes/uedro.ts` 注释）：
@@ -84,6 +133,42 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
   '10': '插件评审',
   '11': 'Pixso Handoff',
 };
+
+/**
+ * 按评审类型构造羽点稿件预览页 URL（点击卡片时新开页查看稿件内容）。
+ *
+ * 返回根相对路径（`/uedro/ux?id=…`），由 daemon 的根路径反向代理透传到羽点
+ * 上游——直接访问 `https://uedro.hikvision.com.cn/…` 需要登录，浏览器跨源也
+ * 带不上 uedro 会话 cookie；走本地代理则始终同源，daemon 注入本地 SSO session
+ * 里的 uedro cookie。详见 `apps/daemon/src/routes/hik_routes/uedro.ts` 的
+ * `/uedro` / `/portal` 反向代理。
+ *
+ * manuscriptId 取自 `manuscriptDtos[0].manuscriptId`；不同 reviewType 走羽点
+ * 不同的预览前端路由（对齐原站卡片点击行为）：
+ *   "1" 交互评审 → /uedro/ux?id=<manuscriptId>
+ *   "2" 视觉评审 → /uedro/ua?id=<manuscriptId>
+ *   "3" 文稿评审 → /uedro/pdf-js?id=<manuscriptId>&projectid=null&projName=&projManager=null
+ *   "4" 表格评审 → /uedro/xlsx?id=<manuscriptId>&projectid=null&projName=&projManager=null
+ * 缺少 manuscriptId 或类型无对应预览页（海客/插件/Pixso 等）时返回 null，
+ * 由调用方决定不响应点击。
+ */
+export function buildManuscriptPreviewUrl(reviewType: unknown, manuscriptId: unknown): string | null {
+  if (manuscriptId === undefined || manuscriptId === null || manuscriptId === '') return null;
+  const id = encodeURIComponent(String(manuscriptId));
+  const t = reviewType === undefined || reviewType === null ? '' : String(reviewType);
+  switch (t) {
+    case '1':
+      return `/uedro/ux?id=${id}`;
+    case '2':
+      return `/uedro/ua?id=${id}`;
+    case '3':
+      return `/uedro/pdf-js?id=${id}&projectid=null&projName=&projManager=null`;
+    case '4':
+      return `/uedro/xlsx?id=${id}&projectid=null&projName=&projManager=null`;
+    default:
+      return null;
+  }
+}
 
 export function reviewTypeLabel(r: any): string {
   const t = r?.reviewType;

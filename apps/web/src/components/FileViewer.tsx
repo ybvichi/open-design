@@ -117,6 +117,7 @@ import {
   type ImageExportFormat,
 } from '../runtime/exports';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
+import { exportProjectAsAxureZip } from '../runtime/axure-export';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
 import { shouldConsumeSlideNav } from '../runtime/slide-nav';
 import { findHtmlEntriesReferencing } from '../runtime/jsx-module-refs';
@@ -174,6 +175,7 @@ import { RemixIcon } from './RemixIcon';
 import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
 import { ReviewListModal } from './ReviewListModal';
+import { ReviewAddModal } from './ReviewAddModal';
 import { PreviewDrawOverlay, type DrawToolbarElement } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
@@ -6321,6 +6323,8 @@ function HtmlViewer({
   // 历史 Modal 封装在独立组件 ReviewListModal，由 reviewListModalOpen 控制。
   const [reviewMenuOpen, setReviewMenuOpen] = useState(false);
   const [reviewListModalOpen, setReviewListModalOpen] = useState(false);
+  // 发起评审 Modal：对齐羽点原站「发起评审」表单，弹出 ReviewAddModal。
+  const [reviewAddModalOpen, setReviewAddModalOpen] = useState(false);
   // False when closed; otherwise records which entry opened the modal so the
   // surface_view impression can carry entry_from.
   const [versionModalOpen, setVersionModalOpen] = useState<false | 'toolbar' | 'more_menu'>(false);
@@ -11645,6 +11649,25 @@ function HtmlViewer({
       fallbackTitle: context?.title ?? exportTitle,
       ...(context?.versionId ? { versionId: context.versionId } : {}),
     }));
+ }
+ // 导出 Axure RP 风格交互稿压缩包：拉取工程全部文件，生成站点地图导航。
+ function triggerAxureExport() {
+    setDownloadMenuOpen(false);
+    setExportToast({ message: '正在生成 Axure 交互稿...', tone: 'loading' });
+    exportProjectAsAxureZip({ projectId, title: exportTitle })
+      .then((result: { ok: true; pageCount: number } | { ok: false; error: string }) => {
+        if (result.ok) {
+          setExportToast({ message: `已导出 ${result.pageCount} 个文件`, tone: 'success' });
+        } else {
+          setExportToast({ message: result.error, tone: 'error' });
+        }
+      })
+      .catch((err: unknown) => {
+        setExportToast({
+          message: err instanceof Error && err.message ? err.message : '导出 Axure 交互稿失败',
+          tone: 'error',
+        });
+      });
   }
   // 导入到pixso
   function triggerPixsoExport(isSplit?:boolean) {
@@ -11803,6 +11826,11 @@ function HtmlViewer({
   async function openReviewListModal() {
     setReviewMenuOpen(false);
     setReviewListModalOpen(true);
+  }
+  // 打开发起评审 Modal。表单数据由独立组件 ReviewAddModal 自行拉取并提交。
+  function openReviewAddModal() {
+    setReviewMenuOpen(false);
+    setReviewAddModalOpen(true);
   }
   const captureExportImageSnapshot = useCallback(async (
     options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
@@ -13329,7 +13357,7 @@ function HtmlViewer({
                         className="share-menu-item"
                         role="menuitem"
                         onClick={() => {
-                          void copyLocalShareLinkAndReview();
+                          openReviewAddModal();
                         }}
                       >
                         <span className="share-menu-icon"><RemixIcon name="chat-new-line" size={15} /></span>
@@ -13656,6 +13684,18 @@ function HtmlViewer({
                   >
                     <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
                     <span>{t('fileViewer.exportZip')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setDownloadMenuOpen(false);
+                      void triggerAxureExport();
+                    }}
+                  >
+                    <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
+                    <span>导出 Axure 压缩包</span>
                   </button>
                   <button
                     type="button"
@@ -14897,6 +14937,7 @@ function HtmlViewer({
         document.body,
       ) : null}
       <ReviewListModal open={reviewListModalOpen} onClose={() => setReviewListModalOpen(false)} />
+      <ReviewAddModal open={reviewAddModalOpen} onClose={() => setReviewAddModalOpen(false)} />
       {deploySavedToast && typeof document !== 'undefined' ? createPortal(
         <Toast
           message={deploySavedToast.message}

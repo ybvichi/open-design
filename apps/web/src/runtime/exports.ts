@@ -27,7 +27,7 @@ export { isOpenDesignHostAvailable } from '@open-design/host';
 const DESIGN_HANDOFF_FILENAME = 'DESIGN-HANDOFF.md';
 const DESIGN_MANIFEST_FILENAME = 'DESIGN-MANIFEST.json';
 
-function safeFilename(name: string, fallback: string): string {
+export function safeFilename(name: string, fallback: string): string {
   const slug = (name || fallback)
     .replace(/[^\w.\-]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -61,7 +61,7 @@ function filenameFromContentDisposition(resp: Response): string | null {
   return plain && plain[1] ? plain[1] : null;
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   triggerHrefDownload(url, filename);
   // Revoke later — Safari sometimes hasn't finished reading the blob yet

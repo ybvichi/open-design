@@ -278,7 +278,7 @@ export async function uedroValidate(cookies: Cookie[]): Promise<UedroValidResult
     if (parsed.code !== '0') {
       return { ok: false };
     }
-    return { ok: true, basicInfo: parsed.data };
+    return { ok: true };
   } catch {
     return { ok: false };
   }

@@ -162,8 +162,11 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  width: 1310px;
+  /*grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));*/
+  grid-template-columns: repeat(3, minmax(300px, 1fr));
   gap: 14px;
+  margin: 0 auto;
 }
 
 /* 加载/错误/空态：撑满 body 高度并居中，保持 80%×80% 画框不塌缩。 */
@@ -265,22 +268,66 @@
   color: var(--text-muted);
   background: var(--bg-subtle);
   white-space: nowrap;
+  display: flex;
+  justify-content: center;
 }
 .remainBadge.urgent {
   color: #d14343;
   border-color: color-mix(in srgb, #d14343 45%, transparent);
   background: color-mix(in srgb, #d14343 10%, var(--bg-subtle));
 }
+/* 卡片状态徽标：待解决=红色，待验证=绿色。统一展示评审遗留态。 */
+.statusBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #d14343 45%, transparent);
+  color: #d14343;
+  background: color-mix(in srgb, #d14343 10%, var(--bg-subtle));
+  white-space: nowrap;
+}
+.statusBadgeOk {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #2f9e6f 45%, transparent);
+  color: #2f9e6f;
+  background: color-mix(in srgb, #2f9e6f 10%, var(--bg-subtle));
+  white-space: nowrap;
+}
 
 .cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 650;
   line-height: 1.45;
   color: var(--text);
+  min-height: 20px;
+}
+.cardTitleText {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-height: 20px;
+}
+.versionBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #2f6f8f 45%, transparent);
+  color: #2f6f8f;
+  background: color-mix(in srgb, #2f6f8f 8%, var(--bg-subtle));
+  white-space: nowrap;
 }
 
 .fields {
@@ -446,7 +493,50 @@
   }
 }
 
-/* ── 底栏：分页 + 关闭 ─────────────────────────────────── */
+/* ── 列表底部：滚动加载更多 / 末页提示 ──────────────────── */
+.listFoot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0 6px;
+}
+.listFootHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.spinnerSmall {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: rlmSpin 700ms linear infinite;
+}
+
+/* 加载更多失败时的行内重试按钮：不冲掉已渲染卡片，仅占列表底部一行。 */
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, #d14343 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, #d14343 8%, var(--bg-panel));
+  color: #d14343;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.retryBtn:hover {
+  background: color-mix(in srgb, #d14343 16%, var(--bg-panel));
+}
+
+/* ── 底栏：加载计数 + 关闭 ─────────────────────────────────── */
 .foot {
   flex-shrink: 0;
   display: flex;
@@ -456,10 +546,10 @@
   padding: 12px 24px;
   border-top: 1px solid var(--border);
 }
-.pager {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.footHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 92px;
 }
 .pagerBtn {
   display: inline-flex;
@@ -486,97 +576,4 @@
 .pagerBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-/* 页码数字按钮序列。 */
-.pageNums {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.pageNum {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
-    background 140ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.pageNum:hover:not(:disabled) {
-  border-color: var(--border-strong, var(--border));
-  background: var(--bg-subtle);
-}
-.pageNum:disabled {
-  cursor: default;
-}
-.pageNumActive {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong, var(--border));
-  color: var(--text);
-  font-weight: 650;
-  cursor: default;
-}
-.pageEllipsis {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 30px;
-  color: var(--text-muted);
-  font-size: 14px;
-  user-select: none;
-}
-
-/* 跳页输入框：第 [ ] 页 */
-.pageJump {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 8px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-}
-.pageJumpLabel {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.pageInput {
-  width: 52px;
-  height: 30px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 13px;
-  text-align: center;
-  outline: none;
-  -moz-appearance: textfield;
-  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.pageInput::-webkit-outer-spin-button,
-.pageInput::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.pageInput:focus {
-  border-color: var(--border-strong, var(--border));
-}
-
-.pageInfo {
-  font-size: 13px;
-  color: var(--text-muted);
-  min-width: 92px;
-  text-align: center;
 }
