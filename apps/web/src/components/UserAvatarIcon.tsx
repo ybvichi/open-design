@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { getStoredUserInfo } from '../auth/auth';
+import { useAuth } from '../auth/LoginGate';
 
 interface UserAvatarIconProps {
   size?: number;
@@ -39,7 +39,8 @@ function getInitial(displayName: string): string {
  * 显示用户名首字母大写，圆形，随机深色背景，白色文字
  */
 export function UserAvatarIcon({ size = 24 }: UserAvatarIconProps) {
-  const {displayName} = getStoredUserInfo();
+  const { userInfo } = useAuth();
+  const displayName = userInfo?.displayName;
 
   const { initial, bgColor } = useMemo(() => {
     if (!displayName) {
@@ -47,7 +48,7 @@ export function UserAvatarIcon({ size = 24 }: UserAvatarIconProps) {
     }
     return {
       initial: getInitial(displayName),
-      bgColor: 'rgb(51, 111, 255)'//getColorFromDisplayName(displayName),
+      bgColor: 'rgb(51, 111, 255)',
     };
   }, [displayName]);
 

@@ -94,8 +94,11 @@ export async function checkAuthStatus(): Promise<
 
     const data = (await response.json()) as { ok: boolean; username: string; userInfo?: any };
     if (data.ok && typeof data.username === 'string' && data.username.length > 0) {
-      // 同步保存 username 到 sessionStorage，确保 FileViewer 等组件能获取
-      return { ok: true, username: data.username };
+      // 同步保存 username + userInfo 到 sessionStorage，确保 FileViewer 等组件能获取
+      if (data.userInfo) {
+        syncUsernameToStorage(data.username, data.userInfo);
+      }
+      return { ok: true, username: data.username, userInfo: data.userInfo };
     }
   } catch {
     // 网络错误，视为未登录

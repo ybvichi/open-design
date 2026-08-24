@@ -572,3 +572,254 @@
   background: var(--text);
   opacity: 0.9;
 }
+
+/* ── 自定义日期时间选择器（替代原生 datetime-local）── */
+.dtpWrap {
+  position: relative;
+  min-width: 0;
+}
+.dtpTrigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 140ms var(--ease-out);
+}
+.dtpTrigger:hover {
+  border-color: var(--border-strong, var(--border));
+}
+.dtpTrigger:focus {
+  outline: none;
+  border-color: var(--border-strong, var(--border));
+}
+.dtpTriggerIcon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+.dtpTriggerText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.dtpTriggerPlaceholder {
+  color: var(--text-muted);
+}
+.dtpTriggerClear {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.dtpTriggerClear:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+/* 日历面板 */
+.dtpPanel {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  z-index: 40;
+  width: 296px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: dtpFadeIn 160ms var(--ease-out);
+}
+@keyframes dtpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 面板头：月份导航 */
+.dtpHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+}
+.dtpNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.dtpNavBtn:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+.dtpNavBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.dtpHeadLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+}
+
+/* 星期表头 */
+.dtpWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 0 8px 4px;
+}
+.dtpWeekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  padding: 4px 0;
+}
+
+/* 日期网格 */
+.dtpDays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 0 8px 8px;
+}
+.dtpDay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.dtpDay:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+.dtpDay:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.dtpDayOther {
+  color: var(--text-faint);
+}
+.dtpToday {
+  font-weight: 700;
+}
+.dtpSelected {
+  background: var(--accent);
+  color: var(--bg-elevated);
+}
+.dtpSelected:hover {
+  background: var(--accent-strong);
+}
+
+/* 时间选择区 */
+.dtpTime {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.dtpTimeLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.dtpTimeSelect {
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 140ms var(--ease-out);
+}
+.dtpTimeSelect:focus {
+  border-color: var(--border-strong, var(--border));
+}
+.dtpColon {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 面板底栏 */
+.dtpFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.dtpFootBtn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+.dtpFootBtn:hover {
+  background: var(--bg-subtle);
+}
+.dtpFootBtnPrimary {
+  background: var(--accent);
+  color: var(--bg-elevated);
+  border-color: var(--accent);
+}
+.dtpFootBtnPrimary:hover {
+  background: var(--accent-strong);
+}

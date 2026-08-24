@@ -642,15 +642,14 @@ export function ReviewAddModal({
              <label className={styles.itemLabel}>
                预计结束日期 <span className={styles.req}>*</span>
              </label>
-              <div className={styles.itemControl}>
-                <input
-                  type="datetime-local"
-                  className={styles.input}
+             <div className={styles.itemControl}>
+                <DateTimePicker
                   value={endtime}
-                  onChange={(e) => {
-                    setEndtime(e.target.value);
+                  onChange={(v) => {
+                    setEndtime(v);
                     clearFieldError('endtime');
                   }}
+                  placeholder="请选择预计结束时间"
                 />
                 <span className={styles.itemError}>{fieldErrors.endtime || ''}</span>
               </div>
@@ -1222,5 +1221,260 @@ function UploadArea({
         onChange={(e) => handleFiles(e.target.files)}
       />
     </>
+  );
+}
+
+/**
+ * 自定义日期时间选择器：日历面板 + 时分下拉，替代原生 datetime-local。
+ *
+ * 值格式与原生 datetime-local 一致（`YYYY-MM-DDTHH:mm`），所以 endtime
+ * 状态、endtimeForSubmit 转换、提交体都不用改。
+ *
+ * 约束：只能选今天及以后的日期。今天之前的日期在面板里置灰禁用；
+ * 月份导航在"上个月会早于本月"时禁用上翻按钮。
+ */
+function DateTimePicker({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 面板展示的年月（默认从当前 value 或今天开始）。
+  const initial = value ? new Date(value) : new Date();
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth()); // 0-11
+  // 临时选中的日期 + 时分，确定后才回写。
+  const [pickDate, setPickDate] = useState<Date | null>(value ? new Date(value) : null);
+  const [pickHour, setPickHour] = useState(value ? new Date(value).getHours() : 23);
+  const [pickMin, setPickMin] = useState(value ? new Date(value).getMinutes() : 59);
+
+  // 打开时同步临时状态到当前 value。
+  useEffect(() => {
+    if (!open) return;
+    const d = value ? new Date(value) : null;
+    if (d) {
+      setViewYear(d.getFullYear());
+      setViewMonth(d.getMonth());
+      setPickDate(d);
+      setPickHour(d.getHours());
+      setPickMin(d.getMinutes());
+    } else {
+      const now = new Date();
+      setViewYear(now.getFullYear());
+      setViewMonth(now.getMonth());
+      setPickDate(null);
+      setPickHour(23);
+      setPickMin(59);
+    }
+  }, [open, value]);
+
+  // 点外部收起。
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  // 今天 00:00 作为"最早可选"基准。
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  function fmt(d: Date) {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  // 月份网格：返回 42 格（6 行 × 7 列），含上月末几天 + 本月 + 下月初几天。
+  function buildDays(): Date[] {
+    const first = new Date(viewYear, viewMonth, 1);
+    const startDay = first.getDay(); // 0=周日
+    const gridStart = new Date(viewYear, viewMonth, 1 - startDay);
+    const days: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i));
+    }
+    return days;
+  }
+
+  const days = buildDays();
+  const monthLabel = `${viewYear} 年 ${viewMonth + 1} 月`;
+
+  // 上翻是否禁用：若上个月的最后一天 < 今天，则不允许翻到上个月。
+  const prevDisabled = new Date(viewYear, viewMonth, 0) < todayStart;
+
+  function prevMonth() {
+    if (prevDisabled) return;
+    const d = new Date(viewYear, viewMonth - 1, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+  }
+  function nextMonth() {
+    const d = new Date(viewYear, viewMonth + 1, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+  }
+
+  function isSameDay(a: Date | null, b: Date) {
+    if (!a) return false;
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function selectDay(d: Date) {
+    // 保留已选时分；若未选过分则用 23:59。
+    const nd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), pickHour, pickMin);
+    setPickDate(nd);
+  }
+
+  function confirm() {
+    if (!pickDate) return;
+    const d = new Date(pickDate.getFullYear(), pickDate.getMonth(), pickDate.getDate(), pickHour, pickMin);
+    onChange(fmt(d));
+    setOpen(false);
+  }
+
+  // 触发器展示文本。
+  const displayText = value ? (() => {
+    const d = new Date(value);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })() : '';
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const mins = Array.from({ length: 60 }, (_, i) => i);
+
+  return (
+    <div className={styles.dtpWrap} ref={wrapRef}>
+      <button
+        type="button"
+        className={styles.dtpTrigger}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={styles.dtpTriggerIcon}>
+          {/* 日历图标 */}
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="12" height="11" rx="1.5" />
+            <path d="M2 6h12M5 1.5v3M11 1.5v3" />
+          </svg>
+        </span>
+        <span className={`${styles.dtpTriggerText} ${!displayText ? styles.dtpTriggerPlaceholder : ''}`}>
+          {displayText || placeholder || '请选择日期时间'}
+        </span>
+        {value ? (
+          <span
+            className={styles.dtpTriggerClear}
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange('');
+              setPickDate(null);
+            }}
+          >
+            ✕
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className={styles.dtpPanel}>
+          <div className={styles.dtpHead}>
+            <button
+              type="button"
+              className={styles.dtpNavBtn}
+              onClick={prevMonth}
+              disabled={prevDisabled}
+              aria-label="上个月"
+            >
+              ‹
+            </button>
+            <span className={styles.dtpHeadLabel}>{monthLabel}</span>
+            <button
+              type="button"
+              className={styles.dtpNavBtn}
+              onClick={nextMonth}
+              aria-label="下个月"
+            >
+              ›
+            </button>
+          </div>
+          <div className={styles.dtpWeekdays}>
+          {['日', '一', '二', '三', '四', '五', '六'].map((w) => (
+            <span key={w} className={styles.dtpWeekday}>{w}</span>
+          ))}
+          </div>
+          <div className={styles.dtpDays}>
+          {days.map((d, i) => {
+            const isOther = d.getMonth() !== viewMonth;
+            const before = d < todayStart;
+            const isToday = isSameDay(todayStart, d);
+            const selected = isSameDay(pickDate, d);
+            const cls = [
+              styles.dtpDay,
+              isOther ? styles.dtpDayOther : '',
+              isToday ? styles.dtpToday : '',
+              selected ? styles.dtpSelected : '',
+            ].filter(Boolean).join(' ');
+            return (
+              <button
+                key={i}
+                type="button"
+                className={cls}
+                disabled={before}
+                onClick={() => selectDay(d)}
+              >
+                {d.getDate()}
+              </button>
+            );
+          })}
+          </div>
+          <div className={styles.dtpTime}>
+            <span className={styles.dtpTimeLabel}>时间</span>
+            <select
+              className={styles.dtpTimeSelect}
+              value={pickHour}
+              onChange={(e) => setPickHour(Number(e.target.value))}
+            >
+              {hours.map((h) => (
+                <option key={h} value={h}>{pad(h)}</option>
+              ))}
+            </select>
+            <span className={styles.dtpColon}>:</span>
+            <select
+              className={styles.dtpTimeSelect}
+              value={pickMin}
+              onChange={(e) => setPickMin(Number(e.target.value))}
+            >
+              {mins.map((m) => (
+                <option key={m} value={m}>{pad(m)}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.dtpFoot}>
+            <button
+              type="button"
+              className={styles.dtpFootBtn}
+              onClick={() => setOpen(false)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className={`${styles.dtpFootBtn} ${styles.dtpFootBtnPrimary}`}
+              onClick={confirm}
+              disabled={!pickDate}
+            >
+              确定
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
