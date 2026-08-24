@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+﻿import type { Express } from 'express';
 import multer from 'multer';
 import * as https from 'node:https';
 import * as http from 'node:http';
@@ -70,6 +70,39 @@ const UEDRO_MANUSCRIPT_DELETE_URL = UEDRO_BASE + '/uedro/web/manuscript/v1/delet
 
 /** 羽点发起评审接口（POST，提交完整评审表单创建一条评审）。 */
 const UEDRO_REVIEW_ADDITION_URL = UEDRO_BASE + '/uedro/web/review/v1/addition';
+/** 羽点评审稿追加接口（POST，向已有评审追加一份评审稿）。 */
+const UEDRO_MANUSCRIPT_ADDITION_URL = UEDRO_BASE + '/uedro/web/manuscript/v1/addition';
+/** 羽点关闭评审接口（POST，结束一条评审）。 */
+const UEDRO_REVIEW_FINISH_URL = UEDRO_BASE + '/uedro/web/review/v1/finish';
+const UEDRO_REVIEW_REPEAT_URL = UEDRO_BASE + '/uedro/web/review/v1/repeat';
+const UEDRO_REVIEW_EDIT_URL = UEDRO_BASE + '/uedro/web/review/v1/edit';
+const UEDRO_MANUSCRIPT_REUPLOAD_URL = UEDRO_BASE + '/uedro/web/manuscript/v1/reUpload';
+const UEDRO_MANUSCRIPT_REUPLOAD_CONFIRM_URL = UEDRO_BASE + '/uedro/web/manuscript/v1/reUploadConfirm';
+
+/**
+ * 反向代理需要重写的上游绝对 URL 前缀。
+ *
+ * 羽点前端 SPA 的 HTML / JS / CSS 里硬编码了 `https://uedro.hikvision.com.cn`
+ * 绝对地址（资源、fetch、window.location 跳转等）。若不重写，浏览器直接访问
+ * 原站会跨源，uedro 会话 cookie 带不上。把绝对地址改成同源根相对路径后，
+ * 这些请求自然落回本代理，始终同源、cookie 始终随行。
+ */
+const UEDRO_ABS_ORIGIN = UEDRO_BASE; // https://uedro.hikvision.com.cn
+
+/**
+ * 需要做绝对 URL 重写的文本类 content-type 前缀。
+ *
+ * 二进制（图片、字体、xlsx/docx 文件流）不含可重写的 URL，原样透传。
+ * 仅对 text/html、text/css、application/javascript 等文本类做字符串替换。
+ */
+const REWRITE_CONTENT_TYPES = [
+  'text/html',
+  'text/css',
+  'application/javascript',
+  'text/javascript',
+  'application/json',
+  'application/x-javascript',
+];
 
 /**
  * 评审稿上传 multer 单例：memoryStorage 把文件留在内存，再以 multipart 透传上游。
@@ -78,6 +111,7 @@ const UEDRO_REVIEW_ADDITION_URL = UEDRO_BASE + '/uedro/web/review/v1/addition';
 const manuscriptUpload = multer({ storage: multer.memoryStorage() }).fields([
   { name: 'file', maxCount: 1 },
   { name: 'excelJson', maxCount: 1 },
+  { name: 'manuscriptId', maxCount: 1 },
 ]);
 
 /** 从本地 SSO session 取出羽点会话 cookie；缺失时返回 null 并由调用方回 401。 */
@@ -493,25 +527,25 @@ export function registerHikUedroRoutes(app: Express, deps: RegisterHikUedroRoute
     if (!uedroCookies) {
       return sendApiError(res, 401, 'UNAUTHORIZED', 'uedro session not found, please login first');
     }
-    const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
-    const fileArr = files['file'];
-    const excelJsonArr = files['excelJson'];
-    const file = fileArr?.[0];
-    if (!file) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'file is required');
-    }
-    const excelJson = excelJsonArr?.[0]?.buffer?.toString('utf8') ?? '';
+   const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
+   const fileArr = files['file'];
+   const file = fileArr?.[0];
+   if (!file) {
+     return sendApiError(res, 400, 'BAD_REQUEST', 'file is required');
+   }
+   // excelJson 是文本字段，multer 放入 req.body 而非 req.files。
+   const excelJson = typeof req.body?.excelJson === 'string' ? req.body.excelJson : '';
 
     try {
-      const result = await forwardMultipart(
-        UEDRO_MANUSCRIPT_UPLOAD_URL,
-        uedroCookies,
-        [
-          { name: 'file', filename: file.originalname, contentType: file.mimetype || 'application/octet-stream', data: file.buffer },
-          { name: 'excelJson', data: excelJson },
-        ],
-        'upload manuscript',
-      );
+     const result = await forwardMultipart(
+       UEDRO_MANUSCRIPT_UPLOAD_URL,
+       uedroCookies,
+       [
+         { name: 'file', filename: Buffer.from(file.originalname, 'latin1').toString('utf8'), contentType: file.mimetype || 'application/octet-stream', data: file.buffer },
+         { name: 'excelJson', data: excelJson },
+       ],
+       'upload manuscript',
+     );
       let upstream: any;
       try {
         upstream = JSON.parse(result.body);
@@ -520,8 +554,91 @@ export function registerHikUedroRoutes(app: Express, deps: RegisterHikUedroRoute
       }
       return res.json({ ok: upstream?.code === '0', msg: upstream?.msg, data: upstream?.data });
     } catch (err: any) {
-      return sendApiError(res, 502, 'BAD_GATEWAY', 'uedro uploadManuscript failed: ' + (err?.message || String(err)));
+     return sendApiError(res, 502, 'BAD_GATEWAY', 'uedro uploadManuscript failed: ' + (err?.message || String(err)));
+   }
+ });
+
+  /**
+   * POST /api/hik/uedro/reUploadManuscript — 重新上传评审稿（更新评审稿第一步）。
+   *
+   * 透传上游 `POST /uedro/web/manuscript/v1/reUpload`（multipart/form-data）。
+   * 前端发 multipart（含 `file` + `manuscriptId` + `excelJson`），其中 manuscriptId
+   * 是当前评审稿的已有稿件 ID。daemon 用 multer memoryStorage 接收，再以原生
+   * https 模块把 multipart 重组透传上游。
+   *
+   * 上游响应 `{code:'0',data:{manuscriptId,middleManuscriptId,url,...,reviewType}}`，
+   * 其中 middleManuscriptId 供后续 reUploadConfirm 使用。
+   */
+  app.post('/api/hik/uedro/reUploadManuscript', (req, res, next) => {
+    manuscriptUpload(req, res, (err: any) => {
+      if (err) return sendApiError(res, 400, 'BAD_REQUEST', 'manuscript reUpload parse failed: ' + (err?.message || String(err)));
+      next();
+    });
+  }, async (req, res) => {
+    const uedroCookies = readUedroCookies(dataDir);
+    if (!uedroCookies) {
+      return sendApiError(res, 401, 'UNAUTHORIZED', 'uedro session not found, please login first');
     }
+  const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
+  const fileArr = files['file'];
+  const file = fileArr?.[0];
+  if (!file) {
+    return sendApiError(res, 400, 'BAD_REQUEST', 'file is required');
+  }
+  // manuscriptId 是文本字段（FormData.append 字符串），multer 放入 req.body 而非 req.files。
+  const manuscriptId = typeof req.body?.manuscriptId === 'string' ? req.body.manuscriptId : '';
+  if (!manuscriptId) {
+    return sendApiError(res, 400, 'BAD_REQUEST', 'manuscriptId is required');
+  }
+  const excelJson = typeof req.body?.excelJson === 'string' ? req.body.excelJson : '';
+
+    try {
+      const result = await forwardMultipart(
+        UEDRO_MANUSCRIPT_REUPLOAD_URL,
+        uedroCookies,
+        [
+          { name: 'file', filename: Buffer.from(file.originalname, 'latin1').toString('utf8'), contentType: file.mimetype || 'application/octet-stream', data: file.buffer },
+          { name: 'manuscriptId', data: manuscriptId },
+          { name: 'excelJson', data: excelJson },
+        ],
+        'reUpload manuscript',
+      );
+      let upstream: any;
+      try {
+        upstream = JSON.parse(result.body);
+      } catch {
+        return sendApiError(res, 502, 'BAD_GATEWAY', 'uedro reUploadManuscript bad response');
+      }
+      return res.json({ ok: upstream?.code === '0', msg: upstream?.msg, data: upstream?.data });
+    } catch (err: any) {
+      return sendApiError(res, 502, 'BAD_GATEWAY', 'uedro reUploadManuscript failed: ' + (err?.message || String(err)));
+    }
+  });
+
+  /**
+   * POST /api/hik/uedro/reUploadConfirm — 确认重新上传评审稿（更新评审稿第二步）。
+   *
+   * 透传上游 `POST /uedro/web/manuscript/v1/reUploadConfirm`，请求体：
+   *   { manuscriptId, middleManuscriptId, description }
+   * - manuscriptId：原稿件 ID（reUpload 时传入的）
+   * - middleManuscriptId：reUpload 响应返回的中间稿件 ID
+   * - description：备注，可空
+   *
+   * 上游响应 `{code:'0'}` 视为成功，data 为 null。
+   */
+  app.post('/api/hik/uedro/reUploadConfirm', async (req, res) => {
+    return postUedroJson(req, res, {
+      dataDir,
+      sendApiError,
+      url: UEDRO_MANUSCRIPT_REUPLOAD_CONFIRM_URL,
+      label: 'reUploadConfirm',
+      buildBody: (body) => ({
+        manuscriptId: typeof body.manuscriptId === 'string' ? body.manuscriptId : '',
+        middleManuscriptId: typeof body.middleManuscriptId === 'string' ? body.middleManuscriptId : '',
+        description: typeof body.description === 'string' ? body.description : '',
+      }),
+      requireFields: ['manuscriptId', 'middleManuscriptId'],
+    });
   });
 
   /**
@@ -562,15 +679,380 @@ export function registerHikUedroRoutes(app: Express, deps: RegisterHikUedroRoute
               projName: typeof body.projName === 'string' ? body.projName : '',
             }),
       }),
-      requireFields: [
-        'reviewName',
-        'reviewType',
-        'preReviewEndTime',
-        'manuscriptId',
-        'reviewModel',
-      ],
+    requireFields: [
+      'reviewName',
+      'reviewType',
+      'preReviewEndTime',
+      'manuscriptId',
+      'reviewModel',
+    ],
+  });
+});
+
+  /**
+   * POST /api/hik/uedro/manuscriptAddition — 向已有评审追加评审稿。
+   *
+   * 透传上游 `POST /uedro/web/manuscript/v1/addition`，请求体：
+   *   manuscriptId / reviewId / category / description
+   * category 为稿件分类（1=交互/2=视觉/3=文稿/4=表格/11=Pixso-Handoff，
+   * 与评审子类型取值一致）。description 为备注，可空。
+   *
+   * 上游响应 `{code:'0'}` 视为成功，data 为 null。
+   */
+  app.post('/api/hik/uedro/manuscriptAddition', async (req, res) => {
+    return postUedroJson(req, res, {
+      dataDir,
+      sendApiError,
+      url: UEDRO_MANUSCRIPT_ADDITION_URL,
+      label: 'manuscriptAddition',
+      buildBody: (body) => ({
+        manuscriptId: typeof body.manuscriptId === 'string' ? body.manuscriptId : '',
+        reviewId: typeof body.reviewId === 'string' ? body.reviewId : '',
+        category: typeof body.category === 'number' ? body.category : Number(body.category) || 0,
+        description: typeof body.description === 'string' ? body.description : '',
+      }),
+     requireFields: ['manuscriptId', 'reviewId', 'category'],
+   });
+ });
+
+  /**
+   * POST /api/hik/uedro/reviewFinish — 关闭评审。
+   *
+   * 透传上游 `POST /uedro/web/review/v1/finish`，请求体仅 `{ reviewId }`。
+   * 上游响应 `{code:'0'}` 视为成功，data 为 null。
+   */
+  app.post('/api/hik/uedro/reviewFinish', async (req, res) => {
+    return postUedroJson(req, res, {
+      dataDir,
+      sendApiError,
+      url: UEDRO_REVIEW_FINISH_URL,
+      label: 'reviewFinish',
+      buildBody: (body) => ({
+        reviewId: typeof body.reviewId === 'string' ? body.reviewId : '',
+      }),
+      requireFields: ['reviewId'],
     });
   });
+
+  /**
+   * GET /api/hik/uedro/reviewRepeat — 读取评审编辑回显数据。
+   *
+   * 透传上游 `GET /uedro/web/review/v1/repeat?reviewId=…`，返回评审的完整
+   * 可编辑字段：reviewName / preReviewEndTime / reviewType / designers（评审
+   * 组长）/ coreReviewers / reviewers / author / copyPersons / content 等。
+   * 上游响应 `{code:'0'}` 视为成功。
+   */
+  app.get('/api/hik/uedro/reviewRepeat', async (req, res) => {
+    const uedroCookies = readUedroCookies(dataDir);
+    if (!uedroCookies) {
+      return sendApiError(res, 401, 'UNAUTHORIZED', 'uedro session not found, please login first');
+    }
+    const reviewId = typeof req.query.reviewId === 'string' ? req.query.reviewId : '';
+    if (!reviewId) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'reviewId is required');
+    }
+
+    const upstreamUrl = new URL(UEDRO_REVIEW_REPEAT_URL);
+    upstreamUrl.searchParams.set('reviewId', reviewId);
+
+    try {
+      const result = await rawRequest('GET', upstreamUrl.toString(), uedroCookies, {
+        extraHeaders: uedroHeaders(uedroCookies),
+      });
+      let upstream: any;
+      try {
+        upstream = JSON.parse(result.body);
+      } catch {
+        return sendApiError(res, 502, 'BAD_GATEWAY', 'uedro reviewRepeat bad response');
+      }
+      return res.json({ ok: upstream?.code === '0', msg: upstream?.msg, data: upstream?.data });
+    } catch (err: any) {
+      return sendApiError(res, 500, 'INTERNAL_ERROR', 'uedro reviewRepeat failed: ' + (err?.message || String(err)));
+    }
+  });
+
+  /**
+   * POST /api/hik/uedro/reviewEdit — 编辑评审。
+   *
+   * 透传上游 `POST /uedro/web/review/v1/edit`，请求体：
+   *   reviewId / preReviewEndTime / designers / coreReviewers / reviewers /
+   *   copyPersons / content
+   * 上游响应 `{code:'0'}` 视为成功。
+   */
+  app.post('/api/hik/uedro/reviewEdit', async (req, res) => {
+    return postUedroJson(req, res, {
+      dataDir,
+      sendApiError,
+      url: UEDRO_REVIEW_EDIT_URL,
+      label: 'reviewEdit',
+      buildBody: (body) => ({
+        reviewId: typeof body.reviewId === 'string' ? body.reviewId : '',
+        preReviewEndTime: typeof body.preReviewEndTime === 'string' ? body.preReviewEndTime : '',
+        designers: Array.isArray(body.designers) ? body.designers : [],
+        coreReviewers: Array.isArray(body.coreReviewers) ? body.coreReviewers : [],
+        reviewers: Array.isArray(body.reviewers) ? body.reviewers : [],
+        copyPersons: Array.isArray(body.copyPersons) ? body.copyPersons : [],
+        content: typeof body.content === 'string' ? body.content : '',
+      }),
+      requireFields: ['reviewId'],
+    });
+  });
+
+/**
+ * 反向代理羽点前端页面：/uedro/* → https://uedro.hikvision.com.cn/uedro/*
+   *
+   * 前端 `buildManuscriptPreviewUrl` 生成 `/uedro/ux?id=…` 等根相对路径，
+   * `next.config.ts` 把 `/uedro/:path*` rewrite 到 daemon。daemon 在此把请求
+   * 透传到羽点上游，注入本地 SSO session 里的 uedro cookie，浏览器侧始终同源，
+   * 原站 SPA 的根相对资源与 fetch 自然落回代理。
+   *
+   * 未登录或无 uedro cookie 时返回 401。HTML/JS/CSS 里的绝对 URL 会被重写为
+   * 根相对路径，避免页面内资源链接跳回原站导致跨源 cookie 丢失。
+   */
+  app.use('/uedro', createUedroProxyHandler('/uedro', dataDir, sendApiError));
+
+  /**
+   * 反向代理羽点门户页面：/portal/* → https://uedro.hikvision.com.cn/portal/*
+   *
+   * 与 /uedro/* 同理，门户登录页、basicInfo 等门户前端资源也走同源代理。
+   */
+ app.use('/portal', createUedroProxyHandler('/portal', dataDir, sendApiError));
+}
+
+/**
+ * 反向代理羽点前端页面（/uedro/ux、/uedro/ua、/uedro/pdf-js、/portal/ 等）。
+ *
+ * 前端 `buildManuscriptPreviewUrl` 生成 `/uedro/ux?id=…` 等根相对路径，
+ * `next.config.ts` 把 `/uedro/:path*` / `/portal/:path*` rewrite 到 daemon。
+ * daemon 在此把请求透传到 `https://uedro.hikvision.com.cn`，注入本地 SSO
+ * session 里的 uedro cookie，浏览器侧始终同源，原站 SPA 的根相对资源与
+ * fetch 自然落回代理。
+ *
+ * 与 `streamUpstreamGet` 的区别：那个专做文件下载（JSON 视为错误、不重写
+ * URL）；这里要处理完整前端页面，需重写 HTML/JS/CSS 里的绝对 URL，并透传
+ * set-cookie 让会话续期。
+ *
+ * @param mountPath 挂载前缀（`/uedro` 或 `/portal`），仅用于错误日志
+ * @param dataDir   daemon 数据目录，用于读 SSO session
+ * @param sendApiError 错误响应工具
+ */
+function createUedroProxyHandler(mountPath: string, dataDir: string, sendApiError: (...args: any[]) => any) {
+  return (req: any, res: any) => {
+    const uedroCookies = readUedroCookies(dataDir);
+    if (!uedroCookies) {
+      return sendApiError(res, 401, 'UNAUTHORIZED', 'uedro session not found, please login first');
+    }
+    // req.url 形如 `/uedro/ux?id=…`，直接拼到 UEDRO_BASE 即可。
+    // Express 的 app.use('/uedro', ...) 会剥掉 mountPath 前缀，req.url 变成
+    // `/ux?id=…`；req.originalUrl 才是完整的 `/uedro/ux?id=…`。拼到 UEDRO_BASE
+    // 时必须用 originalUrl，否则上游路径少了 /uedro 前缀，nginx 回 404。
+    const upstreamUrl = UEDRO_BASE + req.originalUrl;
+    proxyUpstream(upstreamUrl, uedroCookies, res, sendApiError, `uedro proxy ${mountPath}`, req);
+  };
+}
+
+/**
+ * 通用上游反向代理：发起请求、跟随重定向、重写文本里的绝对 URL、透传响应。
+ *
+ * 与 `streamUpstreamGet` 结构相似（内网直连 / 外网走代理、跟随 3xx、合并 cookie），
+ * 但不把 JSON 当错误——前端页面代理可能合法返回 JSON（如 SPA 的 config 接口）。
+ * 对 text/html / text/css / application/javascript 等文本类做绝对 URL 重写，
+ * 二进制（图片、字体、文件流）原样 pipe。
+ */
+function proxyUpstream(
+  urlStr: string,
+  cookies: Cookie[],
+  res: any,
+  sendApiError: (...args: any[]) => any,
+  label: string,
+  req?: any,
+): void {
+  const doReq = (u: string, jar: Cookie[], redirects: number) => {
+    if (redirects > 15) {
+      if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} too many redirects`);
+      return;
+    }
+    const url = new URL(u);
+    const isHttps = url.protocol === 'https:';
+    const method = req?.method || 'GET';
+    const headers: Record<string, string> = {
+      'User-Agent': UA,
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+    };
+    // GET 请求（页面/静态资源）用浏览器风格 Accept；POST 等 API 请求
+    // 用 */* 通用 Accept，并透传前端发来的 Content-Type。
+    if (method === 'GET') {
+      headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+    } else {
+      headers['Accept'] = '*/*';
+      const ct = req?.headers?.['content-type'];
+      if (ct) headers['Content-Type'] = ct;
+    }
+    // 用 cookieHeader 按 domain 过滤，确保带上匹配的 uedro 应用域 cookie。
+    const cookieStr = cookieHeader(jar, u);
+    if (cookieStr) headers['Cookie'] = cookieStr;
+    // Referer 设为上游同源根路径，让上游认为是从羽点站内跳转来的。
+    headers['Referer'] = UEDRO_BASE + '/';
+
+    const handleResponse = (resp: any) => {
+      // 合并本轮 set-cookie 到 jar，供重定向复用，并透传给浏览器（同源 cookie）。
+      const setCookies = ([] as string[]).concat((resp.headers['set-cookie'] as string[]) || []);
+      jar = mergeCookies(jar, parseCookieHeaders(setCookies, u));
+
+      const status = resp.statusCode ?? 0;
+      // 3xx 重定向：跟随 location 并带上更新后的 cookie。
+      // 重写 Location 为根相对路径，让浏览器走代理而非直连原站。
+      if (status >= 300 && status < 400 && resp.headers.location) {
+        const loc = String(resp.headers.location);
+        const next = new URL(loc, u).toString();
+        const rewrittenLoc = rewriteUrl(next);
+        resp.resume();
+        if (!res.headersSent) {
+          res.setHeader('Location', rewrittenLoc);
+          res.status(status).end();
+        }
+        return;
+      }
+
+      const contentType = String(resp.headers['content-type'] || '').toLowerCase();
+      const shouldRewrite = REWRITE_CONTENT_TYPES.some((t) => contentType.includes(t));
+
+      // 二进制或无需重写的文本：直接 pipe，透传 content-type / content-disposition。
+      if (!shouldRewrite) {
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', resp.headers['content-type'] || 'application/octet-stream');
+          if (resp.headers['content-length']) {
+            res.setHeader('Content-Length', resp.headers['content-length']);
+          }
+          // 透传 set-cookie（同源，浏览器会存下）。
+          if (setCookies.length) {
+            res.setHeader('Set-Cookie', setCookies);
+          }
+          res.status(status);
+        }
+        resp.pipe(res);
+        resp.on('error', () => {
+          if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} stream error`);
+        });
+        return;
+      }
+
+     // 文本类：整体缓存后重写绝对 URL，再发给浏览器。
+     const chunks: Buffer[] = [];
+     resp.on('data', (c: Buffer) => chunks.push(c));
+     resp.on('end', () => {
+       if (res.headersSent) return;
+       let body = Buffer.concat(chunks).toString('utf8');
+       body = rewriteProxyText(body, contentType);
+       // 重写后长度变了，删除 content-length，用 chunked 或不设。
+        const outHeaders: Record<string, any> = {
+          'Content-Type': resp.headers['content-type'] || 'text/html; charset=utf-8',
+        };
+        if (setCookies.length) outHeaders['Set-Cookie'] = setCookies;
+        res.status(status);
+        for (const [k, v] of Object.entries(outHeaders)) res.setHeader(k, v);
+        res.send(body);
+      });
+      resp.on('error', () => {
+        if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} response error`);
+      });
+    };
+
+    // POST/PUT 等带 body 的请求：把前端发来的请求体写给上游。
+    // express.json() 中间件在路由之前注册，已消费 req 流并把结果放
+    // req.body。此时直接序列化 req.body 发给上游；流未被消费（如跳过
+    // body parser 的路径）才走 data/end 事件读取。
+    // 3xx 重定向后不应重发 body（上游已处理完毕，重发会报错）。
+    let postBody: Buffer | null = null;
+    let streamBody = false;
+    if (method !== 'GET' && redirects === 0 && req) {
+      if (req.body !== undefined && req.body !== null) {
+        const bodyStr = typeof req.body === 'string' || Buffer.isBuffer(req.body)
+          ? req.body
+          : JSON.stringify(req.body);
+        postBody = Buffer.isBuffer(bodyStr) ? bodyStr : Buffer.from(bodyStr, 'utf8');
+      } else {
+        // 流未被消费，需要从 req 事件读取。
+        streamBody = true;
+      }
+    }
+    if (postBody) {
+      headers['Content-Length'] = String(postBody.length);
+    }
+
+   const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
+
+   const opts: https.RequestOptions = {
+      hostname: url.hostname,
+      port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
+      path: url.pathname + url.search,
+      method,
+      headers,
+      rejectUnauthorized: false,
+    };
+
+    const upstream = mod.request(opts, handleResponse);
+    upstream.setTimeout(30000, () => {
+      upstream.destroy();
+      if (!res.headersSent) sendApiError(res, 504, 'INTERNAL_ERROR', `${label} timeout`);
+    });
+    upstream.on('error', (e: any) => {
+      if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} failed: ${e?.message || String(e)}`);
+    });
+    // 发送请求体（或结束无 body 请求）。
+    if (postBody) {
+      upstream.end(postBody);
+    } else if (streamBody) {
+      const bodyChunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => bodyChunks.push(c));
+      req.on('end', () => upstream.end(Buffer.concat(bodyChunks)));
+      req.on('error', (e: any) => {
+        if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} request body error: ${e?.message || String(e)}`);
+      });
+    } else {
+      upstream.end();
+    }
+  };
+  doReq(urlStr, [...cookies], 0);
+}
+
+/**
+ * 把文本里的羽点绝对 URL 重写为同源根相对路径。
+ *
+ * `https://uedro.hikvision.com.cn/uedro/ux?id=1` → `/uedro/ux?id=1`，
+ * `https://uedro.hikvision.com.cn/portal/` → `/portal/`。
+ * 仅替换 host 部分，path + search 原样保留。这样浏览器请求落回本代理，
+ * 始终同源、cookie 始终随行。
+ */
+export function rewriteProxyText(body: string, contentType: string): string {
+  const ct = contentType.toLowerCase();
+  // 1. 域名改写：https/http 绝对域名 → 根相对；协议相对 //域名 → 根相对。
+  //    先替换 https:// 和 http:// 前缀的完整域名，再替换 //域名（协议相对）。
+  //    顺序很重要：先替换带协议的，避免 // 被误匹配。
+  let out = body
+    .replace(/https:\/\/uedro\.hikvision\.com\.cn/g, '')
+    .replace(/http:\/\/uedro\.hikvision\.com\.cn/g, '')
+    .replace(/\/\/uedro\.hikvision\.com\.cn/g, '');
+  // 2. HTML 专属：剥离 CSP meta 标签。
+  //    原站 CSP 限制脚本/连接来源为 'self'（指原站域），代理后 'self' 变成
+  //    本代理域，但 CSP 里的其它白名单仍指向原站，会阻止代理页加载资源。
+  //    剥掉 CSP meta 让浏览器不施加额外限制，代理页资源自然同源加载。
+  if (ct.includes('text/html')) {
+    out = out.replace(/<meta\s+http-equiv=["']?Content-Security-Policy["']?[^>]*>/gi, '');
+  }
+  return out;
+}
+
+/**
+ * 重写一个完整 URL 字符串为同源根相对路径（用于 Location 头）。
+ * `https://uedro.hikvision.com.cn/uedro/home?id=1` → `/uedro/home?id=1`。
+ * 非羽点地址原样返回（如外网 CDN 重定向）。
+ */
+function rewriteUrl(u: string): string {
+  if (u.startsWith(UEDRO_ABS_ORIGIN)) {
+    return u.slice(UEDRO_ABS_ORIGIN.length);
+  }
+  return u;
 }
 
 /**
@@ -860,11 +1342,16 @@ function forwardMultipart(
     const chunks: Buffer[] = [];
     for (const part of parts) {
       chunks.push(Buffer.from(`--${boundary}\r\n`));
-      if (part.filename) {
-        const disp = `Content-Disposition: form-data; name="${part.name}"; filename="${part.filename}"\r\n`;
-        chunks.push(Buffer.from(disp, 'utf8'));
-        chunks.push(Buffer.from(`Content-Type: ${part.contentType || 'application/octet-stream'}\r\n\r\n`));
-      } else {
+     if (part.filename) {
+      // 含非 ASCII 字符的文件名需 RFC 5987 编码，否则上游 Java/Tomcat 按 ISO-8859-1 解析
+       // 会导致中文文件名变成乱码，进而返回的 url/staticFileDir 也是乱码。
+       const fn = part.filename;
+       const asciiFn = fn.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '_');
+       const pctFn = encodeURIComponent(fn);
+       const disp = `Content-Disposition: form-data; name="${part.name}"; filename="${asciiFn}"; filename*=UTF-8''${pctFn}\r\n`;
+       chunks.push(Buffer.from(disp, 'utf8'));
+       chunks.push(Buffer.from(`Content-Type: ${part.contentType || 'application/octet-stream'}\r\n\r\n`));
+     } else {
         chunks.push(Buffer.from(`Content-Disposition: form-data; name="${part.name}"\r\n\r\n`));
       }
       chunks.push(Buffer.isBuffer(part.data) ? part.data : Buffer.from(part.data, 'utf8'));
@@ -896,12 +1383,25 @@ function forwardMultipart(
       rejectUnauthorized: false,
     };
 
-    const handleResp = (resp: any) => {
-      const data: Buffer[] = [];
-      resp.on('data', (c: Buffer) => data.push(c));
-      resp.on('end', () => resolve({ body: Buffer.concat(data).toString('utf8') }));
-      resp.on('error', (e: any) => reject(new Error(`${label} response error: ${e?.message || String(e)}`)));
-    };
+   const handleResp = (resp: any) => {
+     const data: Buffer[] = [];
+     resp.on('data', (c: Buffer) => data.push(c));
+     resp.on('end', () => {
+       const buf = Buffer.concat(data);
+       // 上游可能返回 UTF-8 或 GBK，按 Content-Type charset 判断。
+       const ct = resp.headers?.['content-type'] || '';
+       const charset = /charset\s*=\s*["']?([\w-]+)/i.exec(ct)?.[1]?.toLowerCase() || 'utf-8';
+       let body: string;
+       if (charset === 'gbk' || charset === 'gb2312' || charset === 'gb18030') {
+         try { body = new TextDecoder('gbk').decode(buf); }
+         catch { body = buf.toString('utf8'); }
+       } else {
+         body = buf.toString('utf8');
+       }
+       resolve({ body });
+     });
+     resp.on('error', (e: any) => reject(new Error(`${label} response error: ${e?.message || String(e)}`)));
+   };
 
     let req: http.ClientRequest;
     if (proxy && !bypass) {

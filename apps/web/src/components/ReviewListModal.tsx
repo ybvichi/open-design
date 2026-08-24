@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './ReviewListModal.module.css';
 import { pick, computeRemainDays, withTotal, reviewTypeMeta, formatVersion, buildManuscriptPreviewUrl } from './reviewMeta';
 import { ReviewDetailDrawer } from './ReviewDetailModal';
+import { ReviewManuscriptUpdateModal } from './ReviewManuscriptUpdateModal';
+import { ReviewEditModal } from './ReviewEditModal';
+import { getStoredUserInfo } from '../auth/auth';
 
 /** 卡片「更多」下拉的操作。评审详情为第一项（打开右侧抽屉，非异步操作），
  *  其余三项对齐羽点原站卡片左下角的子功能菜单。 */
-type CardAction = 'detail' | 'download' | 'remind' | 'notify';
+type CardAction = 'detail' | 'download' | 'remind' | 'notify' | 'finish';
 
 /** 单卡片操作状态：当前展开的下拉、各项的 pending / 结果反馈。 */
 interface CardActionState {
@@ -57,7 +60,16 @@ const REVIEW_TYPES: { value: string; label: string }[] = [
   { value: '11', label: 'Pixso-Handoff' },
 ];
 
-export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ReviewListModal({
+  open,
+  onClose,
+  projectId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 当前 open-design 项目 ID，供「更新评审稿」走 Axure 导出流程使用。 */
+  projectId?: string;
+}) {
   // loading 区分两种语义：首屏/筛选切换的整屏 loading，和滚动到底的「加载更多」loading。
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -80,6 +92,12 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
   // 评审详情抽屉：叠加在列表画框之上，由卡片「更多」→「评审详情」触发。
   const [detailReview, setDetailReview] = useState<any | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // 更新评审稿小 modal：叠加在列表画框之上，由卡片右下角「更新」按钮触发。
+ const [updateReview, setUpdateReview] = useState<any | null>(null);
+ const [updateOpen, setUpdateOpen] = useState(false);
+  // 编辑评审 modal：叠加在列表画框之上，由卡片右下角「编辑」按钮触发。
+  const [editReview, setEditReview] = useState<any | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   // 弹窗关闭 / 组件卸载后不再写状态，避免异步回填到已卸载组件。
   const aliveRef = useRef(true);
@@ -269,10 +287,10 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
               ))}
             </select>
             <input
-              type="search"
-              className={styles.search}
-              placeholder="搜索评审名称"
-              value={reviewName}
+             type="search"
+             className={styles.search}
+             placeholder="请输入评审名称/创建人/项目名称"
+             value={reviewName}
               onChange={(e) => setReviewName(e.target.value)}
               aria-label="按评审名称搜索"
             />
@@ -295,16 +313,24 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
             </div>
           ) : (
             <div className={styles.grid}>
-              {items.map((r: any, i: number) => (
-                <ReviewCard
-                  key={r?.reviewNum ?? r?.id ?? i}
-                  r={r}
-                  onOpenDetail={(review) => {
-                    setDetailReview(review);
-                    setDetailOpen(true);
-                  }}
-                />
-              ))}
+             {items.map((r: any, i: number) => (
+               <ReviewCard
+                 key={r?.reviewNum ?? r?.id ?? i}
+                 r={r}
+                 onOpenDetail={(review) => {
+                   setDetailReview(review);
+                   setDetailOpen(true);
+                 }}
+                 onOpenUpdate={(review) => {
+                   setUpdateReview(review);
+                   setUpdateOpen(true);
+                 }}
+                 onOpenEdit={(review) => {
+                   setEditReview(review);
+                   setEditOpen(true);
+                 }}
+              />
+             ))}
             </div>
           )}
 
@@ -347,12 +373,27 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
             关闭
           </button>
         </div>
-        <ReviewDetailDrawer
-          review={detailReview}
-          open={detailOpen}
-          onClose={() => setDetailOpen(false)}
-        />
-      </div>
+       <ReviewDetailDrawer
+         review={detailReview}
+         open={detailOpen}
+         onClose={() => setDetailOpen(false)}
+       />
+       <ReviewManuscriptUpdateModal
+         open={updateOpen}
+         onClose={() => setUpdateOpen(false)}
+         reviewId={pick(updateReview?.reviewId, updateReview?.id)}
+         category={String(updateReview?.reviewType ?? '')}
+        reviewName={pick(updateReview?.reviewName, updateReview?.name)}
+        projectId={projectId}
+        manuscriptId={updateReview?.manuscriptDtos?.[0]?.manuscriptId ?? ''}
+      />
+      <ReviewEditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        reviewId={pick(editReview?.reviewId, editReview?.id)}
+        reviewName={pick(editReview?.reviewName, editReview?.name)}
+      />
+     </div>
     </div>,
     document.body,
   );
@@ -374,14 +415,28 @@ export function ReviewListModal({ open, onClose }: { open: boolean; onClose: () 
  *
  * 示对照（第一条）：王欢44 · 剩余 0 天 · ...xlsx · 评审率 0% · 4/7 · 1/7 · 缺陷 0。
  * 注意：分母是 repeat.reviewersNum（7），不是 reviewAllNum（8）——示例明确为 /7。 */
-function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) => void }) {
+function ReviewCard({
+  r,
+  onOpenDetail,
+  onOpenUpdate,
+  onOpenEdit,
+}: {
+  r: any;
+  onOpenDetail: (review: any) => void;
+  onOpenUpdate: (review: any) => void;
+  onOpenEdit: (review: any) => void;
+}) {
   // 主标题：优先项目名，缺失则取首个稿件文件名（即示例中的 xlsx 文件名），再退到评审名称。
   const manuscriptFile = r?.manuscriptDtos?.[0]?.fileName;
   const title = pick(r?.projectName, manuscriptFile, r?.reviewName);
-  const creator = pick(r?.creator, r?.creatorName);
-  const reviewName = pick(r?.reviewName, r?.name);
+ const creator = pick(r?.creator, r?.creatorName);
+ const reviewName = pick(r?.reviewName, r?.name);
+  // 仅当评审创建人与当前登录用户同名时，才允许「更新」「关闭」操作。
+ const currentDisplayName = getStoredUserInfo()?.displayName;
+ const canUpdate =
+    Boolean(currentDisplayName) && Boolean(creator) && creator === currentDisplayName;
 
-  // 评审率：上游直接给百分比字符串。
+ // 评审率：上游直接给百分比字符串。
   const coreRate = pick(r?.coreReviewerRatePercent, r?.coreReviewerRate, r?.reviewRate);
 
   // 已完成 / 评审中 / 总数：分母取 repeat.reviewersNum（评委人数），与「4 / 7」「1 / 7」对齐。
@@ -400,8 +455,10 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
   // 用数值比较：0 视为「无」，缺失字段当作 0。
   const defectsCount = Number(r?.defectsNum ?? r?.manuscriptDtos?.[0]?.defectNums ?? r?.defectNum ?? r?.defectCount ?? 0);
   const verifyCount = Number(r?.verifyNum ?? r?.verifyCount ?? 0);
-  const reviewEnded = Number(r?.endStatus) === 3;
-  const remainDays = computeRemainDays(r?.preReviewEndTimeDate, r?.preReviewEndTime);
+ const reviewEnded = Number(r?.endStatus) === 3;
+  // 已完成（endStatus===3）时禁用「更新」「编辑」「关闭」。
+  const canAction = canUpdate && !reviewEnded;
+ const remainDays = computeRemainDays(r?.preReviewEndTimeDate, r?.preReviewEndTime);
   const urgent = remainDays === null ? false : remainDays <= 0;
   const remainLabel = remainDays === null ? '—' : `剩余 ${Math.max(0, remainDays)} 天`;
 
@@ -422,14 +479,27 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
   const versionLabel = formatVersion(r?.manuscriptDtos?.[0]?.version);
 
   // 「更多」下拉菜单 + 三项操作（下载资源 / 一键提醒 / 开启通知）。
-  const [menu, setMenu] = useState<CardActionState>({
-    open: false,
-    pending: null,
-    toast: null,
-    // subscriptionStatus 上游是字符串 "false"/"true"；缺失视为关。
-    notifyOn: String(r?.subscriptionStatus) === 'true',
-  });
-  const menuRef = useRef<HTMLDivElement | null>(null);
+ const [menu, setMenu] = useState<CardActionState>({
+   open: false,
+   pending: null,
+   toast: null,
+   // subscriptionStatus 上游是字符串 "false"/"true"；缺失视为关。
+   notifyOn: String(r?.subscriptionStatus) === 'true',
+ });
+  // 「关闭」评审的二次确认气泡：点「关闭」先弹出确认，再调 reviewFinish。
+  const [confirmFinish, setConfirmFinish] = useState(false);
+  const confirmWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 点确认气泡外部收起。
+  useEffect(() => {
+    if (!confirmFinish) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!confirmWrapRef.current?.contains(e.target as Node)) setConfirmFinish(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [confirmFinish]);
+ const menuRef = useRef<HTMLDivElement | null>(null);
 
   // 点卡片外部收起下拉。
   useEffect(() => {
@@ -512,7 +582,20 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
         });
         const j = await resp.json().catch(() => null);
         if (!resp.ok || !j?.ok) throw new Error(j?.error?.message || j?.msg || `HTTP ${resp.status}`);
-        setMenu((m) => ({ ...m, pending: null, toast: { text: '已发送催办提醒', tone: 'ok' } }));
+       setMenu((m) => ({ ...m, pending: null, toast: { text: '已发送催办提醒', tone: 'ok' } }));
+       return;
+     }
+
+      if (action === 'finish') {
+        if (!reviewId || reviewId === '—') throw new Error('缺少 reviewId');
+        const resp = await fetch('/api/hik/uedro/reviewFinish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reviewId }),
+        });
+        const j = await resp.json().catch(() => null);
+        if (!resp.ok || !j?.ok) throw new Error(j?.error?.message || j?.msg || `HTTP ${resp.status}`);
+        setMenu((m) => ({ ...m, pending: null, toast: { text: '已关闭评审', tone: 'ok' } }));
         return;
       }
 
@@ -602,7 +685,85 @@ function ReviewCard({ r, onOpenDetail }: { r: any; onOpenDetail: (review: any) =
         </div>
       </div>
 
-      <div className={styles.cardFoot}>
+    <div className={styles.cardFoot}>
+    {/* 卡片右下角「更新」按钮：打开更新评审稿小 modal。仅创建人可用，已完成时禁用。 */}
+    {canUpdate ? (
+      <button
+        type="button"
+        className={styles.updateBtn}
+        disabled={!canAction}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (canAction) onOpenUpdate(r);
+        }}
+        title={canAction ? '更新评审稿' : '已完成，不可更新'}
+      >
+        更新
+      </button>
+    ) : null}
+    {/* 卡片右下角「编辑」按钮：打开编辑评审 modal。仅创建人可用，已完成时禁用。 */}
+    {canUpdate ? (
+      <button
+        type="button"
+        className={styles.updateBtn}
+        disabled={!canAction}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (canAction) onOpenEdit(r);
+        }}
+        title={canAction ? '编辑评审' : '已完成，不可编辑'}
+      >
+        编辑
+      </button>
+    ) : null}
+    {/* 卡片右下角「关闭」按钮：点开二次确认气泡，确认后调 reviewFinish。仅创建人可用，已完成时禁用。 */}
+    {canUpdate ? (
+      <div
+        className={styles.closeWrap}
+        ref={confirmWrapRef}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className={styles.updateBtn}
+          disabled={!canAction || menu.pending === 'finish'}
+          onClick={() => {
+            if (!canAction) return;
+            setMenu((m) => ({ ...m, toast: null }));
+            setConfirmFinish((v) => !v);
+          }}
+          title={canAction ? '关闭评审' : '已完成，不可关闭'}
+        >
+          {menu.pending === 'finish' ? '关闭中…' : '关闭'}
+        </button>
+        {confirmFinish ? (
+          <div className={styles.confirmPop} role="dialog" aria-label="确认关闭评审">
+            <span className={styles.confirmText}>确认关闭该评审？关闭后不可恢复。</span>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.confirmCancel}
+                onClick={() => setConfirmFinish(false)}
+                disabled={menu.pending === 'finish'}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className={styles.confirmOk}
+                onClick={() => {
+                  setConfirmFinish(false);
+                  void runAction('finish');
+                }}
+                disabled={menu.pending === 'finish'}
+              >
+                {menu.pending === 'finish' ? '关闭中…' : '确认关闭'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : null}
         {/* 卡片左下角「更多」下拉：评审详情（首位） / 下载资源 / 一键提醒 / 开启通知。 */}
         <div
           className={styles.moreWrap}

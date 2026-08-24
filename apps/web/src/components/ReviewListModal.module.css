@@ -131,7 +131,7 @@
   border-color: var(--border-strong, var(--border));
 }
 .search {
-  width: 200px;
+  width: 320px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border);
@@ -369,13 +369,102 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: auto;
+}
+
+/* ── 卡片右下角「更新」按钮：与「更多」同款视觉语言 ── */
+.updateBtn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.updateBtn:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong, var(--border));
+}
+
+/* ── 卡片右下角「关闭」按钮 + 二次确认气泡 ── */
+.closeWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.confirmPop {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+  transform-origin: bottom right;
+  animation: rlmMenuIn 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.confirmText {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirmCancel,
+.confirmOk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 140ms ease-out;
+}
+.confirmCancel:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+.confirmOk {
+  background: #d14343;
+  color: #fff;
+  border-color: #d14343;
+}
+.confirmOk:hover:not(:disabled) {
+  background: #c83e3e;
+  border-color: #c83e3e;
+}
+.confirmCancel:disabled,
+.confirmOk:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── 卡片左下角「更多」下拉 ─────────────────────────────── */
 .moreWrap {
   position: absolute;
-  top:-28px;
+  top: 0;
   left:0;
   display: inline-flex;
   align-items: center;

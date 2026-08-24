@@ -161,7 +161,7 @@ import {
   rewriteInlinedScriptAssetRefs,
 } from './file-viewer-preview-assets';
 import { resolvePoweredPreviewUrl } from '../runtime/powered-preview';
-import { saveTemplate } from '../state/projects';
+import { saveTemplate, getProject } from '../state/projects';
 import type {
   LiveArtifactEventItem,
   LiveArtifact,
@@ -11654,7 +11654,12 @@ function HtmlViewer({
  function triggerAxureExport() {
     setDownloadMenuOpen(false);
     setExportToast({ message: '正在生成 Axure 交互稿...', tone: 'loading' });
-    exportProjectAsAxureZip({ projectId, title: exportTitle })
+    // 压缩包名采用项目名称：先拉项目详情拿 name，再传入导出。
+    getProject(projectId)
+      .then((proj) => proj?.name)
+      .then((projectName) =>
+        exportProjectAsAxureZip({ projectId, title: exportTitle, projectName }),
+      )
       .then((result: { ok: true; pageCount: number } | { ok: false; error: string }) => {
         if (result.ok) {
           setExportToast({ message: `已导出 ${result.pageCount} 个文件`, tone: 'success' });
@@ -14936,8 +14941,13 @@ function HtmlViewer({
         </div>,
         document.body,
       ) : null}
-      <ReviewListModal open={reviewListModalOpen} onClose={() => setReviewListModalOpen(false)} />
-      <ReviewAddModal open={reviewAddModalOpen} onClose={() => setReviewAddModalOpen(false)} />
+      <ReviewListModal
+        open={reviewListModalOpen}
+        onClose={() => setReviewListModalOpen(false)}
+        projectId={projectId}
+      />
+      {/* projectId 透传给 ReviewListModal，供「更新评审稿」走 Axure 导出流程使用。 */}
+     <ReviewAddModal open={reviewAddModalOpen} onClose={() => setReviewAddModalOpen(false)} projectId={projectId} />
       {deploySavedToast && typeof document !== 'undefined' ? createPortal(
         <Toast
           message={deploySavedToast.message}

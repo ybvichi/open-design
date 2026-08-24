@@ -1,15 +1,19 @@
 // 工具脚本：把当前项目的 HTML 文件打包成标准 Axure RP HTML 交互稿压缩包。
 // 1. fetchProjectFiles 拉文件列表；2. HTML 文件按目录结构生成页面树导航；
-// 3. 取全部工程文件（文本 + 二进制）按原始目录结构放入 files/<path>，
-//    保证 HTML 内 CSS/JS/图片等相对路径引用可正确解析；
-// 4. fetch 拉取 /axure-prototype 骨架资源（含 Axure RP 运行时），以
-//    data/document.js 为模板，用标记替换法注入生成的 PAGES 数组；
-// 5. buildZip 生成 Blob，triggerDownload 下载。
+// 3. 为每个 HTML 页面生成标准 Axure 页面结构：
+//    - 根目录 <pageName>.html：Axure 页面壳，加载运行时 + document.js + per-page data.js；
+//    - files/<pageName>/data.js：调用 $axure.loadCurrentPage 注入页面元数据（pageName、notes 等），
+//      使 Axure player 能追踪页面切换并维护 annotation 状态；
+//    - files/<pageName>/styles.css：页面样式占位。
+// 4. 工程非 HTML 文件按原始目录结构放入 images/<pageName>/，保证相对路径引用可解析；
+// 5. fetch 拉取 /axure-prototype 骨架资源（含 Axure RP 运行时），
+//    以 data/document.js 为模板注入生成的站点地图；
+// 6. buildZip 生成 Blob，triggerDownload 下载。
 
 import { buildZip, type ZipEntry } from './zip';
 import { fetchProjectFiles, fetchProjectFileText, fetchProjectFileBase64 } from '../providers/registry';
 import type { ProjectFile } from '../types';
-import { safeFilename, triggerDownload } from './exports';
+import { triggerDownload } from './exports';
 // 构建时生成的骨架文件清单（相对 axure-prototype/ 的路径列表）。
 import skeletonManifest from '../../public/axure-prototype/skeleton-manifest.json';
 
@@ -24,11 +28,13 @@ interface AxurePageNode {
 export interface AxureExportOptions {
   projectId: string;
   title?: string;
+  projectName?: string;
   onProgress?: (done: number, total: number) => void;
+  returnBlob?: boolean;
 }
 
 export type AxureExportResult =
-  | { ok: true; pageCount: number }
+  | { ok: true; pageCount: number; blob?: Blob; zipName?: string }
   | { ok: false; error: string };
 
 const HTML_FILE_EXTS = /\.html?$/i;
@@ -37,12 +43,31 @@ const TEXT_FILE_EXTS = /\.(html?|css|js|mjs|cjs|json|md|svg|xml|txt|csv|webmanif
 const BINARY_FILE_EXTS = /\.(png|gif|ico|woff2?|cur|jpg|jpeg|webp|mp3|mp4|ttf|otf|eot)$/i;
 const SKELETON_BASE = '/axure-prototype';
 
+// 生成 6 位随机字母数字后缀，用于页面文件名和 ID，
+// 避免与骨架保留文件名（index.html、start.html 等）冲突。
+function randomSuffix(len = 6): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let s = '';
+  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+// 生成文件系统安全的页面 URL 文件名（不含扩展名）。
+// Axure 参考包使用页面名直接作为文件名（如 视频融合-设备信息.html），
+// 但为了跨平台安全，这里替换文件系统非法字符为下划线。
+// 末尾追加随机后缀，避免与骨架保留文件名（index、start 等）冲突。
+function pageUrlSlug(rawPath: string): string {
+  const fileName = rawPath.split('/').pop() ?? rawPath;
+  const name = fileName.replace(/\.html?$/i, '');
+  // 替换文件系统非法字符（Windows: <>:"/\|?*）为下划线
+  return `${name.replace(/[<>:"/\\|?*]/g, '_').trim() || 'page'}_${randomSuffix()}`;
+}
+
 function pageIdFromPath(rawPath: string, used: Set<string>): string {
   const base =
     rawPath.replace(/\.html?$/i, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'page';
-  let id = base;
-  let n = 2;
-  while (used.has(id)) id = `${base}-${n++}`;
+  let id = `${base}-${randomSuffix()}`;
+  while (used.has(id)) id = `${base}-${randomSuffix()}`;
   used.add(id);
   return id;
 }
@@ -58,16 +83,28 @@ function escapeJsString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function isHtmlPage(file: ProjectFile): boolean {
   if (file.type === 'dir') return false;
   return HTML_FILE_EXTS.test(file.path || file.name);
 }
 
+interface PageInfo {
+  node: AxurePageNode;
+  filePath: string;
+  slug: string;
+  pageName: string;
+}
+
 function buildPageTree(
   htmlFiles: ProjectFile[],
   usedIds: Set<string>,
-): { nodes: AxurePageNode[]; idByPath: Map<string, string> } {
-  const idByPath = new Map<string, string>();
+): { nodes: AxurePageNode[]; pages: PageInfo[] } {
+  const pages: PageInfo[] = [];
+  const slugToId = new Map<string, string>();
   type DirNode = { name: string; pages: AxurePageNode[]; dirs: Map<string, DirNode> };
   const root: DirNode = { name: '', pages: [], dirs: new Map() };
   function ensureDir(segments: string[]): DirNode {
@@ -89,8 +126,18 @@ function buildPageTree(
     segments.pop();
     const parent = segments.length ? ensureDir(segments) : root;
     const id = pageIdFromPath(p, usedIds);
-    idByPath.set(p, id);
-    parent.pages.push({ id, pageName: pageNameFromPath(p), type: 'Wireframe', url: `files/${p}` });
+    const slug = pageUrlSlug(p);
+    const pageName = pageNameFromPath(p);
+    // slug 已含随机后缀，冲突概率极低；此处为安全兜底。
+    let finalSlug = slug;
+    while (slugToId.has(finalSlug) && slugToId.get(finalSlug) !== id) {
+      finalSlug = pageUrlSlug(p);
+    }
+    slugToId.set(finalSlug, id);
+    // Axure 参考包中 url 是根目录下的扁平文件名（如 视频融合-设备信息.html）
+    const node: AxurePageNode = { id, pageName, type: 'Wireframe', url: `${finalSlug}.html` };
+    parent.pages.push(node);
+    pages.push({ node, filePath: p, slug: finalSlug, pageName });
   }
   function collapse(dir: DirNode): AxurePageNode[] {
     const result: AxurePageNode[] = [];
@@ -109,7 +156,7 @@ function buildPageTree(
     }
     return result;
   }
-  return { nodes: collapse(root), idByPath };
+  return { nodes: collapse(root), pages };
 }
 
 // 把页面树序列化为 Axure RP document.js 中 PAGES 数组的 JS 源码。
@@ -145,26 +192,30 @@ const PAGES_MARKER_END = '// ===== PAGES END =====';
 
 // 模板中 projectName 的占位符；导出时替换为实际项目标题。
 const PROJECT_NAME_PLACEHOLDER = '__AXURE_PROJECT_NAME__';
+const ROOT_FOLDER_PLACEHOLDER = '__AXURE_ROOT_FOLDER__';
 
 function injectPagesIntoDocument(template: string, pageNodes: AxurePageNode[], projectName: string): string {
   const startIdx = template.indexOf(PAGES_MARKER_START);
   const endIdx = template.indexOf(PAGES_MARKER_END);
+  const pagesJs = buildPagesJs(pageNodes);
+  let result: string;
   if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) {
     // 模板缺失标记时退化为把 PAGES 变量追加到末尾。
-    const pagesJs = buildPagesJs(pageNodes);
-    const fallback = `${template}\nvar PAGES = [\n${pagesJs}\n];\n`;
-    return fallback.replaceAll(PROJECT_NAME_PLACEHOLDER, escapeJsString(projectName));
+    result = `${template}\nvar PAGES = [\n${pagesJs}\n];\n`;
+  } else {
+    // 与 generate-sitemap.ps1 同样的策略：替换从 startIdx 到 endIdx 后第一个换行。
+    const arrayEnd = template.indexOf('\n', endIdx);
+    const blockEnd = arrayEnd < 0 ? template.length : arrayEnd;
+    const newBlock =
+      `${PAGES_MARKER_START}\n` +
+      `    var PAGES = [\n${pagesJs}\n    ];\n` +
+      `    ${PAGES_MARKER_END}`;
+    result = template.slice(0, startIdx) + newBlock + template.slice(blockEnd);
   }
-  // 与 generate-sitemap.ps1 同样的策略：替换从 startIdx 到 endIdx 后第一个换行。
-  const arrayEnd = template.indexOf('\n', endIdx);
-  const blockEnd = arrayEnd < 0 ? template.length : arrayEnd;
-  const pagesJs = buildPagesJs(pageNodes);
-  const newBlock =
-    `${PAGES_MARKER_START}\n` +
-    `    var PAGES = [\n${pagesJs}\n    ];\n` +
-    `    ${PAGES_MARKER_END}`;
-  const replaced = template.slice(0, startIdx) + newBlock + template.slice(blockEnd);
-  return replaced.replaceAll(PROJECT_NAME_PLACEHOLDER, escapeJsString(projectName));
+  const escapedName = escapeJsString(projectName);
+  return result
+    .replaceAll(PROJECT_NAME_PLACEHOLDER, escapedName)
+    .replaceAll(ROOT_FOLDER_PLACEHOLDER, escapedName);
 }
 
 async function fetchTextOrNull(url: string): Promise<string | null> {
@@ -214,6 +265,179 @@ function base64DataUrlToBytes(dataUrl: string | null): Uint8Array | null {
   }
 }
 
+// 以原始 HTML 为基础，注入 Axure RP 运行时代码。
+// 策略：不拆解原始 HTML，而是在 </head> 前插入 Axure 运行时脚本链
+// （CSS、jQuery、axure 脚本、document.js、per-page data.js），
+// 并在 <body> 内包裹 <div id="base">（Axure annotation 系统依赖此容器）。
+// 原始页面的样式表、脚本、meta、结构全部保留不变。
+function injectAxureRuntimeIntoHtml(originalHtml: string, pageSlug: string, pageName: string): string {
+  const escapedTitle = escapeHtml(pageName);
+  const axureHead = `
+<!-- ===== Axure RP Runtime (injected) ===== -->
+    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet" />
+    <link href="data/styles.css" type="text/css" rel="stylesheet" />
+    <link href="files/${pageSlug}/styles.css" type="text/css" rel="stylesheet" />
+    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
+    <script src="resources/scripts/axure/axQuery.js"></script>
+    <script src="resources/scripts/axure/globals.js"></script>
+    <script src="resources/scripts/axutils.js"></script>
+    <script src="resources/scripts/axure/annotation.js"></script>
+    <script src="resources/scripts/axure/axQuery.std.js"></script>
+    <script src="resources/scripts/axure/doc.js"></script>
+    <script src="resources/scripts/messagecenter.js"></script>
+    <script src="resources/scripts/axure/events.js"></script>
+    <script src="resources/scripts/axure/recording.js"></script>
+    <script src="resources/scripts/axure/action.js"></script>
+    <script src="resources/scripts/axure/expr.js"></script>
+    <script src="resources/scripts/axure/geometry.js"></script>
+    <script src="resources/scripts/axure/flyout.js"></script>
+    <script src="resources/scripts/axure/model.js"></script>
+    <script src="resources/scripts/axure/repeater.js"></script>
+    <script src="resources/scripts/axure/sto.js"></script>
+    <script src="resources/scripts/axure/utils.temp.js"></script>
+    <script src="resources/scripts/axure/variables.js"></script>
+    <script src="resources/scripts/axure/drag.js"></script>
+    <script src="resources/scripts/axure/move.js"></script>
+    <script src="resources/scripts/axure/visibility.js"></script>
+    <script src="resources/scripts/axure/style.js"></script>
+    <script src="resources/scripts/axure/adaptive.js"></script>
+    <script src="resources/scripts/axure/tree.js"></script>
+    <script src="resources/scripts/axure/init.temp.js"></script>
+    <script src="resources/scripts/axure/legacy.js"></script>
+    <script src="resources/scripts/axure/viewer.js"></script>
+    <script src="resources/scripts/axure/math.js"></script>
+    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
+    <script src="data/document.js"></script>
+    <script src="files/${pageSlug}/data.js"></script>
+    <script type="text/javascript">
+      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
+      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
+      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
+    </script>
+<!-- ===== /Axure RP Runtime ===== -->`;
+
+  let result = originalHtml;
+
+  // 在 </head> 前注入 Axure 运行时代码
+  if (/<\/head>/i.test(result)) {
+    result = result.replace(/<\/head>/i, `${axureHead}\n</head>`);
+  } else {
+    // 没有 </head>：如果也没有 <head>，在 <html> 后插入一个 <head>
+    if (/<html[^>]*>/i.test(result)) {
+      result = result.replace(/(<html[^>]*>)/i, `$1\n<head>${axureHead}\n</head>`);
+    } else {
+      result = `${axureHead}\n${result}`;
+    }
+  }
+
+  // 在 <body> 标签后插入 <div id="base">，在 </body> 前闭合 </div>
+  // Axure annotation 系统依赖 #base 容器来定位页面内容
+  if (/<body[^>]*>/i.test(result) && /<\/body>/i.test(result)) {
+    result = result.replace(/(<body[^>]*>)/i, `$1\n    <div id="base" class="">`);
+    result = result.replace(/<\/body>/i, `    </div>\n</body>`);
+  } else {
+    // 没有 <body> 标签：在整个内容外包裹一层
+    result = `<body>\n    <div id="base" class="">\n${result}\n    </div>\n</body>`;
+  }
+
+  // 确保 <title> 存在（Axure player 依赖 title 显示页面名）
+  if (!/<title>/i.test(result)) {
+    const titleTag = `<title>${escapedTitle}</title>`;
+    if (/<head[^>]*>/i.test(result)) {
+      result = result.replace(/(<head[^>]*>)/i, `$1\n    ${titleTag}`);
+    } else {
+      result = `<head>\n    ${titleTag}\n</head>\n${result}`;
+    }
+  }
+
+  return result;
+}
+
+// 生成 per-page data.js 存根。Axure 参考包中每个 files/<pageName>/data.js
+// 调用 $axure.loadCurrentPage 注入页面元数据，player 依赖此调用初始化页面状态。
+// 包含 pageName 和空的 notes/annotations，使 annotation.js 能正常初始化页面切换。
+function buildPageDataJs(pageName: string, pageSlug: string): string {
+  const escapedPageName = escapeJsString(pageName);
+  const escapedUrl = escapeJsString(`${pageSlug}.html`);
+  return `$axure.loadCurrentPage(
+(function() {
+    var _ = function() { var r={},a=arguments; for(var i=0; i<a.length; i+=2) r[a[i]]=a[i+1]; return r; }
+    var _creator = function() { return _("url","${escapedUrl}","pageName","${escapedPageName}","defaultAdaptiveView","","size",_("width",0,"height",0),"adaptiveViews",[],"sketchKeys",["s0"],"variables",["OnLoadVariable"],"page",_("packageId","${pageSlug}","type","Axure:Page","pageName","${escapedPageName}","notes",_("widgetNotes",[],"ownerToFns",{}),"style",_("baseStyle","627587b6038d43cca051c114ac41ad32","pageAlignment","center","fill",_("fillType","solid","color",0xFFFFFFFF),"image",null,"favicon",null,"sketchFactor","0","colorStyle","appliedFont","fontName","'ArialMT', 'Arial', sans-serif","borderWidth","1","borderVisibility","all","borderFill",0xFF797979,"cornerRadius","0","cornerVisibility","all","outerShadow",_("on",false,"offsetX",5,"offsetY",5,"blurRadius",5,"spread",5,"color",_("r",0,"g",0,"b",0,"a",0.349019607843137))),"annotations",[]); };
+    return _creator();
+})());
+`;
+}
+
+// 将单个引用路径解析为 webresources/<project-root-relative-path> 形式。
+// filePath 是该 HTML 文件在工程中的原始路径（如 dashboard/sub/page.html）。
+// ref 是 HTML 中出现的相对/绝对引用（如 ../../assets/logo.png 或 /css/style.css）。
+// 不处理的引用：data:、http(s):、协议相对 //、# 锚点、mailto/tel/javascript: 等。
+function resolveWebResourcePath(ref: string, filePath: string): string {
+  const trimmed = ref.trim();
+  if (!trimmed) return ref;
+  // 跳过 data URI、绝对 URL、协议相对 URL、纯锚点、特殊协议
+  if (/^(data:|https?:|\/\/|#|mailto:|tel:|javascript:|blob:|file:)/i.test(trimmed)) return ref;
+  // 跳过 Axure 框架自身路径（resources/、data/、files/、plugins/）
+  if (/^(resources\/|data\/|files\/|plugins\/)/i.test(trimmed)) return ref;
+
+  let projectRelative: string;
+  if (trimmed.startsWith('/')) {
+    // 绝对路径：去掉开头的 / 即为工程根相对路径
+    projectRelative = trimmed.slice(1);
+  } else {
+    // 相对路径：从文件所在目录向上解析
+    // 空字符串 split('/') 会产生 ['']，过滤掉空段以避免 webresources//path 双斜杠
+    const fileDir = filePath.split('/').slice(0, -1).filter((seg) => seg.length > 0);
+    const refParts = trimmed.split('/');
+    const stack = [...fileDir];
+    for (const part of refParts) {
+      if (part === '..') {
+        if (stack.length > 0) stack.pop();
+      } else if (part === '.' || part === '') {
+        continue;
+      } else {
+        stack.push(part);
+      }
+    }
+    projectRelative = stack.join('/');
+  }
+  return `webresources/${projectRelative}`;
+}
+
+// 重写 HTML body 内容中的所有资源引用路径，使其指向 webresources/ 目录。
+// 处理：src="..."、href="..."、srcset="..."、CSS url(...)、poster="..."。
+function rewriteResourcePaths(html: string, filePath: string): string {
+  let result = html;
+
+  // src="..." 和 href="..." 和 poster="..." 属性（单引号或双引号）
+  result = result.replace(/(\b(?:src|href|poster)\s*=\s*)(["'])([^"']*)\2/gi, (_m, prefix: string, _q: string, val: string) => {
+    return `${prefix}"${resolveWebResourcePath(val, filePath)}"`;
+  });
+
+  // srcset="url1 1x, url2 2x" — 逐个 URL 重写
+  result = result.replace(/(\bsrcset\s*=\s*)(["'])([^"']*)\2/gi, (_m, prefix: string, _q: string, val: string) => {
+    const rewritten = val.split(',').map((pair: string) => {
+      const parts = pair.trim().split(/\s+/);
+      if (parts.length === 0) return pair;
+      const first = parts[0];
+      if (first === undefined) return pair;
+      parts[0] = resolveWebResourcePath(first, filePath);
+      return parts.join(' ');
+    }).join(', ');
+    return `${prefix}"${rewritten}"`;
+  });
+
+  // CSS url(...) — 包括内联 style 属性和 <style> 标签内容
+  // 仅处理带文件后缀的资源路径（如 url(../images/logo.png)），
+  // 跳过 SVG 引用（url(#gradientId)）、CSS 变量等无后缀值。
+  result = result.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m: string, _q: string, val: string) => {
+    if (!/\.[a-z0-9]+$/i.test(val.trim())) return m;
+    return `url(${resolveWebResourcePath(val, filePath)})`;
+  });
+
+  return result;
+}
+
 export async function exportProjectAsAxureZip(opts: AxureExportOptions): Promise<AxureExportResult> {
   const { projectId, title } = opts;
   let files: ProjectFile[];
@@ -229,7 +453,7 @@ export async function exportProjectAsAxureZip(opts: AxureExportOptions): Promise
   }
 
   const usedIds = new Set<string>();
-  const { nodes: pageNodes, idByPath } = buildPageTree(htmlFiles, usedIds);
+  const { nodes: pageNodes, pages } = buildPageTree(htmlFiles, usedIds);
   const docName = title?.trim() || 'Axure RP HTML 交互稿';
 
   const entries: ZipEntry[] = [];
@@ -253,26 +477,57 @@ export async function exportProjectAsAxureZip(opts: AxureExportOptions): Promise
     entries.push({ path: 'data/document.js', content: injectPagesIntoDocument(documentTemplate, pageNodes, docName) });
   }
 
-  // 全部工程文件（非目录）按原始路径打包，确保相对路径引用可解析。
-  const packableFiles = files.filter((f) => f.type !== 'dir');
-  const total = packableFiles.length;
+  // 为每个 HTML 页面生成标准 Axure 页面结构：
+  // 根目录 <pageName>.html（Axure 页面壳）、files/<pageName>/data.js（页面元数据）、
+  // files/<pageName>/styles.css（样式占位）。
+  // body 中的相对路径（../../assets 等）重写为 webresources/<project-path>。
+  // 非页面文件按原始路径放入 webresources/<path>，使重写后的引用可解析。
+  const pageFileSet = new Set(pages.map((pg) => pg.filePath));
+  const nonHtmlFiles = files.filter((f) => f.type !== 'dir' && !pageFileSet.has(f.path || f.name));
+  const total = pages.length + nonHtmlFiles.length;
   let done = 0;
-  for (const file of packableFiles) {
+  for (const pg of pages) {
+    // 拉取 HTML 文件原始内容，保留原始 HTML 不变，
+    // 只注入 Axure 运行时代码，原始样式和脚本全部保留。
+    const rawHtml = await fetchProjectFileText(projectId, pg.filePath);
+    // 重写原始 HTML 中所有资源引用路径为 webresources/
+    const rewrittenHtml = rewriteResourcePaths(rawHtml ?? '', pg.filePath);
+    // 在原始 HTML 基础上注入 Axure 运行时（不拆解原始结构）
+    entries.push({ path: `${pg.slug}.html`, content: injectAxureRuntimeIntoHtml(rewrittenHtml, pg.slug, pg.pageName) });
+    // per-page data.js 存根（$axure.loadCurrentPage 调用，使 player 追踪页面切换）
+    entries.push({ path: `files/${pg.slug}/data.js`, content: buildPageDataJs(pg.pageName, pg.slug) });
+    // per-page styles.css 占位（Axure 页面壳引用此文件）
+    entries.push({ path: `files/${pg.slug}/styles.css`, content: '' });
+    done += 1;
+    opts.onProgress?.(done, total);
+  }
+  for (const file of nonHtmlFiles) {
     const p = file.path || file.name;
-    void idByPath; // 页面树节点的 url 字段已指向 files/<path>
     if (TEXT_FILE_EXTS.test(p) || file.mime.startsWith('text/')) {
       const content = await fetchProjectFileText(projectId, p);
-      if (content != null) entries.push({ path: `files/${p}`, content });
+      if (content != null) entries.push({ path: `webresources/${p}`, content });
     } else {
       const dataUrl = await fetchProjectFileBase64(projectId, p);
       const binary = base64DataUrlToBytes(dataUrl);
-      if (binary) entries.push({ path: `files/${p}`, content: binary });
+      if (binary) entries.push({ path: `webresources/${p}`, content: binary });
     }
     done += 1;
     opts.onProgress?.(done, total);
   }
 
   const blob = buildZip(entries);
-  triggerDownload(blob, `${safeFilename(docName, 'axure-prototype')}.zip`);
-  return { ok: true, pageCount: packableFiles.length };
+  // 压缩包名优先用项目名称，其次用文档标题，兜底默认名。
+  // 保留中文等 Unicode 字符，只去掉首尾空格、合并连续空格、
+  // 清除文件系统非法字符（/ \ : * ? " < > |）。
+  const rawName = opts.projectName?.trim() || docName;
+  const zipName =
+    rawName
+      .replace(/[/\\:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim() || 'axure-prototype';
+  if (opts.returnBlob) {
+    return { ok: true, pageCount: pages.length, blob, zipName };
+  }
+  triggerDownload(blob, `${zipName}.zip`);
+  return { ok: true, pageCount: pages.length };
 }

@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './ReviewAddModal.module.css';
+import { exportProjectAsAxureZip } from '../runtime/axure-export';
+import { getProject } from '../state/projects';
+import { getStoredUserInfo } from '../auth/auth';
 
 /**
  * 发起评审 Modal：在羽点（uedro）上发起一条真实评审。
@@ -44,7 +47,7 @@ const SUBTYPE_UPLOAD_HINT: Record<string, string> = {
 };
 
 /** 人员对象（来自 /uedro/web/user/v1/list）：{id,name,email,userDeptPath,...}。 */
-interface Person {
+export interface Person {
   id: string;
   name: string;
   email?: string;
@@ -65,12 +68,21 @@ interface UploadInfo {
   manuscriptId: string;
   url: string;
   reviewType?: string;
+  fileName?: string;
   [k: string]: any;
 }
 
-export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ReviewAddModal({
+  open,
+  onClose,
+  projectId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  projectId?: string;
+}) {
   // ── 表单状态 ──
-  const [reviewModel, setReviewModel] = useState<1 | 2>(1); // 1 项目 / 2 部门
+  const [reviewModel, setReviewModel] = useState<1 | 2>(2); // 1 项目 / 2 部门，默认部门评审
   // 项目模式：选中的项目 + 评审名称模板列表
   const [project, setProject] = useState<Project | null>(null);
   const [reviewTemplates, setReviewTemplates] = useState<any[]>([]);
@@ -89,10 +101,28 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
   // 评审稿
   const [uploadInfo, setUploadInfo] = useState<UploadInfo | null>(null);
   const [uploading, setUploading] = useState(false);
+  // 评审稿来源：'project' 来自当前项目（导出 Axure 包） / 'upload' 手动上传
+  const [manuscriptSource, setManuscriptSource] = useState<'project' | 'upload'>('project');
+  // 当前 open-design 项目名称（用于"来自当前项目"时显示 zip 文件名）
+  const [odProjectName, setOdProjectName] = useState('');
+  // 从当前项目生成 Axure 包并上传中
+  const [exporting, setExporting] = useState(false);
   // 提交
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  // 字段级错误：提交时收集，填写正确后自动清除对应 key。
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  /** 清除某个字段的错误（值变更后调用）。 */
+  function clearFieldError(key: string) {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
 
   const aliveRef = useRef(true);
 
@@ -106,14 +136,75 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
     setEndtime(
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
     );
+ }, [open]);
+
+  // 拉取当前 open-design 项目名称（用于"来自当前项目"显示 zip 文件名）。
+  useEffect(() => {
+    if (!open || !projectId) return;
+    let cancelled = false;
+    getProject(projectId)
+      .then((proj) => {
+        if (!cancelled && proj?.name) setOdProjectName(proj.name);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+ }, [open, projectId]);
+
+  // 打开时预填"作者"为当前登录用户。
+  useEffect(() => {
+    if (!open) return;
+    // 只从 session 拿 displayName，再调 uedro userList 查完整 Person。
+    const info = getStoredUserInfo();
+    const displayName = info?.displayName;
+    if (!displayName) return;
+    let cancelled = false;
+    fetch('/api/hik/uedro/userList', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: displayName, pageNo: 1, pageSize: 15 }),
+    })
+      .then((r) => r.json().catch(() => null))
+      .then((j) => {
+        if (cancelled) return;
+        const list: Person[] = Array.isArray(j?.data?.list) ? j.data.list : [];
+        const person = list[0];
+        if (person) setAuthor([person]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   // 组件卸载 / 关闭后不再写状态。
   useEffect(() => {
     aliveRef.current = open;
     if (!open) {
+      // 关闭时清空所有表单状态，下次打开是干净初始态。
+      setReviewModel(2);
+      setProject(null);
+      setReviewTemplates([]);
+      setSelectedTemplate(null);
+      setDeptReviewName('');
+      setSubtype('1');
+      setEndtime('');
+      setContent('');
+      setMainjudge([]);
+      setAuthor([]);
+      setCoreReviewers([]);
+      setJudgelist([]);
+      setAddPersonList([]);
+      setUploadInfo(null);
+      setUploading(false);
+      setManuscriptSource('project');
+      setOdProjectName('');
+      setExporting(false);
+      setSubmitting(false);
       setError(null);
       setOkMsg(null);
+      setFieldErrors({});
     }
   }, [open]);
 
@@ -190,6 +281,16 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
   }
 
   /** 上传评审稿：multipart/form-data，字段 file + excelJson（固定空串）。 */
+  /** 计算"来自当前项目"时导出 Axure 包的文件名（与 axure-export.ts 逻辑一致）。 */
+  const projectZipName = useMemo(() => {
+    const raw = odProjectName.trim() || 'axure-prototype';
+    const name = raw
+      .replace(/[/\\:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim() || 'axure-prototype';
+    return `${name}.zip`;
+  }, [odProjectName]);
+
   async function handleUpload(file: File) {
     setUploading(true);
     setError(null);
@@ -205,8 +306,9 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
         setUploadInfo(null);
         return;
       }
-      setUploadInfo(j.data);
-    } catch (err: any) {
+    setUploadInfo({ ...j.data, fileName: file.name });
+      clearFieldError('upload');
+   } catch (err: any) {
       if (!aliveRef.current) return;
       setError('评审稿上传失败: ' + (err?.message || String(err)));
     } finally {
@@ -218,46 +320,113 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
   async function handleSubmit() {
     setError(null);
     setOkMsg(null);
+    const errs: Record<string, string> = {};
     // 必填校验（对齐原站 rules）。
     if (reviewModel === 1 && !project?.projNum) {
-      setError('请选择项目');
-      return;
+      errs.project = '请选择项目';
     }
     if (!reviewNameForSubmit) {
-      setError(reviewModel === 1 ? '请选择评审名称' : '请输入评审名称');
-      return;
+      errs.reviewName = reviewModel === 1 ? '请选择评审名称' : '请输入评审名称';
     }
     if (!endtime) {
-      setError('请选择结束时间');
-      return;
+      errs.endtime = '请选择结束时间';
     }
     if (!mainjudge.length) {
-      setError('请添加评审组长');
-      return;
+      errs.mainjudge = '请添加评审组长';
     }
     if (!author.length) {
-      setError('请添加作者');
-      return;
+      errs.author = '请添加作者';
     }
     if (!coreReviewers.length) {
-      setError('请添加核心评委');
-      return;
+      errs.coreReviewers = '请添加核心评委';
     }
-    if (!uploadInfo?.manuscriptId) {
-      setError('请上传评审稿');
+    // "来自当前项目"时评审稿在提交时自动生成，无需校验；仅"上传"模式校验。
+    if (manuscriptSource === 'upload' && !uploadInfo?.manuscriptId) {
+      errs.upload = '请上传评审稿';
+    }
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
       return;
     }
     // 核心评委不得与评审组长同名。
     const mainNames = new Set(mainjudge.map((p) => p.name));
     const dup = coreReviewers.find((p) => mainNames.has(p.name));
     if (dup) {
-      setError('评审组长与评委重复');
+      setFieldErrors({ coreReviewers: '评审组长与评委重复' });
       return;
     }
-    // 评审稿类型必须与子类型一致（原站：parseInt(reviewType)===parseInt(select2)）。
-    if (uploadInfo.reviewType && String(uploadInfo.reviewType) !== subtype) {
-      setError('评审类型与上传评审稿格式不一致');
+    // "上传"模式：校验已有 uploadInfo 的类型一致性。
+    if (manuscriptSource === 'upload' && uploadInfo?.reviewType && String(uploadInfo.reviewType) !== subtype) {
+      setFieldErrors({ upload: '评审类型与上传评审稿格式不一致' });
       return;
+    }
+
+    // 解析最终 manuscriptId：
+    // - "上传"模式：直接用已有 uploadInfo。
+    // - "来自当前项目"模式：提交时生成 Axure zip → 上传拿 manuscriptId。
+    setSubmitting(true);
+    let manuscriptId = uploadInfo?.manuscriptId ?? '';
+    if (manuscriptSource === 'project') {
+      if (!projectId) {
+        setFieldErrors({ upload: '无法获取当前项目' });
+        setSubmitting(false);
+        return;
+      }
+      setExporting(true);
+      try {
+        const result = await exportProjectAsAxureZip({
+          projectId,
+          projectName: odProjectName,
+          returnBlob: true,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          setFieldErrors({ upload: result.error });
+          setSubmitting(false);
+          return;
+        }
+        if (!result.blob || !result.zipName) {
+          const msg = '导出 Axure 包失败：未生成文件';
+          setError(msg);
+          setFieldErrors({ upload: msg });
+          setSubmitting(false);
+          return;
+        }
+        // blob → File → 上传拿 manuscriptId（临时文件流，浏览器自动回收）。
+        const file = new File([result.blob], `${result.zipName}.zip`, { type: 'application/zip' });
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('excelJson', '');
+        const upResp = await fetch('/api/hik/uedro/uploadManuscript', { method: 'POST', body: fd });
+        const upJson = await upResp.json().catch(() => null);
+        if (!aliveRef.current) return;
+        if (!upResp.ok || !upJson?.ok) {
+          const msg = upJson?.error?.message || upJson?.msg || `上传失败 HTTP ${upResp.status}`;
+          setError(msg);
+          setFieldErrors({ upload: msg });
+          setSubmitting(false);
+          return;
+        }
+        manuscriptId = upJson.data.manuscriptId;
+      } catch (err: any) {
+        if (!aliveRef.current) return;
+        const msg = '导出 Axure 包失败: ' + (err?.message || String(err));
+        setError(msg);
+        setFieldErrors({ upload: msg });
+        setSubmitting(false);
+        return;
+      } finally {
+        if (aliveRef.current) setExporting(false);
+      }
+      if (!manuscriptId) {
+        setFieldErrors({ upload: '导出后未获得评审稿 ID' });
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      // "上传"模式：到这里 uploadInfo 必非空。
+      if (!uploadInfo?.manuscriptId) return;
+      manuscriptId = uploadInfo.manuscriptId;
     }
 
     const body: Record<string, any> = {
@@ -270,7 +439,7 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
       reviewers: judgelist,
       coreReviewers,
       copyPersons: addPersonList,
-      manuscriptId: uploadInfo.manuscriptId,
+      manuscriptId,
       reviewModel,
     };
     if (reviewModel === 1 && project) {
@@ -279,7 +448,6 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
       body.projName = project.projName;
     }
 
-    setSubmitting(true);
     try {
       const resp = await fetch('/api/hik/uedro/reviewAddition', {
         method: 'POST',
@@ -337,13 +505,14 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
         </div>
 
         <div className={styles.body}>
-          {/* ── 左栏：基本信息 ── */}
-          <div className={styles.col}>
+          {/* ── 第一组：评审类型 / 项目 / 评审名称 / 预计结束日期 / 评审备注 ── */}
+          <div className={styles.group}>
             <div className={styles.item}>
               <label className={styles.itemLabel}>
                 评审类型 <span className={styles.req}>*</span>
               </label>
-              <div className={styles.radioRow}>
+              <div className={styles.itemControl}>
+                <div className={styles.radioRow}>
                 <label className={styles.radio}>
                   <input
                     type="radio"
@@ -360,170 +529,264 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
                   />
                   部门评审
                 </label>
+                </div>
               </div>
             </div>
 
             {reviewModel === 1 ? (
               <>
-                <div className={styles.item}>
+               <div className={styles.item}>
                   <label className={styles.itemLabel}>
                     项目名称 <span className={styles.req}>*</span>
                   </label>
-                  <ProjectPicker
-                    value={project}
-                    onChange={(p) => {
-                      setProject(p);
-                      setSelectedTemplate(null);
-                      setReviewTemplates([]);
-                      if (p?.projNum) void loadReviewTemplates(p.projNum);
-                    }}
-                  />
+                  <div className={styles.itemControl}>
+                    <ProjectPicker
+                      value={project}
+                      onChange={(p) => {
+                        setProject(p);
+                        clearFieldError('project');
+                        setSelectedTemplate(null);
+                        setReviewTemplates([]);
+                        if (p?.projNum) void loadReviewTemplates(p.projNum);
+                      }}
+                    />
+                    <span className={styles.itemError}>{fieldErrors.project || ''}</span>
+                  </div>
                 </div>
                 <div className={styles.item}>
                   <label className={styles.itemLabel}>
                     评审名称 <span className={styles.req}>*</span>
                   </label>
-                  <select
-                    className={styles.select}
-                    value={selectedTemplate ? JSON.stringify(selectedTemplate) : ''}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSelectedTemplate(v ? JSON.parse(v) : null);
-                    }}
-                    disabled={!reviewTemplates.length}
-                  >
-                    {!reviewTemplates.length ? (
-                      <option value="">{project ? '无可用评审名称' : '请先选择项目'}</option>
-                    ) : (
-                      <>
-                        <option value="">请选择评审名称</option>
-                        {reviewTemplates.map((t, i) => (
-                          <option key={i} value={JSON.stringify(t)}>
-                            {t.reviewname_cn ?? t.reviewname ?? `模板 ${i + 1}`}
+                  <div className={styles.itemControl}>
+                    <div className={styles.inlineRow}>
+                      <select
+                        className={styles.select}
+                        value={selectedTemplate ? JSON.stringify(selectedTemplate) : ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedTemplate(v ? JSON.parse(v) : null);
+                          clearFieldError('reviewName');
+                        }}
+                        disabled={!reviewTemplates.length}
+                      >
+                        {!reviewTemplates.length ? (
+                          <option value="">{project ? '无可用评审名称' : '请先选择项目'}</option>
+                        ) : (
+                          <>
+                            <option value="">请选择评审名称</option>
+                            {reviewTemplates.map((t, i) => (
+                              <option key={i} value={JSON.stringify(t)}>
+                                {t.reviewname_cn ?? t.reviewname ?? `模板 ${i + 1}`}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                      <select
+                        className={`${styles.select} ${styles.subtypeInline}`}
+                        value={subtype}
+                        onChange={(e) => {
+                          setSubtype(e.target.value);
+                          clearFieldError('upload');
+                        }}
+                      >
+                        {REVIEW_SUBTYPES.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.label}
                           </option>
                         ))}
-                      </>
-                    )}
-                  </select>
+                      </select>
+                    </div>
+                    <span className={styles.itemError}>{fieldErrors.reviewName || ''}</span>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className={styles.item}>
+             </>
+           ) : (
+             <div className={styles.item}>
                 <label className={styles.itemLabel}>
                   评审名称 <span className={styles.req}>*</span>
                 </label>
-                <input
-                  className={styles.input}
-                  placeholder="请输入评审名称"
-                  value={deptReviewName}
-                  onChange={(e) => setDeptReviewName(e.target.value)}
-                  maxLength={32}
-                />
+                <div className={styles.itemControl}>
+                  <div className={styles.inlineRow}>
+                    <input
+                      className={styles.input}
+                      placeholder="请输入评审名称"
+                      value={deptReviewName}
+                      onChange={(e) => {
+                        setDeptReviewName(e.target.value);
+                        clearFieldError('reviewName');
+                      }}
+                      maxLength={32}
+                    />
+                    <select
+                      className={`${styles.select} ${styles.subtypeInline}`}
+                      value={subtype}
+                      onChange={(e) => {
+                        setSubtype(e.target.value);
+                        clearFieldError('upload');
+                      }}
+                    >
+                      {REVIEW_SUBTYPES.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className={styles.itemError}>{fieldErrors.reviewName || ''}</span>
+                </div>
               </div>
-            )}
+           )}
 
-            <div className={styles.item}>
-              <label className={styles.itemLabel}>
-                评审子类型 <span className={styles.req}>*</span>
-              </label>
-              <select
-                className={styles.select}
-                value={subtype}
-                onChange={(e) => setSubtype(e.target.value)}
-              >
-                {REVIEW_SUBTYPES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+           <div className={styles.item}>
+             <label className={styles.itemLabel}>
+               预计结束日期 <span className={styles.req}>*</span>
+             </label>
+              <div className={styles.itemControl}>
+                <input
+                  type="datetime-local"
+                  className={styles.input}
+                  value={endtime}
+                  onChange={(e) => {
+                    setEndtime(e.target.value);
+                    clearFieldError('endtime');
+                  }}
+                />
+                <span className={styles.itemError}>{fieldErrors.endtime || ''}</span>
+              </div>
             </div>
 
-            <div className={styles.item}>
-              <label className={styles.itemLabel}>
-                预计结束日期 <span className={styles.req}>*</span>
-              </label>
-              <input
-                type="datetime-local"
-                className={styles.input}
-                value={endtime}
-                onChange={(e) => setEndtime(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.item}>
-              <label className={styles.itemLabel}>评审备注</label>
-              <textarea
-                className={styles.textarea}
-                placeholder="请输入备注"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.item}>
-              <label className={styles.itemLabel}>
-                评审稿 <span className={styles.req}>*</span>
-              </label>
-              <div className={styles.uploadArea}>
-                <UploadArea
-                  subtype={subtype}
-                  uploading={uploading}
-                  uploadInfo={uploadInfo}
-                  onPick={handleUpload}
+           <div className={styles.item}>
+             <label className={styles.itemLabel}>评审备注</label>
+              <div className={styles.itemControl}>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="请输入备注"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
                 />
               </div>
             </div>
           </div>
 
-          {/* ── 右栏：人员 ── */}
-          <div className={styles.col}>
-            <div className={styles.item}>
+        {/* ── 第二组：评审子类型 / 评审稿 / 人员 ── */}
+        <div className={styles.groupDivider} />
+        <div className={styles.group}>
+           <div className={styles.item}>
               <label className={styles.itemLabel}>
                 评审组长 <span className={styles.req}>*</span>
               </label>
-              <PersonPicker
-                selected={mainjudge}
-                onChange={setMainjudge}
-                placeholder="请输入名称（评审组长）"
-                multiple={false}
-              />
+              <div className={styles.itemControl}>
+                <PersonPicker
+                  selected={mainjudge}
+                  onChange={(p) => {
+                    setMainjudge(p);
+                    clearFieldError('mainjudge');
+                  }}
+                  placeholder="请输入名称（评审组长）"
+                  multiple={false}
+                />
+                <span className={styles.itemError}>{fieldErrors.mainjudge || ''}</span>
+              </div>
             </div>
             <div className={styles.item}>
               <label className={styles.itemLabel}>
                 作者 <span className={styles.req}>*</span>
               </label>
-              <PersonPicker
-                selected={author}
-                onChange={setAuthor}
-                placeholder="请输入名称（作者）"
-              />
+              <div className={styles.itemControl}>
+                <PersonPicker
+                  selected={author}
+                  onChange={(p) => {
+                    setAuthor(p);
+                    clearFieldError('author');
+                  }}
+                  placeholder="请输入名称（作者）"
+                />
+                <span className={styles.itemError}>{fieldErrors.author || ''}</span>
+              </div>
             </div>
             <div className={styles.item}>
               <label className={styles.itemLabel}>
                 核心评委 <span className={styles.req}>*</span>
               </label>
-              <PersonPicker
-                selected={coreReviewers}
-                onChange={setCoreReviewers}
-                placeholder="请输入名称（核心评委）"
-              />
+              <div className={styles.itemControl}>
+                <PersonPicker
+                  selected={coreReviewers}
+                  onChange={(p) => {
+                    setCoreReviewers(p);
+                    clearFieldError('coreReviewers');
+                  }}
+                  placeholder="请输入名称（核心评委）"
+                />
+                <span className={styles.itemError}>{fieldErrors.coreReviewers || ''}</span>
+              </div>
             </div>
             <div className={styles.item}>
               <label className={styles.itemLabel}>团队评委</label>
-              <PersonPicker
-                selected={judgelist}
-                onChange={setJudgelist}
-                placeholder="请输入名称（团队评委）"
-              />
+              <div className={styles.itemControl}>
+                <PersonPicker
+                  selected={judgelist}
+                  onChange={setJudgelist}
+                  placeholder="请输入名称（团队评委）"
+                />
+              </div>
             </div>
             <div className={styles.item}>
+              <label className={styles.itemLabel}>
+                评审稿 <span className={styles.req}>*</span>
+             </label>
+              <div className={styles.itemControl}>
+                <div className={styles.uploadArea}>
+                  {/* 评审稿来源切换：来自当前项目 / 上传 */}
+                  <div className={styles.sourceToggle}>
+                    <button
+                      type="button"
+                      className={`${styles.sourceBtn} ${manuscriptSource === 'project' ? styles.sourceBtnActive : ''}`}
+                      onClick={() => {
+                        setManuscriptSource('project');
+                        clearFieldError('upload');
+                      }}
+                    >
+                      来自当前项目
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.sourceBtn} ${manuscriptSource === 'upload' ? styles.sourceBtnActive : ''}`}
+                      onClick={() => {
+                        setManuscriptSource('upload');
+                        clearFieldError('upload');
+                      }}
+                    >
+                      上传
+                    </button>
+                  </div>
+                  {manuscriptSource === 'project' ? (
+                    <div className={styles.uploadFileRow}>
+                      <span className={styles.uploadFileName}>{projectZipName}</span>
+                      {exporting ? <span className={styles.acSpinner} /> : null}
+                    </div>
+                  ) : (
+                   <UploadArea
+                     subtype={subtype}
+                     uploading={uploading}
+                     uploadInfo={uploadInfo}
+                     onPick={handleUpload}
+                     onRemove={() => setUploadInfo(null)}
+                   />
+                  )}
+                </div>
+                <span className={styles.itemError}>{fieldErrors.upload || ''}</span>
+              </div>
+           </div>
+            <div className={styles.item}>
               <label className={styles.itemLabel}>抄送人员</label>
-              <PersonPicker
-                selected={addPersonList}
-                onChange={setAddPersonList}
-                placeholder="请输入名称（抄送人员）"
-              />
+              <div className={styles.itemControl}>
+                <PersonPicker
+                  selected={addPersonList}
+                  onChange={setAddPersonList}
+                  placeholder="请输入名称（抄送人员）"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -542,7 +805,7 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
               onClick={() => void handleSubmit()}
               disabled={submitting || uploading}
             >
-              {submitting ? '提交中…' : '确定'}
+              {exporting ? '生成评审稿中…' : submitting ? '提交中…' : '确定'}
             </button>
           </div>
         </div>
@@ -563,7 +826,7 @@ export function ReviewAddModal({ open, onClose }: { open: boolean; onClose: () =
  * 姓名 + 部门 + X。对齐原站 personAdd：trigger-on-focus=false（必须输入才查），
  * 选中后把人员整个对象加入数组（提交时原站把对象原样塞进 reviewerMain[] 等）。
  */
-function PersonPicker({
+export function PersonPicker({
   selected,
   onChange,
   placeholder,
@@ -715,25 +978,20 @@ function PersonPicker({
           <span className={styles.selectedEmpty}>{emptyHint}</span>
         ) : (
           selected.map((p, i) => (
-            <span key={p.id ?? i} className={styles.tag}>
-              <span className={styles.tagAvatar} aria-hidden>
-                {(p.name || '?').charAt(0).toUpperCase()}
-              </span>
-              <span className={styles.tagBody}>
-                <span className={styles.tagName}>{p.name}</span>
-                {p.userDeptPath ? (
-                  <span className={styles.tagSub}>{p.userDeptPath.split('\\').pop()}</span>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                className={styles.tagRemove}
-                onClick={() => remove(i)}
-                aria-label={`移除 ${p.name}`}
-              >
-                ✕
-              </button>
-            </span>
+          <span key={p.id ?? i} className={styles.tag}>
+            <span className={styles.tagName}>{p.name}</span>
+            {p.userDeptPath ? (
+              <span className={styles.tagSub}>{p.userDeptPath.split('\\').pop()}</span>
+            ) : null}
+            <button
+              type="button"
+              className={styles.tagRemove}
+              onClick={() => remove(i)}
+              aria-label={`移除 ${p.name}`}
+            >
+              ✕
+            </button>
+          </span>
           ))
         )}
       </div>
@@ -883,13 +1141,15 @@ function ProjectPicker({
 function UploadArea({
   subtype,
   uploading,
-  uploadInfo,
-  onPick,
+ uploadInfo,
+ onPick,
+ onRemove,
 }: {
   subtype: string;
   uploading: boolean;
   uploadInfo: UploadInfo | null;
   onPick: (file: File) => void;
+  onRemove: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hint = SUBTYPE_UPLOAD_HINT[subtype] ?? '请上传评审稿';
@@ -900,9 +1160,9 @@ function UploadArea({
     onPick(f);
   }
 
-  if (uploadInfo?.manuscriptId && !uploading) {
-    const name = uploadInfo.url || uploadInfo.manuscriptId;
-    return (
+ if (uploadInfo?.manuscriptId && !uploading) {
+   const name = uploadInfo.fileName || uploadInfo.manuscriptId;
+   return (
       <div className={styles.uploadFileRow}>
         <span className={styles.uploadFileName}>{name}</span>
         <button
@@ -910,9 +1170,16 @@ function UploadArea({
           className={styles.uploadReplace}
           onClick={() => inputRef.current?.click()}
         >
-          替换
-        </button>
-        <input
+         替换
+       </button>
+       <button
+         type="button"
+         className={styles.uploadReplace}
+         onClick={onRemove}
+       >
+         删除
+       </button>
+       <input
           ref={inputRef}
           type="file"
           style={{ display: 'none' }}
