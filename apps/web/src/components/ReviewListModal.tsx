@@ -253,10 +253,15 @@ export function ReviewListModal({
       }}
     >
       <div className={styles.shell} role="dialog" aria-modal="true">
-        <div className={styles.head}>
-          <div className={styles.kicker}>REVIEW</div>
-          <h2 className={styles.title}>历史评审</h2>
-          <p className={styles.subtitle}>来自羽点（uedro）的评审列表</p>
+       <div className={styles.head}>
+          <div className={styles.headMain}>
+            <div className={styles.kicker}>REVIEW</div>
+            <h2 className={styles.title}>历史评审</h2>
+            <p className={styles.subtitle}>来自羽点（uedro）的评审列表</p>
+          </div>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="关闭">
+            ✕
+          </button>
         </div>
         {/* 筛选栏：左侧 processType 单选切换，右侧 reviewType 下拉 + 搜索框。 */}
         <div className={styles.toolbar}>
@@ -632,7 +637,13 @@ function ReviewCard({
        // 点击整张卡片：打开对应 reviewType 的羽点稿件预览页（新标签）。
        // 卡片内交互（更多菜单 / 各操作按钮）自行 stopPropagation，避免误触发新开页。
        // 用 openExternalUrl 在系统默认浏览器打开，而非 Electron 新窗口。
-       if (previewUrl) void openExternalUrl(previewUrl);
+       // previewUrl 是根相对路径（/uedro/ux?id=…），openExternalUrl 走
+       // shell.openExternal / daemon open-external 都需要完整 http(s) URL，
+       // 否则会退化为当前标签页跳转。用 window.location.origin 补全。
+       if (previewUrl) {
+         const absolute = new URL(previewUrl, window.location.origin).toString();
+         void openExternalUrl(absolute);
+       }
       }}
     >
       <div className={styles.cardHead}>

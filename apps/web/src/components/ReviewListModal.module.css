@@ -46,8 +46,15 @@
 
 .head {
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   padding: 20px 24px 14px;
   border-bottom: 1px solid var(--border);
+}
+.headMain {
+  min-width: 0;
 }
 .kicker {
   font-size: 11px;
@@ -66,6 +73,27 @@
   margin: 6px 0 0;
   color: var(--text-muted);
   font-size: 13px;
+}
+.closeBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.closeBtn:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
 }
 
 /* ── 筛选栏：列表区顶部，左侧 processType 单选切换，右侧 reviewType + 搜索 ─ */
@@ -131,7 +159,7 @@
   border-color: var(--border-strong, var(--border));
 }
 .search {
-  width: 320px;
+  width: 360px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border);

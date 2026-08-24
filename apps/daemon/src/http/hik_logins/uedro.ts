@@ -25,8 +25,8 @@ const UEDRO_LOGIN_SUBMIT_URL = UEDRO_API_BASE + '/cas/login/submit';
 /** 取 JWT：POST /portal/front/user/getJwtToken */
 const UEDRO_JWT_URL = UEDRO_API_BASE + '/front/user/getJwtToken';
 
-/** 校验登录态：GET /portal/front/common/isLogin */
-const UEDRO_IS_LOGIN_URL = UEDRO_API_BASE + '/front/common/isLogin';
+/** 校验登录态：GET /uedro/web/login/v1/userInfo */
+const UEDRO_IS_LOGIN_URL = UEDRO_BASE + '/uedro/web/login/v1/userInfo';
 
 /** 基础信息：GET /portal/front/common/basicInfo */
 const UEDRO_BASIC_INFO_URL = UEDRO_API_BASE + '/front/common/basicInfo';
@@ -264,7 +264,7 @@ export async function uedroLogout(cookies: Cookie[]): Promise<UedroLogoutResult>
 /**
  * 校验羽点会话是否仍有效。
  *
- * 通过 GET /portal/front/common/isLogin 判断：响应 code === '0' 即有效。
+ * 通过 GET /uedro/web/login/v1/userInfo 判断：响应 code === '0' 即有效。
  */
 export async function uedroValidate(cookies: Cookie[]): Promise<UedroValidResult> {
   if (!cookies?.length) {
@@ -278,7 +278,7 @@ export async function uedroValidate(cookies: Cookie[]): Promise<UedroValidResult
     if (parsed.code !== '0') {
       return { ok: false };
     }
-    return { ok: true };
+    return { ok: true,basicInfo:parsed };
   } catch {
     return { ok: false };
   }
