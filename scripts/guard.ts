@@ -65,6 +65,7 @@ const residualSkippedDirectories = new Set([
   "out",
   // Git submodule — not project-owned source.
   "ybvichi.github.io",
+  "axure-prototype"
 ]);
 
 const residualAllowedExactPaths = new Set([
