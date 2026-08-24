@@ -5,6 +5,7 @@ import { pick, computeRemainDays, withTotal, reviewTypeMeta, formatVersion, buil
 import { ReviewDetailDrawer } from './ReviewDetailModal';
 import { ReviewManuscriptUpdateModal } from './ReviewManuscriptUpdateModal';
 import { ReviewEditModal } from './ReviewEditModal';
+import { openExternalUrl } from '../providers/registry';
 import { getStoredUserInfo } from '../auth/auth';
 
 /** 卡片「更多」下拉的操作。评审详情为第一项（打开右侧抽屉，非异步操作），
@@ -628,9 +629,10 @@ function ReviewCard({
     <div
       className={styles.card}
       onClick={() => {
-        // 点击整张卡片：打开对应 reviewType 的羽点稿件预览页（新标签）。
-        // 卡片内交互（更多菜单 / 各操作按钮）自行 stopPropagation，避免误触发新开页。
-        if (previewUrl) window.open(previewUrl, '_blank', 'noopener,noreferrer');
+       // 点击整张卡片：打开对应 reviewType 的羽点稿件预览页（新标签）。
+       // 卡片内交互（更多菜单 / 各操作按钮）自行 stopPropagation，避免误触发新开页。
+       // 用 openExternalUrl 在系统默认浏览器打开，而非 Electron 新窗口。
+       if (previewUrl) void openExternalUrl(previewUrl);
       }}
     >
       <div className={styles.cardHead}>
