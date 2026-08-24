@@ -362,8 +362,8 @@ function buildPageDataJs(pageName: string, pageSlug: string): string {
   return `$axure.loadCurrentPage(
 (function() {
     var _ = function() { var r={},a=arguments; for(var i=0; i<a.length; i+=2) r[a[i]]=a[i+1]; return r; }
-    var _creator = function() { return _("url","${escapedUrl}","pageName","${escapedPageName}","defaultAdaptiveView","","size",_("width",0,"height",0),"adaptiveViews",[],"sketchKeys",["s0"],"variables",["OnLoadVariable"],"page",_("packageId","${pageSlug}","type","Axure:Page","pageName","${escapedPageName}","notes",_("widgetNotes",[],"ownerToFns",{}),"style",_("baseStyle","627587b6038d43cca051c114ac41ad32","pageAlignment","center","fill",_("fillType","solid","color",0xFFFFFFFF),"image",null,"favicon",null,"sketchFactor","0","colorStyle","appliedFont","fontName","'ArialMT', 'Arial', sans-serif","borderWidth","1","borderVisibility","all","borderFill",0xFF797979,"cornerRadius","0","cornerVisibility","all","outerShadow",_("on",false,"offsetX",5,"offsetY",5,"blurRadius",5,"spread",5,"color",_("r",0,"g",0,"b",0,"a",0.349019607843137))),"annotations",[]); };
-    return _creator();
+    var _creator = function() { return _("url","${escapedUrl}","pageName","${escapedPageName}","defaultAdaptiveView","","size",_("width",0,"height",0),"adaptiveViews",[],"sketchKeys",["s0"],"variables",["OnLoadVariable"],"page",_("packageId","${pageSlug}","type","Axure:Page","name","","pageName","${escapedPageName}","notes",_("widgetNotes",[],"ownerToFns",{}),"style",_("baseStyle","627587b6038d43cca051c114ac41ad32","pageAlignment","center","fill",_("fillType","solid","color",0xFFFFFFFF),"image",null,"favicon",null,"sketchFactor","0","colorStyle","appliedFont","fontName","'ArialMT', 'Arial', sans-serif","borderWidth","1","borderVisibility","all","borderFill",0xFF797979,"cornerRadius","0","cornerVisibility","all","outerShadow",_("on",false,"offsetX",5,"offsetY",5,"blurRadius",5,"spread",5,"color",_("r",0,"g",0,"b",0,"a",0.349019607843137))),"annotations",[],"diagram",_("objects",[])),"masters",_(),"objectPaths",_()); };
+   return _creator();
 })());
 `;
 }
