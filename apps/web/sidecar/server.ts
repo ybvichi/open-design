@@ -225,7 +225,16 @@ function isDaemonProxyPathname(pathname: string): boolean {
     pathname === "/artifacts" ||
     pathname.startsWith("/artifacts/") ||
     pathname === "/frames" ||
-    pathname.startsWith("/frames/")
+    pathname.startsWith("/frames/") ||
+    // 羽点稿件预览页（/uedro/ux?id=… 等）与门户页面（/portal/…）走 daemon
+    // 根路径反向代理：daemon 注入本地 uedro 会话 cookie，浏览器侧始终同源。
+    // 详见 apps/daemon/src/routes/hik_routes/uedro.ts 与 next.config.ts dev
+    // rewrites。dev 模式下 Next rewrites 承担此代理；server/standalone 模式
+    // 下 web sidecar 必须同样放行，否则打包后 /uedro/home 等页面 404。
+    pathname === "/uedro" ||
+    pathname.startsWith("/uedro/") ||
+    pathname === "/portal" ||
+    pathname.startsWith("/portal/")
   );
 }
 
@@ -913,7 +922,11 @@ function createDaemonProxyHandler(
       const pathname = request.url ? new URL(request.url, `http://${hostHeader}`).pathname : "";
       const isApiRoute = pathname === "/api" || pathname.startsWith("/api/") ||
         pathname === "/artifacts" || pathname.startsWith("/artifacts/") ||
-        pathname === "/frames" || pathname.startsWith("/frames/");
+        pathname === "/frames" || pathname.startsWith("/frames/") ||
+        // /uedro 和 /portal 反向代理路由同样需要放行非 loopback 访问，
+        // 与 isDaemonProxyPathname 保持一致。
+        pathname === "/uedro" || pathname.startsWith("/uedro/") ||
+        pathname === "/portal" || pathname.startsWith("/portal/");
       if (!isApiRoute && !isStrictLoopbackHost(hostname)) {
         response.statusCode = 403;
         response.setHeader("content-type", "application/json; charset=utf-8");

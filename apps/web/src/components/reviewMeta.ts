@@ -158,13 +158,13 @@ export function buildManuscriptPreviewUrl(reviewType: unknown, manuscriptId: unk
   const t = reviewType === undefined || reviewType === null ? '' : String(reviewType);
   switch (t) {
     case '1':
-      return `/uedro/ux?id=${id}`;
+      return `http://127.0.0.1:9529/uedro/ux?id=${id}`;
     case '2':
-      return `/uedro/ua?id=${id}`;
+      return `http://127.0.0.1:9529/uedro/ua?id=${id}`;
     case '3':
-      return `/uedro/pdf-js?id=${id}&projectid=null&projName=&projManager=null`;
+      return `http://127.0.0.1:9529/uedro/pdf-js?id=${id}&projectid=null&projName=&projManager=null`;
     case '4':
-      return `/uedro/xlsx?id=${id}&projectid=null&projName=&projManager=null`;
+      return `http://127.0.0.1:9529/uedro/xlsx?id=${id}&projectid=null&projName=&projManager=null`;
     default:
       return null;
   }

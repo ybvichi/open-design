@@ -11827,11 +11827,12 @@ function HtmlViewer({
     setDownloadMenuOpenForPixso(false);
     setReviewMenuOpen((v) => !v);
   };
-  // 打开历史评审 Modal。列表数据由独立组件 ReviewListModal 自行拉取。
-  async function openReviewListModal() {
-    setReviewMenuOpen(false);
-    setReviewListModalOpen(true);
-  }
+ // 打开历史评审 Modal。列表数据由独立组件 ReviewListModal 自行拉取。
+ async function openReviewListModal() {
+   setReviewMenuOpen(false);
+    // 走 daemon 反向代理（/uedro → uedro.hikvision.com.cn），新窗口打开羽点首页。
+    window.open('http://127.0.0.1:9529/uedro/home', '_blank', 'noopener');
+ }
   // 打开发起评审 Modal。表单数据由独立组件 ReviewAddModal 自行拉取并提交。
   function openReviewAddModal() {
     setReviewMenuOpen(false);

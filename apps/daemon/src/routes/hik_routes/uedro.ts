@@ -980,37 +980,50 @@ function proxyUpstream(
       headers['Content-Length'] = String(postBody.length);
     }
 
-   const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
+    const mod: typeof https = isHttps ? https : (http as unknown as typeof https);
 
-   const opts: https.RequestOptions = {
-      hostname: url.hostname,
-      port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
-      path: url.pathname + url.search,
-      method,
-      headers,
-      rejectUnauthorized: false,
+    const sendUpstream = (finalBody: Buffer | null) => {
+      const opts: https.RequestOptions = {
+        hostname: url.hostname,
+        port: url.port ? parseInt(url.port) : isHttps ? 443 : 80,
+        path: url.pathname + url.search,
+        method,
+        headers,
+        rejectUnauthorized: false,
+      };
+
+      const upstream = mod.request(opts, handleResponse);
+      upstream.setTimeout(30000, () => {
+        upstream.destroy();
+        if (!res.headersSent) sendApiError(res, 504, 'INTERNAL_ERROR', `${label} timeout`);
+      });
+      upstream.on('error', (e: any) => {
+        if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} failed: ${e?.message || String(e)}`);
+      });
+      if (finalBody) {
+        upstream.end(finalBody);
+      } else {
+        upstream.end();
+      }
     };
 
-    const upstream = mod.request(opts, handleResponse);
-    upstream.setTimeout(30000, () => {
-      upstream.destroy();
-      if (!res.headersSent) sendApiError(res, 504, 'INTERNAL_ERROR', `${label} timeout`);
-    });
-    upstream.on('error', (e: any) => {
-      if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} failed: ${e?.message || String(e)}`);
-    });
     // 发送请求体（或结束无 body 请求）。
-    if (postBody) {
-      upstream.end(postBody);
-    } else if (streamBody) {
+    // postBody / 无 body 路径：headers 已就绪（含 Content-Length），直接建连发送。
+    // streamBody 路径：先累积完整 body 再补 Content-Length，否则 mod.request() 已固定
+    // headers，后补的长度不会随请求发出，上游因缺少 Content-Length 而挂起 socket。
+    if (streamBody) {
       const bodyChunks: Buffer[] = [];
       req.on('data', (c: Buffer) => bodyChunks.push(c));
-      req.on('end', () => upstream.end(Buffer.concat(bodyChunks)));
+      req.on('end', () => {
+        const body = Buffer.concat(bodyChunks);
+        headers['Content-Length'] = String(body.length);
+        sendUpstream(body);
+      });
       req.on('error', (e: any) => {
         if (!res.headersSent) sendApiError(res, 502, 'BAD_GATEWAY', `${label} request body error: ${e?.message || String(e)}`);
       });
     } else {
-      upstream.end();
+      sendUpstream(postBody);
     }
   };
   doReq(urlStr, [...cookies], 0);

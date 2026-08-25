@@ -4,6 +4,7 @@ import styles from './ReviewAddModal.module.css';
 import { exportProjectAsAxureZip } from '../runtime/axure-export';
 import { getProject } from '../state/projects';
 import { getStoredUserInfo } from '../auth/auth';
+import { buildManuscriptPreviewUrl } from './reviewMeta';
 
 /**
  * 发起评审 Modal：在羽点（uedro）上发起一条真实评审。
@@ -461,7 +462,12 @@ export function ReviewAddModal({
         return;
       }
       setOkMsg('创建成功');
-      // 原站创建成功后刷新列表；这里 1.2s 后自动关闭，让调用方（FileView）的 toast 接力。
+      // 创建成功后新开页面窗口跳转到评审页（对齐 ReviewListModal 卡片点击行为），
+      // 随后关闭本 modal。
+      const previewUrl = buildManuscriptPreviewUrl(subtype, manuscriptId);
+      if (previewUrl) {
+        window.open(previewUrl, '_blank', 'noopener');
+      }
       setTimeout(() => {
         if (aliveRef.current) onClose();
       }, 1200);
@@ -493,19 +499,19 @@ export function ReviewAddModal({
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
-      <div className={styles.shell} role="dialog" aria-modal="true">
-        <div className={styles.head}>
-          <div className={styles.headMain}>
-            <div className={styles.kicker}>REVIEW · UEDRO</div>
-            <h2 className={styles.title}>发起评审</h2>
-          </div>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="关闭">
-            ✕
-          </button>
-        </div>
+     <div className={styles.shell} role="dialog" aria-modal="true">
+       <div className={styles.head}>
+         <div className={styles.headMain}>
+           <div className={styles.kicker}>REVIEW · UEDRO</div>
+           <h2 className={styles.title}>发起评审</h2>
+         </div>
+         <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="关闭">
+           ✕
+         </button>
+       </div>
 
-        <div className={styles.body}>
-          {/* ── 第一组：评审类型 / 项目 / 评审名称 / 预计结束日期 / 评审备注 ── */}
+       <div className={styles.body}>
+         {/* ── 第一组：评审类型 / 项目 / 评审名称 / 预计结束日期 / 评审备注 ── */}
           <div className={styles.group}>
             <div className={styles.item}>
               <label className={styles.itemLabel}>
@@ -806,11 +812,19 @@ export function ReviewAddModal({
             >
               {exporting ? '生成评审稿中…' : submitting ? '提交中…' : '确定'}
             </button>
-          </div>
-        </div>
+         </div>
       </div>
-    </div>,
-    document.body,
+        {(submitting || exporting) && (
+          <div className={styles.loadingOverlay}>
+            <span className={styles.loadingSpinner} />
+            <span className={styles.loadingText}>
+              {exporting ? '生成评审稿中…' : '提交中…'}
+            </span>
+          </div>
+        )}
+      </div>
+   </div>,
+   document.body,
   );
 }
 

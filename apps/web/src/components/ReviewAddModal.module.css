@@ -29,6 +29,7 @@
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  position: relative;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -571,6 +572,34 @@
 .btnPrimary:hover:not(:disabled) {
   background: var(--text);
   opacity: 0.9;
+}
+
+/* ── 提交中遮罩：覆在 .shell 之上，居中 spinner + 文案 ── */
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: fade-in 160ms ease-out;
+}
+.loadingSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: rlmSpin 700ms linear infinite;
+}
+.loadingText {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* ── 自定义日期时间选择器（替代原生 datetime-local）── */
