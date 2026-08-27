@@ -267,7 +267,9 @@ function verifiedOpenCodeChildren(input: AdaptRuntimeChildObservationsInput): {
   return { byEventIndex, supersededChildSessionIds };
 }
 
-export function adaptRuntimeChildObservationsV1(input: AdaptRuntimeChildObservationsInput) {
+export function adaptRuntimeChildObservationsV1(
+  input: AdaptRuntimeChildObservationsInput,
+): NormalizedAgentObservationV1[] {
   const openCodeChildren = verifiedOpenCodeChildren(input);
   return input.events.flatMap((record, index) => {
     if (record.event !== 'agent' || !record.data || typeof record.data !== 'object') {
