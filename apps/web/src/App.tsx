@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { flushSync } from 'react-dom';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { Button } from '@open-design/components';
+import { LoginGate } from './auth/LoginGate';
 import { reportAgentDetectDiagnostics } from './analytics/agent-detect';
 import { useAnalytics } from './analytics/provider';
 import {
@@ -397,7 +398,7 @@ function clearStaleAmrModelChoiceOnProfileChange(
 export function resetExecutionConfigAfterSignOut(config: AppConfig): AppConfig {
   return {
     ...config,
-    onboardingCompleted: false,
+    onboardingCompleted: true,
     mode: DEFAULT_CONFIG.mode,
     agentId: null,
     agentModels: {},
@@ -858,8 +859,10 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <IframeKeepAliveProvider>
-        <WorkspaceMemberDirectoryPreloader />
-        <AppInner />
+        <LoginGate>
+          <WorkspaceMemberDirectoryPreloader />
+          <AppInner />
+        </LoginGate>
       </IframeKeepAliveProvider>
     </MotionConfig>
   );

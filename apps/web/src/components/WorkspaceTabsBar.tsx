@@ -661,7 +661,7 @@ export function WorkspaceTabsBar({
   route,
   projects,
   activeProjectWorkspaceId,
-  onboardingCompleted = false,
+  onboardingCompleted = true,
   identityScopeKey,
 }: Props) {
   const t = useT();

@@ -983,26 +983,12 @@ export function EntryTopRightCluster({
               {confirmSignOut ? (
                 <SignOutConfirmDialog
                   onCancel={() => setConfirmSignOut(false)}
-                  onConfirm={() => {
-                    setConfirmSignOut(false);
-                    // Real sign-out: clear the vela profile auth on the
-                    // daemon, then nudge every workspace surface to re-read
-                    // (the context read now resolves to null → the shell
-                    // falls back to the signed-out local form).
-                    void velaLogout().then(async (result) => {
-                      if (!result.ok) return;
-                      await onSignedOut?.();
-                      // recvqbkcLqIFH7: a stale "dismissed" flag on the
-                      // footer's CloudSignInTip must not survive a real
-                      // sign-out, or the rail's only sign-in entry point
-                      // silently disappears with nothing left in its place.
-                      resetCloudSignInTipDismissal();
-                      notifyAmrLoginStatusChanged();
-                      notifyWorkspaceContextRefresh();
-                      notifyWorkspaceBillingRefresh();
-                      notifyTeamProjectsChanged();
+                 onConfirm={() => {
+                   setConfirmSignOut(false);
+                    void fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+                      window.location.reload();
                     });
-                  }}
+                 }}
                 />
               ) : null}
               </div>
