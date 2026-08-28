@@ -826,6 +826,8 @@ import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/de
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes, createEnforceWorkspaceProjectMutation } from './routes/project/index.js';
 import { registerVelaRoutes } from './routes/vela.js';
+import { registerVela2HideSignRoutes } from './routes/vela-hidesign.js';
+import { registerCollabContextHideSignRoutes } from './routes/collab-context-hidesign.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js';
@@ -5364,7 +5366,9 @@ export async function startServer({
       freshAuthority: true,
     }).catch(() => undefined);
   };
-  let workspaceAnalyticsService: AnalyticsService | null = null;
+ let workspaceAnalyticsService: AnalyticsService | null = null;
+  registerCollabContextHideSignRoutes(app);
+  registerVela2HideSignRoutes(app, { env: process.env });
   registerCollabContextRoutes(app, {
     workspaceContext: collab.workspaceContext,
     configuredEnv: configuredAmrEnv,

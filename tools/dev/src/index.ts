@@ -302,6 +302,8 @@ function statusMatchesForcedPort(url: string | null | undefined, forcedPort: num
   return forcedPort == null || (url != null && urlPort(url) === String(forcedPort));
 }
 
+const DEFAULT_WEB_PORT = 9529;
+
 function prependNodePath(entries: string[], current = process.env.NODE_PATH): string {
   const existing = current == null || current.length === 0 ? [] : current.split(path.delimiter);
   return [...entries, ...existing].join(path.delimiter);
@@ -482,10 +484,12 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
         ]),
         [SIDECAR_ENV.DAEMON_PORT]: daemonPort,
         [SIDECAR_ENV.WEB_DIST_DIR]: config.apps.web.nextDistDir,
-        [SIDECAR_ENV.WEB_TSCONFIG_PATH]: config.apps.web.nextTsconfigPath,
-        [SIDECAR_ENV.WEB_PORT]: String(webPort ?? 0),
-        PORT: String(webPort ?? 0),
-        ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
+       [SIDECAR_ENV.WEB_TSCONFIG_PATH]: config.apps.web.nextTsconfigPath,
+        [SIDECAR_ENV.WEB_PORT]: String(webPort ?? DEFAULT_WEB_PORT),
+        PORT: String(webPort ?? DEFAULT_WEB_PORT),
+      // When --web-port is omitted, prefer 9529 so the browser URL is stable.
+       // The web sidecar falls back to a random port if 9529 is occupied.
+       ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
         ...(options.prod === true
           ? { NODE_ENV: "production", OD_WEB_OUTPUT_MODE: "server", OD_WEB_PROD: "1" }
           : {}),
@@ -662,10 +666,10 @@ async function startDaemon(
   options: CliOptions,
   startOptions: { refreshWebOrigin?: boolean; requireDesktopAuth?: boolean } = {},
 ) {
-  const daemonPort = parsePortOption(options.daemonPort, "--daemon-port");
-  const webPort = parsePortOption(options.webPort, "--web-port");
-  let existing = await inspectDaemonRuntime(runtimeLookup(config));
-  const shouldRefreshWebOrigin = startOptions.refreshWebOrigin === true && webPort != null;
+ const daemonPort = parsePortOption(options.daemonPort, "--daemon-port");
+ const webPort = parsePortOption(options.webPort, "--web-port") ?? DEFAULT_WEB_PORT;
+ let existing = await inspectDaemonRuntime(runtimeLookup(config));
+ const shouldRefreshWebOrigin = startOptions.refreshWebOrigin === true && webPort != null;
   const existingWeb = shouldRefreshWebOrigin
     ? await inspectWebRuntime(runtimeLookup(config))
     : null;
@@ -727,7 +731,7 @@ async function startDaemon(
 }
 
 async function startWeb(config: ToolDevConfig, options: CliOptions) {
-  const webPort = parsePortOption(options.webPort, "--web-port");
+  const webPort = parsePortOption(options.webPort, "--web-port") ?? DEFAULT_WEB_PORT;
   const existing = await inspectWebRuntime(runtimeLookup(config));
   if (existing?.url != null && statusMatchesForcedPort(existing.url, webPort)) {
     if (options.parentPid != null) {

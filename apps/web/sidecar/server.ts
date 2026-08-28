@@ -935,7 +935,23 @@ async function createWebSidecarHandle(
   closeRuntime: () => Promise<void> | void,
   isRuntimeRunning?: () => boolean,
 ): Promise<WebSidecarHandle> {
-  const port = await listen(httpServer, parsePort(process.env[WEB_PORT_ENV]));
+  // Always prefer port 9529 first, regardless of dev/prod mode or the
+  // startup env var. Only fall back to a random port if 9529 is occupied,
+  // so the web URL stays stable across runs.
+  const DEFAULT_WEB_PORT = 9529;
+  const envPort = parsePort(process.env[WEB_PORT_ENV]);
+  const preferredPort = DEFAULT_WEB_PORT//envPort > 0 ? envPort : DEFAULT_WEB_PORT;
+  let port: number;
+  try {
+    port = await listen(httpServer, preferredPort);
+  } catch (error) {
+    if (preferredPort > 0) {
+      console.warn(`[web] port ${preferredPort} unavailable, using a random port`);
+      port = await listen(httpServer, 0);
+    } else {
+      throw error;
+    }
+  }
   const state: WebStatusSnapshot = {
     pid: process.pid,
     state: "running",
