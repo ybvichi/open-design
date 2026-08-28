@@ -2118,7 +2118,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
 
       {recommendationSlot}
 
-      {activeSubChips.length > 0 && isSubChipParent(activeChipId) ? (
+      {/* {activeSubChips.length > 0 && isSubChipParent(activeChipId) ? (
         <SubTypeRow
           subChips={activeSubChips}
           selectedSlug={selectedSubcategory}
@@ -2147,9 +2147,9 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             if (activeChipId === 'prototype') onPickPrototypeSubtype?.(null);
           }}
         />
-      ) : null}
+      ) : null} */}
 
-      {pluginsLoading ? (
+      {/* {pluginsLoading ? (
         <PluginPromptPresetsLoading />
       ) : filteredExamplePlugins.length > 0 && activeChipId ? (
         <PluginPromptPresets
@@ -2195,7 +2195,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             )}
           </div>
         </div>
-      ) : null}
+      ) : null} */}
 
       {error ? (
         <div role="alert" className="home-hero__error">

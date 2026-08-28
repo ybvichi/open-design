@@ -764,7 +764,7 @@ export function EntryTopRightCluster({
           {/* GitHub star chip: its own option in the cluster, right after the
               campaign badge (per product) — it used to live in the account
               menu's social row. */}
-          <a
+          {/* <a
             className="entry-top-right-github"
             href={REPO_URL}
             {...externalLinkProps}
@@ -775,7 +775,7 @@ export function EntryTopRightCluster({
           >
             <Icon name="github-filled" size={14} />
             <span>{githubStars == null ? GITHUB_STARS_FALLBACK_LABEL : formatStars(githubStars)}</span>
-          </a>
+          </a> */}
           {/* One shared capsule for the account module (per product: 头像和积分
               合并成一个胶囊): credits segment on the left (same availability
               rule as the menu's billing card; clicking jumps to B's billing
@@ -785,7 +785,7 @@ export function EntryTopRightCluster({
           {context ? (
             <>
               <div className="entry-top-right-account-pill">
-          {(billing || balanceLabel) && showCreditsBalance ? (
+          {/* {(billing || balanceLabel) && showCreditsBalance ? (
             <button
               type="button"
               className="entry-top-right-credits"
@@ -800,7 +800,7 @@ export function EntryTopRightCluster({
             >
               <RemixIcon name="battery-charge-line" size={13} /> {balanceLabel ?? '—'}
             </button>
-          ) : null}
+          ) : null} */}
             <div
               ref={accountContainerRef}
               className="entry-nav-rail__account entry-nav-rail__account--floating"
@@ -853,7 +853,7 @@ export function EntryTopRightCluster({
                         The balance row links out to B's console. It receives
                         only an explicitly scoped money value; raw credits are
                         never formatted as dollars here. */}
-                    {billing || balanceLabel ? (
+                    {/* {billing || balanceLabel ? (
                       <div className="entry-nav-rail__menu-credits">
                         <div className="entry-nav-rail__menu-credits-head">
                           <span className="entry-nav-rail__menu-credits-plan">
@@ -874,9 +874,6 @@ export function EntryTopRightCluster({
                             </button>
                           ) : null}
                         </div>
-                        {/* #62 (product ruling): clicking the balance jumps straight to
-                            B's console dashboard for the usage detail — there is
-                            NO intermediate credits popover in the client. */}
                         <button
                           type="button"
                           className="entry-nav-rail__menu-credits-row"
@@ -898,7 +895,7 @@ export function EntryTopRightCluster({
                           </span>
                         </button>
                       </div>
-                    ) : null}
+                    ) : null} */}
                     <button
                       type="button"
                       className="entry-nav-rail__menu-item"
