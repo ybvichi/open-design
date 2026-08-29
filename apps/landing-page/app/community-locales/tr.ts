@@ -2,15 +2,15 @@ import type { DeepPartial, CommunityCopy } from '../community-i18n';
 
 const tr: DeepPartial<CommunityCopy> = {
   hub: {
-    title: "Topluluk — OpenDesign",
-    desc: "OpenDesign topluluğu: herkesin gözü önünde iş çıkaran katkıcılar, yerel atölyeler düzenleyen elçiler ve Discord'u sıcak tutan moderatörler.",
+    title: "Topluluk — HiDesign",
+    desc: "HiDesign topluluğu: herkesin gözü önünde iş çıkaran katkıcılar, yerel atölyeler düzenleyen elçiler ve Discord'u sıcak tutan moderatörler.",
     heroTitle: "Açık tasarım <em>şekillenir</em><br/>onu siz yayımlayınca.",
     heroLead:
-      "OpenDesign herkesin gözü önünde, insanlar tarafından inşa ediliyor. Skill'ler, DESIGN.md sistemleri, plugin'ler, dokümanlar: her commit bir fırça darbesi. Aşağıdan bir kapı seçin, kendi odanızı bulun.",
+      "HiDesign herkesin gözü önünde, insanlar tarafından inşa ediliyor. Skill'ler, DESIGN.md sistemleri, plugin'ler, dokümanlar: her commit bir fırça darbesi. Aşağıdan bir kapı seçin, kendi odanızı bulun.",
     cardMetaH: "İlk merge'de otomatik basılır",
     cardMetaS: "PNG · X'te paylaşılır",
     cardHeroAlt:
-      "OpenDesign katkıcı onur kartı — @dev-kp-eloper, en iyi %99,9, Giotto kademesi",
+      "HiDesign katkıcı onur kartı — @dev-kp-eloper, en iyi %99,9, Giotto kademesi",
     cards: [
       {
         ord: "I",
@@ -21,7 +21,7 @@ const tr: DeepPartial<CommunityCopy> = {
       {
         ord: "II",
         title: "Elçiler",
-        sub: "Şehrinizde OpenDesign'ın <em>sesi</em>.",
+        sub: "Şehrinizde HiDesign'ın <em>sesi</em>.",
         body: "Yerel bir atölye açın. Buluşmaları, demoları, gece geç saatlere kadar süren eleştirileri toplayın. Bütçe, materyal ve çekirdek ekibe özel bir kanalla desteklenir.",
       },
       {
@@ -33,14 +33,14 @@ const tr: DeepPartial<CommunityCopy> = {
     ],
   },
   contributors: {
-    title: "Katkıcılar — OpenDesign",
-    desc: "OpenDesign'a katkıda bulunun: maintainer'lar, haftalık ve tüm zamanların katkıcı liderlik tabloları, good first issue'lar ve ilk eserinizi yayımlamak için sıfır kod yolu.",
+    title: "Katkıcılar — HiDesign",
+    desc: "HiDesign'a katkıda bulunun: maintainer'lar, haftalık ve tüm zamanların katkıcı liderlik tabloları, good first issue'lar ve ilk eserinizi yayımlamak için sıfır kod yolu.",
     heroTitle: "İşi <em>yayımlayan</em> eller.",
     heroLead:
-      "OpenDesign herkesin gözü önünde, insanlar tarafından inşa ediliyor. Skill'ler, DESIGN.md sistemleri, plugin'ler, dokümanlar: her commit bir fırça darbesi. Bir issue seçin, bir PR gönderin ve merge edildiğiniz an eşi benzeri olmayan bir onur kartı kazanın.",
+      "HiDesign herkesin gözü önünde, insanlar tarafından inşa ediliyor. Skill'ler, DESIGN.md sistemleri, plugin'ler, dokümanlar: her commit bir fırça darbesi. Bir issue seçin, bir PR gönderin ve merge edildiğiniz an eşi benzeri olmayan bir onur kartı kazanın.",
     showcase: {
       kicker: "Her şeyi plugin yap",
-      h2: "Sahne olarak OpenDesign. Gösteri olarak <em>sizin işiniz</em>.",
+      h2: "Sahne olarak HiDesign. Gösteri olarak <em>sizin işiniz</em>.",
       intro:
         "Atölye aynı zamanda bir galeri. İşi ortaya çıkarmanıza yardım etmek adresin yarısı; odanın gelip bakmasını sağlamak diğer yarısı. Yayımladığınız her eser bir kasada değil, dünyanın onu bulabileceği bir duvarda yerini alır.",
       tenets: [
@@ -70,7 +70,7 @@ const tr: DeepPartial<CommunityCopy> = {
         steps: [
           {
             h4: "Komutu ajana verin",
-            body: "Yukarıdaki komutu OpenDesign içindeki ajana ya da zaten elinizin altında tuttuğunuz herhangi birine yapıştırın: Claude Code, Codex, Cursor. Kendini kurar.",
+            body: "Yukarıdaki komutu HiDesign içindeki ajana ya da zaten elinizin altında tuttuğunuz herhangi birine yapıştırın: Claude Code, Codex, Cursor. Kendini kurar.",
           },
           {
             h4: "Skill'i uyandırın",
@@ -87,20 +87,20 @@ const tr: DeepPartial<CommunityCopy> = {
       kicker: "Dümeni tutmak",
       h2: "<em>Maintainer'lar</em>.",
       intro:
-        "Maintainer'lar OpenDesign'ın yönünü ve kalitesini korur: katkıları inceler, standardı tutarlı tutar ve daha fazla katkıcının projede yerini kazanmasına alan açar.",
+        "Maintainer'lar HiDesign'ın yönünü ve kalitesini korur: katkıları inceler, standardı tutarlı tutar ve daha fazla katkıcının projede yerini kazanmasına alan açar.",
       role: "Maintainer",
       bios: {
         "Nagendhra-web":
-          "Nagendhra, üretim gerçeğine dair bir veri mühendisinin içgüdüsünü getiriyor: hatayı bul, uç durumu ölç ve düzgünce düzelt. OpenDesign'da bu; deploy ön kontrol çalışmalarında, asset paketleme sağlamlaştırmasında ve katkıcılar iş yayımladığında projeyi güvenilir hissettiren Windows düzeltmelerinde kendini gösteriyor.",
+          "Nagendhra, üretim gerçeğine dair bir veri mühendisinin içgüdüsünü getiriyor: hatayı bul, uç durumu ölç ve düzgünce düzelt. HiDesign'da bu; deploy ön kontrol çalışmalarında, asset paketleme sağlamlaştırmasında ve katkıcılar iş yayımladığında projeyi güvenilir hissettiren Windows düzeltmelerinde kendini gösteriyor.",
         "Sid-Qin":
-          "Sid, bir tasarımcının detay gözüne sahip çok yönlü mühendis: hem bozuk CLI yolunu hem de eğri duran etkileşim öğesini fark eden türden bir maintainer. OpenDesign'da Sid; export akışlarını, plugin eylemlerini, Windows shim'lerini, MIME işlemeyi ve ajan altyapısını bir topluluğun üzerine inşa edebileceği kadar keskin tutuyor.",
+          "Sid, bir tasarımcının detay gözüne sahip çok yönlü mühendis: hem bozuk CLI yolunu hem de eğri duran etkileşim öğesini fark eden türden bir maintainer. HiDesign'da Sid; export akışlarını, plugin eylemlerini, Windows shim'lerini, MIME işlemeyi ve ajan altyapısını bir topluluğun üzerine inşa edebileceği kadar keskin tutuyor.",
       },
     },
     allTime: {
       kicker: "Tüm zamanların sinyali",
       h2: "<em>Derin kökleri</em> olan katkıcılar.",
       intro:
-        "Fikirleri, düzeltmeleri ve zanaati ortak OpenDesign standardına dönüştürmeyi sürdüren yetenekli katkıcıların uzun soluklu bir kaydı.",
+        "Fikirleri, düzeltmeleri ve zanaati ortak HiDesign standardına dönüştürmeyi sürdüren yetenekli katkıcıların uzun soluklu bir kaydı.",
       rankLabel: "Tüm zamanların katkıcısı",
       week: "Depo geçmişi",
       quote:
@@ -116,12 +116,12 @@ const tr: DeepPartial<CommunityCopy> = {
       kicker: "Bu haftanın sinyali",
       h2: "<em>Bu hafta</em> öne çıkan on katkıcı.",
       intro:
-        "PR'lar merge eden, ürünü geliştiren ve OpenDesign'ı canlı hissettiren keskin katkıcıların anlık görüntüsü.",
+        "PR'lar merge eden, ürünü geliştiren ve HiDesign'ı canlı hissettiren keskin katkıcıların anlık görüntüsü.",
       rankLabel: "Bu haftanın lideri",
       week: "Son 7 gün",
       handleSuffix: "· bu hafta önde",
       blurbTemplate:
-        "{name} bu hafta {prs} merge edilmiş PR ve OpenDesign'ı hareket halinde tutan istikrarlı zanaatiyle tempoyu belirliyor.",
+        "{name} bu hafta {prs} merge edilmiş PR ve HiDesign'ı hareket halinde tutan istikrarlı zanaatiyle tempoyu belirliyor.",
       statRank: "Sıra",
       statPrs: "PR · 7g",
       headContributor: "Katkıcı",
@@ -132,7 +132,7 @@ const tr: DeepPartial<CommunityCopy> = {
       kicker: "İlk katkınızı seçin",
       h2: "Açık issue'lar, <em>sizin için etiketlendi</em>.",
       intro:
-        'OpenDesign deposundaki <span class="num">label:&ldquo;good first issue&rdquo;</span> etiketinden canlı olarak. Bir issue üzerine yorum yaparak onu üstlenin; bir maintainer bir gün içinde size atayacaktır.',
+        'HiDesign deposundaki <span class="num">label:&ldquo;good first issue&rdquo;</span> etiketinden canlı olarak. Bir issue üzerine yorum yaparak onu üstlenin; bir maintainer bir gün içinde size atayacaktır.',
       loading: "good first issue",
       foot: 'İlk <span class="num" id="issue-count">—</span> açık good-first-issue gösteriliyor',
       seeAll: "Tümünü GitHub'da gör",
@@ -164,16 +164,16 @@ const tr: DeepPartial<CommunityCopy> = {
         {
           n: "Adım 04",
           h3: "Merge → <em>kart</em>.",
-          body: "Bot, merge edildiğiniz an onur kartınızı basar ve bot-cards dalına push eder. Onu X'te #OpenDesign ile paylaşın; en iyilerini yeniden paylaşıyoruz.",
+          body: "Bot, merge edildiğiniz an onur kartınızı basar ve bot-cards dalına push eder. Onu X'te #HiDesign ile paylaşın; en iyilerini yeniden paylaşıyoruz.",
         },
       ],
       cta: "Katkı rehberini okuyun",
     },
   },
   ambassadors: {
-    title: "Elçiler — OpenDesign",
-    desc: "OpenDesign elçisi olun: yerel bir atölye açın, buluşmalar ve eleştiriler düzenleyin; bütçe, materyal ve çekirdek ekibe özel bir kanal edinin.",
-    heroTitle: "Şehrinizde OpenDesign'ın <em>sesi</em> olun.",
+    title: "Elçiler — HiDesign",
+    desc: "HiDesign elçisi olun: yerel bir atölye açın, buluşmalar ve eleştiriler düzenleyin; bütçe, materyal ve çekirdek ekibe özel bir kanal edinin.",
+    heroTitle: "Şehrinizde HiDesign'ın <em>sesi</em> olun.",
     heroLead:
       "Yerel bir atölye açın. Buluşmaları, demoları, gece geç saatlere kadar süren eleştirileri toplayın. Sizi bütçe, materyal ve çekirdek ekibe özel bir kanalla destekliyoruz.",
     program: {
@@ -181,7 +181,7 @@ const tr: DeepPartial<CommunityCopy> = {
       h2: "Meslek, <em>himaye</em>, ahit.",
       applyCta: "Google Form ile başvurun",
       applyNote:
-        "Elçiler, OpenDesign'ı bir depodan; katkıcıların masada mürekkep ve soğumuş kahveyle bir odada buluşabileceği bir şeye dönüştürür.",
+        "Elçiler, HiDesign'ı bir depodan; katkıcıların masada mürekkep ve soğumuş kahveyle bir odada buluşabileceği bir şeye dönüştürür.",
       cols: [
         {
           n: "I · Meslek",
@@ -224,7 +224,7 @@ const tr: DeepPartial<CommunityCopy> = {
       kicker: "Sahada",
       h2: "<em>Elçilerle</em> tanışın.",
       intro:
-        "OpenDesign'ın daha fazla tasarımcı ve ekibe ulaşmasına yardım eden yerel organizatörler, üreticiler ve topluluk kurucuları.",
+        "HiDesign'ın daha fazla tasarımcı ve ekibe ulaşmasına yardım eden yerel organizatörler, üreticiler ve topluluk kurucuları.",
       places: [
         "Sunshine Coast, Avustralya",
         "Kuala Lumpur, Malezya",
@@ -234,8 +234,8 @@ const tr: DeepPartial<CommunityCopy> = {
     },
   },
   moderators: {
-    title: "Moderatörler — OpenDesign",
-    desc: "OpenDesign Discord moderatörleriyle tanışın ve AI-native tasarımcıların iş yayımladığı, plugin açtığı, betaları test ettiği ve birbirini takılıp kaldığı yerden çıkardığı odaya katılın.",
+    title: "Moderatörler — HiDesign",
+    desc: "HiDesign Discord moderatörleriyle tanışın ve AI-native tasarımcıların iş yayımladığı, plugin açtığı, betaları test ettiği ve birbirini takılıp kaldığı yerden çıkardığı odaya katılın.",
     heroTitle: "<em>Katkıcıların</em> takıldığı oda.",
     heroLead:
       "Ajan-tasarım çağının ön saflarında. Discord, dünyanın en keskin AI-native tasarımcılarının toplandığı yer. Odayı sıcak tutan yöneticilerle tanışın.",
@@ -248,11 +248,11 @@ const tr: DeepPartial<CommunityCopy> = {
       cards: [
         {
           role: "Stüdyodan",
-          bio: "OpenDesign kurucu ekibinden. Discord'un takılmak için güzel bir yer olarak kalmasını umuyor. İstediğiniz zaman, her soru için el sallayın.",
+          bio: "HiDesign kurucu ekibinden. Discord'un takılmak için güzel bir yer olarak kalmasını umuyor. İstediğiniz zaman, her soru için el sallayın.",
         },
         {
           role: "Odanın yöneticisi",
-          bio: "Discord ve topluluk bakımında deneyimli bir el. Odayı sıcak, kapıları açık, sohbeti akışkan tutar. OpenDesign tutkunu.",
+          bio: "Discord ve topluluk bakımında deneyimli bir el. Odayı sıcak, kapıları açık, sohbeti akışkan tutar. HiDesign tutkunu.",
         },
       ],
       channelNotes: ["yayımlanan iş", "üreticiler", "erken geri bildirim", "takılmaktan kurtulma"],

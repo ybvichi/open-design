@@ -21,7 +21,7 @@ export function resolveHyperFramesCliPath({
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Bundled HyperFrames CLI is unavailable. Reinstall Open Design so its pinned ` +
+      `Bundled HyperFrames CLI is unavailable. Reinstall Hi Design so its pinned ` +
         `HyperFrames runtime and native dependencies match this platform. ${detail}`,
     );
   }

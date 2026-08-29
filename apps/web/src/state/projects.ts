@@ -788,7 +788,7 @@ export async function createProject(
   );
   try {
     // `randomUUID` falls back to `crypto.getRandomValues` / `Math.random`
-    // when `crypto.randomUUID` is unavailable. OpenDesign served over
+    // when `crypto.randomUUID` is unavailable. HiDesign served over
     // plain HTTP on a LAN IP (Docker / unRAID self-hosting) is a
     // non-secure context, where `crypto.randomUUID` is undefined and
     // calling it directly throws — the surrounding try/catch then turns
@@ -822,7 +822,7 @@ export async function createProject(
       }
       if (await isDaemonProxyConnectionFailure(resp)) {
         throw new ProjectCreateError(
-          'Could not reach the local OpenDesign service',
+          'Could not reach the local HiDesign service',
           null,
           null,
           true,
@@ -2190,7 +2190,7 @@ export async function publishGeneratedPluginToGitHub(
   );
 }
 
-export async function contributeGeneratedPluginToOpenDesign(
+export async function contributeGeneratedPluginToHiDesign(
   projectId: string,
   relativePath: string,
   workspaceContext?: WorkspaceCollabContext | null,

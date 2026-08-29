@@ -47,13 +47,13 @@ describe("legacy payload desktop handoff", () => {
         root,
         version: "1.2.3-beta.5",
       });
-      const outerExecutablePath = join(root, "installed", "Open Design Beta.app", "Contents", "MacOS", "Open Design Beta");
+      const outerExecutablePath = join(root, "installed", "Hi Design Beta.app", "Contents", "MacOS", "Hi Design Beta");
       const payloadExecutablePath = join(
         versionPaths.payloadRoot,
-        "Open Design Beta.app",
+        "Hi Design Beta.app",
         "Contents",
         "MacOS",
-        "Open Design Beta",
+        "Hi Design Beta",
       );
       await mkdir(join(payloadExecutablePath, ".."), { recursive: true });
       await mkdir(join(outerExecutablePath, ".."), { recursive: true });
@@ -64,8 +64,8 @@ describe("legacy payload desktop handoff", () => {
       await writeFile(versionPaths.manifestPath, `${JSON.stringify({
         channel: "beta",
         entry: {
-          cwd: "payload/Open Design Beta.app",
-          executable: "payload/Open Design Beta.app/Contents/MacOS/Open Design Beta",
+          cwd: "payload/Hi Design Beta.app",
+          executable: "payload/Hi Design Beta.app/Contents/MacOS/Hi Design Beta",
         },
         namespace,
         payloadRoot: "payload",
@@ -89,7 +89,7 @@ describe("legacy payload desktop handoff", () => {
       })}\n`);
       await writeFile(launcherPaths.installPath, `${JSON.stringify({
         channel: "beta",
-        launchPath: join(root, "installed", "Open Design Beta.app"),
+        launchPath: join(root, "installed", "Hi Design Beta.app"),
         namespace,
         schemaVersion: LAUNCHER_SCHEMA_VERSION,
       })}\n`);
@@ -293,13 +293,13 @@ describe("legacy payload desktop handoff", () => {
       root,
       version: "1.2.3-beta.5",
     });
-    const outerExecutablePath = join(root, "installed", "Open Design Beta.app", "Contents", "MacOS", "Open Design Beta");
+    const outerExecutablePath = join(root, "installed", "Hi Design Beta.app", "Contents", "MacOS", "Hi Design Beta");
     const payloadExecutablePath = join(
       versionPaths.payloadRoot,
-      "Open Design Beta.app",
+      "Hi Design Beta.app",
       "Contents",
       "MacOS",
-      "Open Design Beta",
+      "Hi Design Beta",
     );
     await mkdir(join(payloadExecutablePath, ".."), { recursive: true });
     await mkdir(join(outerExecutablePath, ".."), { recursive: true });
@@ -310,8 +310,8 @@ describe("legacy payload desktop handoff", () => {
     await writeFile(versionPaths.manifestPath, `${JSON.stringify({
       channel: "beta",
       entry: {
-        cwd: "payload/Open Design Beta.app",
-        executable: "payload/Open Design Beta.app/Contents/MacOS/Open Design Beta",
+        cwd: "payload/Hi Design Beta.app",
+        executable: "payload/Hi Design Beta.app/Contents/MacOS/Hi Design Beta",
       },
       namespace,
       payloadRoot: "payload",
@@ -335,7 +335,7 @@ describe("legacy payload desktop handoff", () => {
     })}\n`);
     await writeFile(launcherPaths.installPath, `${JSON.stringify({
       channel: "beta",
-      launchPath: join(root, "installed", "Open Design Beta.app"),
+      launchPath: join(root, "installed", "Hi Design Beta.app"),
       namespace,
       schemaVersion: LAUNCHER_SCHEMA_VERSION,
     })}\n`);
@@ -850,8 +850,8 @@ describe("legacy payload desktop handoff", () => {
         root,
         version,
       });
-      const outerExecutablePath = join(root, "installed", "Open Design Beta.exe");
-      const payloadExecutablePath = join(versionPaths.payloadRoot, "Open Design Beta.exe");
+      const outerExecutablePath = join(root, "installed", "Hi Design Beta.exe");
+      const payloadExecutablePath = join(versionPaths.payloadRoot, "Hi Design Beta.exe");
       await mkdir(join(root, "installed"), { recursive: true });
       await mkdir(versionPaths.payloadRoot, { recursive: true });
       await mkdir(runtimeRoot, { recursive: true });
@@ -862,7 +862,7 @@ describe("legacy payload desktop handoff", () => {
         channel: "beta",
         entry: {
           cwd: "payload",
-          executable: "payload/Open Design Beta.exe",
+          executable: "payload/Hi Design Beta.exe",
         },
         namespace,
         payloadRoot: "payload",

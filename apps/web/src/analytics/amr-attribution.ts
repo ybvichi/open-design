@@ -219,11 +219,11 @@ export function amrHandoffDeviceId(input: {
   return input.installationId ?? input.resolvedDeviceId ?? null;
 }
 
-// Builds the AMR handoff URL with OpenDesign attribution params. When
+// Builds the AMR handoff URL with HiDesign attribution params. When
 // `deviceId` is provided it is added as `od_device_id`, so AMR can link the
-// landing/registration directly back to this OpenDesign install instead of
+// landing/registration directly back to this HiDesign install instead of
 // only through the one-shot entry id. The caller passes it ONLY when the user
-// has consented to metrics: AMR is OpenDesign's official model service, so
+// has consented to metrics: AMR is HiDesign's official model service, so
 // this is a same-owner cross-product link, but it still respects the telemetry
 // opt-in. Pass null/undefined to omit it.
 export function attributedAmrUrl(
@@ -340,7 +340,7 @@ async function mirrorAmrEntryToAmrAnalytics(
       }),
     });
   } catch {
-    // AMR analytics mirroring must never block the primary OpenDesign action.
+    // AMR analytics mirroring must never block the primary HiDesign action.
   }
 }
 

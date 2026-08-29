@@ -29,9 +29,9 @@ export const DEEPSEEK_BINDING: CuratedBinding = {
   getCopy: getDeepseekCopy,
   // The heading already names the collection, so the default eyebrow-prefixed
   // title would read "DeepSeek Harness design · DeepSeek Harness plugins …".
-  hubTitle: (copy) => `${copy.collectionHeading} · OpenDesign`,
+  hubTitle: (copy) => `${copy.collectionHeading} · HiDesign`,
   // The hero's secondary CTA sends readers to the "design with DeepSeek
-  // Harness inside OpenDesign" guide instead of the upstream repo.
+  // Harness inside HiDesign" guide instead of the upstream repo.
   heroGuideHref: DEEPSEEK_GUIDE_HREF,
   skillCopy: (copy, slug) => deepseekSkillCopy(copy as DeepseekCopy, slug),
   categoryLabel: (copy, category) =>

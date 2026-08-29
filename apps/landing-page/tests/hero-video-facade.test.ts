@@ -16,7 +16,7 @@ test('hero video facade exposes exactly one labelled, focusable control', () => 
   const button = pageSource.match(/<button[^>]*className='hero-video-play'[\s\S]*?>/)?.[0];
   assert.ok(button, 'play button is missing');
   assert.match(button, /type='button'/);
-  assert.match(button, /aria-label='Play the OpenDesign walkthrough video'/);
+  assert.match(button, /aria-label='Play the HiDesign walkthrough video'/);
   // The button stays in the tab order — it is the focus target.
   assert.doesNotMatch(button, /tabIndex=\{-1\}/);
 

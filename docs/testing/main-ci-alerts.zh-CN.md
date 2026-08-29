@@ -51,7 +51,7 @@
 
 推荐格式：
 
-- `OpenDesign main CI failed`
+- `HiDesign main CI failed`
 - `failing jobs: ...`
 - `commit: ...`
 - `PR: ...`

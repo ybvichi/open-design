@@ -728,7 +728,7 @@ export function shapeDesignTemplate(
     ) ||
     firstParagraph(explicitLocalizedString(data.description, DEFAULT_LOCALE)) ||
     extractFirstProseParagraph(body) ||
-    'OpenDesign renderable design template.';
+    'HiDesign renderable design template.';
   const localizedText = localizeTemplateText({ name, summary, locale });
 
   return {
@@ -775,7 +775,7 @@ export function shapeLiveArtifactTemplate(
     .replace(/\s*[·•]\s*live[\s-]artifact\s+template$/i, '')
     .trim();
 
-  const summary = extractFirstProseParagraph(body) || 'OpenDesign Live Artifact template.';
+  const summary = extractFirstProseParagraph(body) || 'HiDesign Live Artifact template.';
   const localizedText = localizeTemplateText({
     name: localized?.name ?? (cleanH1 || titleizeSlug(slug)),
     summary: localized?.summary ?? summary,

@@ -254,7 +254,7 @@ export const PREMIUM_MODELS: readonly PricingModel[] = [
 ] as const;
 
 /**
- * Hosted image roster, mirrored from the shipped OpenDesign Cloud catalogue
+ * Hosted image roster, mirrored from the shipped HiDesign Cloud catalogue
  * in `apps/daemon/src/media/models.ts` (`provider: 'vela'`, `credentialsRequired:
  * false`): `vela/seedream-5.0`, `vela/seedream-5.0-pro`, `vela/nano-banana-2`
  * (+ `-lite`), and `vela/gpt-image-2`. Variant suffixes are grouped so one model
@@ -774,7 +774,7 @@ const EN: PricingContent = {
   labels: {
     heroTitle: 'Pay only for AI tasks that deliver results',
     footnote: 'Prices shown in USD. Checkout, billing, and auto top-up are handled in the {console}. Adjust or cancel your plan anytime.',
-    consoleLabel: 'OpenDesign Cloud console',
+    consoleLabel: 'HiDesign Cloud console',
     checkoutDestinationUnavailable: 'Checkout destination unavailable. Return to your Cloud Console and open Pricing again.',
     monthly: 'Monthly',
     yearly: 'Yearly',
@@ -860,7 +860,7 @@ const ZH_CN: PricingContent = {
   labels: {
     heroTitle: '只为实际完成的 AI 任务付费',
     footnote: '价格以美元计。结账、账单与自动充值均在 {console} 完成。可随时调整或取消套餐。',
-    consoleLabel: 'OpenDesign Cloud 控制台',
+    consoleLabel: 'HiDesign Cloud 控制台',
     checkoutDestinationUnavailable: '结账环境不可用。请返回 Cloud 控制台后重新打开价格页。',
     monthly: '月付',
     yearly: '年付',
@@ -942,7 +942,7 @@ const ZH_TW: PricingContent = {
   labels: {
     heroTitle: '只為實際完成的 AI 任務付費',
     footnote: '價格以美元計。結帳、帳單與自動加值皆於 {console} 完成。可隨時調整或取消方案。',
-    consoleLabel: 'OpenDesign Cloud 主控台',
+    consoleLabel: 'HiDesign Cloud 主控台',
     checkoutDestinationUnavailable: '結帳環境無法使用。請返回 Cloud 主控台後重新開啟價格頁。',
     monthly: '月付',
     yearly: '年付',
@@ -1024,7 +1024,7 @@ const ES: PricingContent = {
   labels: {
     heroTitle: 'Paga solo por tareas de IA completadas',
     footnote: 'Precios en USD. El pago, la facturación y la recarga automática se gestionan en la {console}. Cambia o cancela tu plan cuando quieras.',
-    consoleLabel: 'consola de OpenDesign Cloud',
+    consoleLabel: 'consola de HiDesign Cloud',
     checkoutDestinationUnavailable: 'El destino de pago no está disponible. Vuelve a la consola Cloud y abre Precios de nuevo.',
     monthly: 'Mensual',
     yearly: 'Anual',
@@ -1106,7 +1106,7 @@ const PT_BR: PricingContent = {
   labels: {
     heroTitle: 'Pague apenas por tarefas de IA concluídas',
     footnote: 'Preços em USD. Pagamento, faturamento e recarga automática são feitos no {console}. Ajuste ou cancele seu plano quando quiser.',
-    consoleLabel: 'console do OpenDesign Cloud',
+    consoleLabel: 'console do HiDesign Cloud',
     checkoutDestinationUnavailable: 'O destino de pagamento não está disponível. Volte ao console Cloud e abra Preços novamente.',
     monthly: 'Mensal',
     yearly: 'Anual',
@@ -1188,7 +1188,7 @@ const RU: PricingContent = {
   labels: {
     heroTitle: 'Платите только за выполненные задачи ИИ',
     footnote: 'Цены указаны в USD. Оплата, выставление счетов и автопополнение выполняются в {console}. Изменение или отмена тарифа в любое время.',
-    consoleLabel: 'консоли OpenDesign Cloud',
+    consoleLabel: 'консоли HiDesign Cloud',
     checkoutDestinationUnavailable: 'Среда оплаты недоступна. Вернитесь в консоль Cloud и снова откройте страницу тарифов.',
     monthly: 'Месяц',
     yearly: 'Год',
@@ -1270,7 +1270,7 @@ const FR: PricingContent = {
   labels: {
     heroTitle: 'Payez uniquement pour les tâches IA terminées',
     footnote: 'Prix indiqués en USD. Le paiement, la facturation et la recharge automatique se gèrent dans la {console}. Ajustez ou résiliez votre forfait à tout moment.',
-    consoleLabel: 'console OpenDesign Cloud',
+    consoleLabel: 'console HiDesign Cloud',
     checkoutDestinationUnavailable: 'La destination de paiement est indisponible. Revenez à la console Cloud et rouvrez la page Tarifs.',
     monthly: 'Mensuel',
     yearly: 'Annuel',
@@ -1352,7 +1352,7 @@ const KO: PricingContent = {
   labels: {
     heroTitle: '완료된 AI 작업에만 비용을 지불하세요',
     footnote: '가격은 USD 기준입니다. 결제, 청구, 자동 충전은 {console}에서 처리됩니다. 플랜 변경 또는 취소는 언제든 가능합니다.',
-    consoleLabel: 'OpenDesign Cloud 콘솔',
+    consoleLabel: 'HiDesign Cloud 콘솔',
     checkoutDestinationUnavailable: '결제 환경을 사용할 수 없습니다. Cloud 콘솔로 돌아가 요금 페이지를 다시 여세요.',
     monthly: '월간',
     yearly: '연간',
@@ -1434,7 +1434,7 @@ const DE: PricingContent = {
   labels: {
     heroTitle: 'Zahle nur für abgeschlossene KI-Aufgaben',
     footnote: 'Preise in USD. Checkout, Abrechnung und automatisches Aufladen erfolgen in der {console}. Plan jederzeit anpassen oder kündigen.',
-    consoleLabel: 'OpenDesign Cloud Konsole',
+    consoleLabel: 'HiDesign Cloud Konsole',
     checkoutDestinationUnavailable: 'Das Zahlungsziel ist nicht verfügbar. Kehre zur Cloud-Konsole zurück und öffne die Preisseite erneut.',
     monthly: 'Monatlich',
     yearly: 'Jährlich',
@@ -1516,7 +1516,7 @@ const JA: PricingContent = {
   labels: {
     heroTitle: '完了した AI タスクにだけ支払う',
     footnote: '価格は米ドル表示です。決済・請求・自動チャージは {console} で行います。プランの変更・解約はいつでも可能です。',
-    consoleLabel: 'OpenDesign Cloud コンソール',
+    consoleLabel: 'HiDesign Cloud コンソール',
     checkoutDestinationUnavailable: '決済先を利用できません。Cloud コンソールに戻り、料金ページを開き直してください。',
     monthly: '月額',
     yearly: '年額',

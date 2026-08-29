@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a narrow authenticated Vela endpoint that maps migrated OpenDesign Pricing interactions into the existing AMR subscription analytics registry.
+**Goal:** Add a narrow authenticated Vela endpoint that maps migrated HiDesign Pricing interactions into the existing AMR subscription analytics registry.
 
 **Architecture:** A dedicated module owns a strict reduced request schema, source-origin checks, bounded per-user throttling, and mapping into `AnalyticsService`. The browser never supplies registry keys or Vela common metadata; the server stamps them and reuses the existing AMR/PostHog pipeline.
 
@@ -117,7 +117,7 @@ expect(mapped[0]).toMatchObject({
 });
 ```
 
-Assert that pricing click maps to `registryKey=subscription_pricing_click`, `eventName=ui_click`, `eventType=click`. Include wallet/dashboard, interval, plan CTA, Enterprise elements, zero-valued Go fields, null current-plan fields, and strict validated OpenDesign attribution.
+Assert that pricing click maps to `registryKey=subscription_pricing_click`, `eventName=ui_click`, `eventType=click`. Include wallet/dashboard, interval, plan CTA, Enterprise elements, zero-valued Go fields, null current-plan fields, and strict validated HiDesign attribution.
 
 - [ ] **Step 2: Run the mapping test and verify RED**
 
@@ -244,7 +244,7 @@ Expected: zero failures.
 
 - [ ] **Step 4: Create the Vela PR with `odc`**
 
-Verify `nexus status --json`, `odc whoami`, and `odc agent verify codex --scope project`. Create the PR with Vela-first deployment instructions and cross-link OpenDesign PR #7299.
+Verify `nexus status --json`, `odc whoami`, and `odc agent verify codex --scope project`. Create the PR with Vela-first deployment instructions and cross-link HiDesign PR #7299.
 
 - [ ] **Step 5: Request independent review**
 

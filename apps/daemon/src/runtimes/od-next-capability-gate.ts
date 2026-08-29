@@ -63,7 +63,7 @@ const ALL_REQUIRED_CASES = [
 ] as const;
 
 /**
- * Exact Codex 0.147.0 tuple replayed by Open Design against the installed CLI
+ * Exact Codex 0.147.0 tuple replayed by Hi Design against the installed CLI
  * and the matching rust-v0.147.0 source. The failure case uses a local
  * Responses endpoint that closes only the already-started Child stream, so it
  * exercises Codex's native task_complete.error and parent recovery path
@@ -89,7 +89,7 @@ export const CODEX_0_147_0_BEST_EFFORT_MANIFEST =
   });
 
 /**
- * Open Design-owned best-effort replay for the exact native OpenCode tuple.
+ * Hi Design-owned best-effort replay for the exact native OpenCode tuple.
  * The source recording is reduced to structural facts in the checked-in seed;
  * no upstream or runtime-owner endorsement is implied.
  */
@@ -113,7 +113,7 @@ export const OPENCODE_1_18_18_BEST_EFFORT_MANIFEST =
   });
 
 /**
- * Open Design-owned replay of the exact Claude 2.1.233 Agent stream-json
+ * Hi Design-owned replay of the exact Claude 2.1.233 Agent stream-json
  * protocol. The checked-in seed contains structural identities only; no
  * Prompt body, output, path, credential, or upstream endorsement is retained.
  */

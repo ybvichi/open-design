@@ -1370,7 +1370,7 @@ ${block('open-design-plan-contract', planContract(snapshot))}`),
 
   it('recovers a Direct Edit completion the agent delivered but never declared', () => {
     // The observed field failure: the agent writes the canonical deliverable
-    // correctly, Open Design's own validator resolves it, and then the agent
+    // correctly, Hi Design's own validator resolves it, and then the agent
     // answers in prose without emitting a single machine block. Refusing that
     // turn stranded a finished artifact behind a generic failure card, and no
     // repair could rescue it — `tryBeginSerializationRepair` needs a recovered
@@ -1400,7 +1400,7 @@ ${block('open-design-plan-contract', planContract(snapshot))}`),
   it('recovers a production completion the agent delivered but never declared', () => {
     // Production is only entered from a locked Full Plan and its schema admits
     // no non-terminal outcome, so a production turn that ran the frozen plan,
-    // delivered a canonical entry Open Design resolved itself, and then answered
+    // delivered a canonical entry Hi Design resolved itself, and then answered
     // in prose has exactly one thing it could have declared. Refusing it
     // discarded a finished deliverable already sitting in the project.
     prepareStrategyRequest(db, {
@@ -1467,7 +1467,7 @@ ${block('open-design-plan-contract', planContract(snapshot))}`),
   });
 
   it('refuses to infer a Direct Edit completion without verified physical delivery', () => {
-    // The inference may only ever accept evidence Open Design resolved itself.
+    // The inference may only ever accept evidence Hi Design resolved itself.
     // An undeclared turn that delivered nothing must still block, so a silent
     // no-op can never be laundered into a completed task.
     prepareStrategyIntake(db, {
@@ -1604,7 +1604,7 @@ ${block('open-design-plan-contract', planContract(snapshot))}`),
 
 describe('OD Next production completion inference', () => {
   it('never infers a complex completion from a turn that declared nothing', () => {
-    // The inference rests on Open Design having resolved the evidence the agent
+    // The inference rests on Hi Design having resolved the evidence the agent
     // failed to declare, and for a simple plan that evidence IS the canonical
     // deliverable. A complex plan additionally owes verified native Child
     // lifecycle — the property that makes it complex — which no deliverable

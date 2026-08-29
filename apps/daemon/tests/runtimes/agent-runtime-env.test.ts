@@ -18,21 +18,21 @@ import { withPlatform } from './helpers/test-helpers.js';
 describe('agent runtime tool environment', () => {
   it('prefers explicit OD_NODE_BIN over the process executable', () => {
     expect(resolveOpenDesignNodeBin({
-      env: { OD_NODE_BIN: 'C:\\Open Design\\resources\\open-design\\bin\\node.exe' },
-      execPath: 'C:\\Users\\Ada\\AppData\\Roaming\\Open Design\\en\\hash\\Open Design.exe',
+      env: { OD_NODE_BIN: 'C:\\Hi Design\\resources\\open-design\\bin\\node.exe' },
+      execPath: 'C:\\Users\\Ada\\AppData\\Roaming\\Hi Design\\en\\hash\\Hi Design.exe',
       platform: 'win32',
       resourceRoot: null,
-    })).toBe('C:\\Open Design\\resources\\open-design\\bin\\node.exe');
+    })).toBe('C:\\Hi Design\\resources\\open-design\\bin\\node.exe');
   });
 
   it('resolves the bundled resource node before falling back to process.execPath', () => {
     expect(resolveOpenDesignNodeBin({
       env: {},
-      execPath: 'C:\\Users\\Ada\\AppData\\Roaming\\Open Design\\en\\hash\\Open Design.exe',
+      execPath: 'C:\\Users\\Ada\\AppData\\Roaming\\Hi Design\\en\\hash\\Hi Design.exe',
       platform: 'win32',
-      resourceRoot: 'C:\\Users\\Ada\\AppData\\Local\\Programs\\Open Design\\resources\\open-design',
+      resourceRoot: 'C:\\Users\\Ada\\AppData\\Local\\Programs\\Hi Design\\resources\\open-design',
       exists: (candidate) => candidate.endsWith('\\resources\\open-design\\bin\\node.exe'),
-    })).toBe('C:\\Users\\Ada\\AppData\\Local\\Programs\\Open Design\\resources\\open-design\\bin\\node.exe');
+    })).toBe('C:\\Users\\Ada\\AppData\\Local\\Programs\\Hi Design\\resources\\open-design\\bin\\node.exe');
   });
 
   it('injects daemon URL and run-scoped tool token into agent sessions', () => {

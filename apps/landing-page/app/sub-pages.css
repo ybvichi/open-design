@@ -68,7 +68,7 @@ body.sub-page {
 /* ---------- breadcrumb ---------- */
 
 /*
- * The "OpenDesign / <page>" breadcrumb strip was removed from the sub-page
+ * The "HiDesign / <page>" breadcrumb strip was removed from the sub-page
  * design. The <nav class="breadcrumb"> markup still renders on ~100 pages
  * (and feeds the BreadcrumbList JSON-LD on some), so it is suppressed here
  * once instead of being stripped from every page file.

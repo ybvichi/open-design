@@ -411,7 +411,7 @@ async function serve(
           type: 'protocol_error',
           ...(requestId ? { request_id: requestId } : {}),
           code: 'DSH_PROFILE_INVALID_COMMAND',
-          message: 'OpenDesign sent an invalid profile command.',
+          message: 'HiDesign sent an invalid profile command.',
         });
         return;
       }

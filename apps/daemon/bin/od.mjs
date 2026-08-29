@@ -9,7 +9,7 @@ const distEntry = resolve(entryDir, "../dist/cli.js");
 
 if (!existsSync(distEntry)) {
   throw new Error(
-    `OpenDesign daemon dist entry not found at ${distEntry}. Run "pnpm bootstrap" after install (or "pnpm --filter @open-design/daemon build").`,
+    `HiDesign daemon dist entry not found at ${distEntry}. Run "pnpm bootstrap" after install (or "pnpm --filter @open-design/daemon build").`,
   );
 }
 

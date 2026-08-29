@@ -22,7 +22,7 @@ export const MEDIA_POLICY_DENIAL_CODES = [
 export type MediaPolicyDenialCode = (typeof MEDIA_POLICY_DENIAL_CODES)[number];
 
 /**
- * Run-scoped policy controlling OpenDesign-owned media generation only.
+ * Run-scoped policy controlling HiDesign-owned media generation only.
  *
  * `allowedSurfaces` and `allowedModels` apply solely to `/api/tools/media/generate`
  * and in-run `od media generate`. External MCP media tools are intentionally
@@ -82,7 +82,7 @@ export function mediaExecutionPolicyDenial(
   return null;
 }
 
-/** Request for Open Design's deterministic local HyperFrames scaffold. */
+/** Request for Hi Design's deterministic local HyperFrames scaffold. */
 export interface HyperFramesScaffoldRequest {
   /** Project-relative path in the form `.hyperframes-cache/<id>`. */
   compositionDir: string;

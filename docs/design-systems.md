@@ -34,7 +34,7 @@ The v1 manifest uses fixed canonical file names:
   "description": "A concise English catalog summary.",
   "source": {
     "type": "bundled",
-    "origin": "OpenDesign curated bundled fixture"
+    "origin": "HiDesign curated bundled fixture"
   },
   "files": {
     "design": "DESIGN.md",

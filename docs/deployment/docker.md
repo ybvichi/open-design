@@ -37,13 +37,13 @@ Then edit `.env` and configure one of these before first start:
 - recommended default: paste the generated token into `OD_API_TOKEN=`
 - trusted authenticated reverse proxy only: leave `OD_API_TOKEN=` empty and set `OPEN_DESIGN_DISABLE_API_AUTH=1`
 
-If you expose OpenDesign through a reverse proxy, also set:
+If you expose HiDesign through a reverse proxy, also set:
 
 ```bash
 OPEN_DESIGN_ALLOWED_ORIGINS=https://yourdomain.com
 ```
 
-## Step 3: Start OpenDesign
+## Step 3: Start HiDesign
 
 ```bash
 docker compose up -d
@@ -78,18 +78,18 @@ Success looks like:
 
 ![curl HTTP 200 output (sanitized)](../screenshots/deployment/docker/05-curl-http-200-proof.png)
 
-## Step 6: Open OpenDesign in Your Browser
+## Step 6: Open HiDesign in Your Browser
 
 Open:
 - `http://127.0.0.1:7456/`
 
 If the browser displays a sign-in dialog, enter `open-design` as the username
 and the `OD_API_TOKEN` value from `deploy/.env` as the password. You should then
-see the OpenDesign interface. Docker bridge peers remain authenticated; no host
+see the HiDesign interface. Docker bridge peers remain authenticated; no host
 networking override is required.
 
-![OpenDesign home (desktop)](../screenshots/deployment/docker/01-open-design-home.png)
-![OpenDesign home (mobile)](../screenshots/deployment/docker/03-open-design-mobile.png)
+![HiDesign home (desktop)](../screenshots/deployment/docker/01-open-design-home.png)
+![HiDesign home (mobile)](../screenshots/deployment/docker/03-open-design-mobile.png)
 
 ## Common Issues
 

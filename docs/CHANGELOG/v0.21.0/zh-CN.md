@@ -1,12 +1,12 @@
 ---
-title: Open Design 0.21.0 — Reliable, Start to Finish
-description: 从 Agent 连接、实时 HTML 预览到 App 重新启动，Open Design 0.21.0 让整个创作体验更加可靠；遇到问题时，也更容易恢复。
+title: Hi Design 0.21.0 — Reliable, Start to Finish
+description: 从 Agent 连接、实时 HTML 预览到 App 重新启动，Hi Design 0.21.0 让整个创作体验更加可靠；遇到问题时，也更容易恢复。
 ---
 
 ### 🌟 Codename: *Reliable, Start to Finish*
 
 🛡️ **42 个 PR · 13 位贡献者 · 4 天** — **从 Agent 连接、实时 HTML 预览到 App
-重新启动，Open Design 0.21.0 让整个创作体验更加可靠；遇到问题时，也更容易恢复。** 🚀
+重新启动，Hi Design 0.21.0 让整个创作体验更加可靠；遇到问题时，也更容易恢复。** 🚀
 
 ## 🔥 亮点
 
@@ -17,17 +17,17 @@ description: 从 Agent 连接、实时 HTML 预览到 App 重新启动，Open De
   菜单。 (#7336, #7358) 感谢 @lefarcen。
 
 - 🧰 **可用的 Agent 不会再被损坏的 shim 挡住。** PATH 前面出现失效的可执行文件
-  时，OpenDesign 会继续寻找真正可用的版本；确实无法启动时，Settings 会保留
+  时，HiDesign 会继续寻找真正可用的版本；确实无法启动时，Settings 会保留
   Agent、说明原因并给出修复入口。DeepSeek Harness 也支持用户实际安装到的新版
   release line，一键安装不再卡在依赖解析里。 (#7153, #7339) 感谢 @lefarcen。
 
-- 🌙 **Kimi 0.37 及以上版本可以重新正常运行。** 新版 Kimi 不再接受 OpenDesign
-  过去附带的 stdio MCP transport，导致任务在握手时直接失败。OpenDesign 现在只
+- 🌙 **Kimi 0.37 及以上版本可以重新正常运行。** 新版 Kimi 不再接受 HiDesign
+  过去附带的 stdio MCP transport，导致任务在握手时直接失败。HiDesign 现在只
   发送当前 Kimi build 能接受的 transport，消息会重新得到正常的流式回复，而不是
   在工作开始前报错。 (#7313) 感谢 @lefarcen。
 
 - 🚪 **遗留的本地引擎不再让 App 重启失败。** 崩溃后残留的 web sidecar 可能继续
-  占用 socket，让之后每次启动都在启动页退出。OpenDesign 现在会安全接管失效的
+  占用 socket，让之后每次启动都在启动页退出。HiDesign 现在会安全接管失效的
   owner；桌面 App 退出时，daemon 与 web 子进程也会一同结束，不再影响下一次启动。
   (#7279) 感谢 @mrcfps。
 

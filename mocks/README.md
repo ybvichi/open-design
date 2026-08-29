@@ -7,10 +7,10 @@ the AMR `vela` CLI) that replays pre-recorded sessions in each CLI's
 native protocol — stdout streaming for most, JSON-RPC over stdio for
 ACP and AMR. **Zero LLM tokens.**
 
-Some wrappers cover registered Open Design runtimes; others are retained
+Some wrappers cover registered Hi Design runtimes; others are retained
 legacy protocol fixtures, and this set is not an exhaustive mirror of
 `apps/daemon/src/runtimes/registry.ts`. In particular, `gemini` is retained as
-a parser/replay fixture and is not a registered Open Design runtime.
+a parser/replay fixture and is not a registered Hi Design runtime.
 
 Used by:
 
@@ -181,7 +181,7 @@ replay gaps:
 > current generic ACP mock emits only message-chunk text, so it does not cover
 > that part of the live contract.
 
-> **Note on `kimi`**: Open Design's registered runtime now launches `kimi acp`
+> **Note on `kimi`**: Hi Design's registered runtime now launches `kimi acp`
 > and uses ACP JSON-RPC. The current `mocks/bin/kimi` replay wrapper still
 > models the retired prompt-mode stream-json contract; do not treat it as live
 > Kimi contract coverage until the wrapper and its smoke test are migrated.

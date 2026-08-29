@@ -1103,7 +1103,7 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
           Authorization: `Bearer ${apiKey}`,
           ...(validated.parsed!.hostname === 'openrouter.ai' ? {
             'HTTP-Referer': 'https://opendesign.dev',
-            'X-Title': 'OpenDesign',
+            'X-Title': 'HiDesign',
           } : {}),
         },
         redirect: 'error' as const,

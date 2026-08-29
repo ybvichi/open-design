@@ -278,7 +278,7 @@ describe('App updater dialog integration', () => {
         updater: {
           status: vi.fn(async () => idleStatus({
             availableVersion: '1.2.4',
-            downloadPath: '/tmp/open-design-updater/Open Design Beta.dmg',
+            downloadPath: '/tmp/open-design-updater/Hi Design Beta.dmg',
             state: 'downloaded',
           })),
         },

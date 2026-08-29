@@ -76,7 +76,7 @@ export async function handleCodexPluginRequest(
 
   const unavailableResponse = () =>
     new Response(
-      `OpenDesign plugin installation guide is temporarily unavailable.\n\nRead ${AGENT_INSTALL_GUIDE_URL} and follow the Install into Codex lane. Do not change unrelated configuration.\n`,
+      `HiDesign plugin installation guide is temporarily unavailable.\n\nRead ${AGENT_INSTALL_GUIDE_URL} and follow the Install into Codex lane. Do not change unrelated configuration.\n`,
       { status: 502, headers },
     );
 
@@ -94,9 +94,9 @@ export async function handleCodexPluginRequest(
     return unavailableResponse();
   }
   const body = [
-    '# OpenDesign for Codex — agent installation entrypoint',
+    '# HiDesign for Codex — agent installation entrypoint',
     '',
-    'The user asked you to install OpenDesign for Codex. Read this entire response, follow the Install into Codex lane, verify the plugin and local MCP, then complete the handoff exactly as instructed.',
+    'The user asked you to install HiDesign for Codex. Read this entire response, follow the Install into Codex lane, verify the plugin and local MCP, then complete the handoff exactly as instructed.',
     '',
     `Canonical guide: ${AGENT_INSTALL_GUIDE_URL}`,
     '',

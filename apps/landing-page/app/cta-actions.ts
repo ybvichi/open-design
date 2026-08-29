@@ -41,7 +41,7 @@ export const downloadFirstCtas = (actions: readonly CtaAction[]): CtaAction[] =>
   return out;
 };
 
-// This guide leads with the OpenDesign download and routes follow-up questions
+// This guide leads with the HiDesign download and routes follow-up questions
 // into the Discord community. Match by stable href so every locale keeps its
 // translated labels while the upstream Harness repository remains available in
 // the article's resource links instead of competing with the primary journey.
@@ -55,7 +55,7 @@ export const deepseekHarnessHeroCtas = (
 
   return [
     {
-      ...(download ?? { label: 'OpenDesign' }),
+      ...(download ?? { label: 'HiDesign' }),
       href: DOWNLOAD_HREF,
       external: false,
       variant: 'primary',

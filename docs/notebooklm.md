@@ -1,6 +1,6 @@
-# NotebookLM: export issues/PRs from OpenDesign
+# NotebookLM: export issues/PRs from HiDesign
 
-OpenDesign gets a lot of feedback via GitHub Issues + PRs. If you want NotebookLM to help with:
+HiDesign gets a lot of feedback via GitHub Issues + PRs. If you want NotebookLM to help with:
 
 - support answers (with citations)
 - clustering + taxonomy of user scenarios

@@ -2,7 +2,7 @@
 
 ## 目标
 
-在 OpenDesign 公开 Pricing 页的个人套餐区域中新增 `DeepSeek V4 Flash Vision Exp`，并明确它在 Go、Plus、Pro 和 Max 四个套餐中都可无限量使用。页面展示、展开后的模型对比表和产品内无限量标记必须保持一致。
+在 HiDesign 公开 Pricing 页的个人套餐区域中新增 `DeepSeek V4 Flash Vision Exp`，并明确它在 Go、Plus、Pro 和 Max 四个套餐中都可无限量使用。页面展示、展开后的模型对比表和产品内无限量标记必须保持一致。
 
 ## 已确认的产品规则
 

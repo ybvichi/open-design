@@ -388,7 +388,7 @@ export interface RunCreatedProps extends RunTaskLineageProps {
   tokens: RunTokenProps;
   design_system?: RunDesignSystemProps;
   // External MCP/Plugin attribution. These fields are optional so existing UI
-  // and CLI Run producers keep their current contract; the OpenDesign Cloud
+  // and CLI Run producers keep their current contract; the HiDesign Cloud
   // Plugin path validates and supplies the complete subset.
   entry_surface?: AnalyticsEntrySurface;
   host_product?: AnalyticsHostProduct;

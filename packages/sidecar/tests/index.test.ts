@@ -73,7 +73,7 @@ function testIpcPath(root: string): string {
 }
 
 describe("generic sidecar path boundary", () => {
-  it("uses descriptor defaults instead of OpenDesign constants", () => {
+  it("uses descriptor defaults instead of HiDesign constants", () => {
     const sourceRoot = resolveSourceRuntimeRoot({
       contract: fakeContract,
       projectRoot: "/repo/product",

@@ -1,6 +1,6 @@
 # Blog indexing automation
 
-The OpenDesign landing page automates the parts of search-engine
+The HiDesign landing page automates the parts of search-engine
 indexing that are tied to a production promotion. It does not request
 indexing through unsupported Google APIs or browser automation.
 

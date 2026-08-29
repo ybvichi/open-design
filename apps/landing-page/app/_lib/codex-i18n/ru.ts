@@ -8,7 +8,7 @@ export const ru: CodexCopyOverride = {
   collectionEyebrow: 'Кураторская подборка',
   collectionHeading: 'Дизайн-плагины, с которыми Codex выдаёт настоящий UI',
   collectionLede:
-    'OpenAI Codex пишет рабочий код. Без присмотра он скатывается к безопасным шрифтам, среднему ритму отступов и Helvetica по центру. Вкус ему дают эти плагины: скиллы для эстетики и правила дизайн-систем. Поставьте один или запустите все внутри OpenDesign.',
+    'OpenAI Codex пишет рабочий код. Без присмотра он скатывается к безопасным шрифтам, среднему ритму отступов и Helvetica по центру. Вкус ему дают эти плагины: скиллы для эстетики и правила дизайн-систем. Поставьте один или запустите все внутри HiDesign.',
   collectionStats: [
     { value: '50', label: 'отобранных плагинов' },
     { value: '13', label: 'репозиториев-источников' },
@@ -20,13 +20,13 @@ export const ru: CodexCopyOverride = {
     'Переопределите эстетику Codex по умолчанию ещё до первой строки кода.',
     'Превратите свои токены и компоненты в правила, которым Codex следует вместо того, чтобы выдумывать своё.',
   ],
-  collectionCloserHeading: 'Пропустите настройку. Проектируйте с Codex внутри OpenDesign',
+  collectionCloserHeading: 'Пропустите настройку. Проектируйте с Codex внутри HiDesign',
   filterAll: 'Все',
   collectionCloserBody:
-    'OpenDesign разворачивается вокруг Codex: это открытая agent-native рабочая среда для дизайна. Она держит ваши системы, скиллы и шаблоны согласованными, чтобы агент выдавал работу, которая принадлежит вам.',
+    'HiDesign разворачивается вокруг Codex: это открытая agent-native рабочая среда для дизайна. Она держит ваши системы, скиллы и шаблоны согласованными, чтобы агент выдавал работу, которая принадлежит вам.',
   categoryFrontend: 'Фронтенд и UI',
   categoryDesignSystems: 'Дизайн-системы',
-  ctaDownload: 'Скачать OpenDesign',
+  ctaDownload: 'Скачать HiDesign',
   ctaStarList: 'Поставить звезду списку',
   ctaBrowseAll: 'Все плагины',
   ctaViewSource: 'Открыть исходник',
@@ -61,9 +61,9 @@ export const ru: CodexCopyOverride = {
   detailMoreOnList: 'Больше плагинов в списке codex-design',
   detailRelated: 'Другие дизайн-плагины для Codex',
   finalEyebrow: 'Следующий шаг',
-  detailCloserHeading: 'Проектируйте с OpenDesign без возни с настройкой',
+  detailCloserHeading: 'Проектируйте с HiDesign без возни с настройкой',
   detailCloserBody:
-    'Поставьте этот плагин сами или разверните вокруг Codex целый кураторский дизайн-слой в OpenDesign. Свой ключ, свой результат.',
+    'Поставьте этот плагин сами или разверните вокруг Codex целый кураторский дизайн-слой в HiDesign. Свой ключ, свой результат.',
   skills: {
     'gpt-taste': {
       tagline:

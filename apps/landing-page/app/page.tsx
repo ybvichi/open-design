@@ -1,5 +1,5 @@
 /*
- * OpenDesign — Atelier Zero landing page.
+ * HiDesign — Atelier Zero landing page.
  *
  * Mirrors `design-templates/open-design-landing/example.html` 1:1. When the canonical
  * example.html changes, mirror the diff here and into `app/globals.css`.
@@ -242,7 +242,7 @@ const REPO_DAEMON = `${REPO}/tree/main/apps/daemon`;
 const REPO_SKILLS = `${REPO}/tree/main/skills`;
 const REPO_DOCS = `${REPO}#readme`;
 const DISCORD = 'https://discord.gg/mHAjSMV6gz';
-const X_TWITTER = 'https://x.com/OpenDesignHQ';
+const X_TWITTER = 'https://x.com/HiDesignHQ';
 const YOUTUBE = 'https://www.youtube.com/channel/UChtshixMhvtgBWzoD9R_Qfg';
 
 // Footer columns mirror the top-nav sections + `site-footer.astro` (the
@@ -648,7 +648,7 @@ export default function Page({
                     src={heroVideoPoster}
                     width={1280}
                     height={720}
-                    alt='OpenDesign product walkthrough video'
+                    alt='HiDesign product walkthrough video'
                     decoding='async'
                     fetchPriority='low'
                   />
@@ -658,7 +658,7 @@ export default function Page({
                   <button
                     type='button'
                     className='hero-video-play'
-                    aria-label='Play the OpenDesign walkthrough video'
+                    aria-label='Play the HiDesign walkthrough video'
                   >
                     <svg viewBox='0 0 24 24' width='30' height='30' aria-hidden='true'>
                       <path d='M8 5.5v13l11-6.5z' fill='currentColor' />
@@ -676,7 +676,7 @@ export default function Page({
             <div className='about-grid'>
               <div className='about-copy' data-reveal>
                 <p className='about-kicker'>
-                  {locale === 'zh' ? '为什么选择 OpenDesign？' : 'Why OpenDesign?'}
+                  {locale === 'zh' ? '为什么选择 HiDesign？' : 'Why HiDesign?'}
                 </p>
                 {/*
                   Text Scroll Reveal (Magic UI / Inspira port): a tall track
@@ -920,7 +920,7 @@ export default function Page({
               <div data-reveal>
                 <h2 className='display'>
                   {t.labsPre}
-                  <em>OpenDesign</em>
+                  <em>HiDesign</em>
                   {t.labsPost}
                 </h2>
                 {t.labsLead ? (
@@ -1106,7 +1106,7 @@ export default function Page({
               </div>
               <div className='testimonial-globe' data-reveal='right' data-testimonial-globe>
                 <canvas
-                  aria-label='OpenDesign global contributor map'
+                  aria-label='HiDesign global contributor map'
                   className='testimonial-globe-canvas'
                   height={720}
                   width={720}
@@ -1185,7 +1185,7 @@ export default function Page({
         <section className='cta' id='contact' data-od-id='cta'>
           <div className='container'>
             <div className='cta-dance' data-precise-bg>
-              {/* OpenDesign Home window floating over the mural — sits above the
+              {/* HiDesign Home window floating over the mural — sits above the
                   painting (::before) but below the CTA copy. Bottom is clipped by
                   the block's overflow:hidden, matching the reference comp.
                   `data-reveal` slides it up from below when the module enters view
@@ -1193,7 +1193,7 @@ export default function Page({
               <img
                 className='cta-window'
                 src='/cta-window.webp'
-                alt='OpenDesign 桌面端首页'
+                alt='HiDesign 桌面端首页'
                 width={2996}
                 height={1870}
                 decoding='async'
@@ -1332,7 +1332,7 @@ export default function Page({
               <div className='sub-footer-col'>
                 <h5>{menu.product}</h5>
                 <ul>
-                  <li><a href={href('/')}>OpenDesign</a></li>
+                  <li><a href={href('/')}>HiDesign</a></li>
                   <li><a href={href('/html-anything/')}>{ui.footer.htmlAnything}</a></li>
                   <li><a href={href('/html-video/')}>{ui.footer.htmlVideo}</a></li>
                   <li><a href={href('/codex-slides/')}>Codex Slides</a></li>

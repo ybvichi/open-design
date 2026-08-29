@@ -264,16 +264,16 @@ export async function runPackagedHeadless(
       }),
   });
 
-  process.stdout.write(`\n Open Design is running\n\n`);
+    process.stdout.write(`\n Hi Design is running\n\n`);
   process.stdout.write(` ➜ ${colorize(webUrl)}\n\n`);
   process.stdout.write(` Press Ctrl+C to stop\n\n`);
 
   process.on("SIGINT", () => {
-    process.stdout.write("\n Shutting down Open Design...\n");
+    process.stdout.write("\n Shutting down Hi Design...\n");
     void shutdown();
   });
   process.on("SIGTERM", () => {
-    process.stdout.write("\n Shutting down Open Design...\n");
+    process.stdout.write("\n Shutting down Hi Design...\n");
     void shutdown();
   });
 }
@@ -290,5 +290,5 @@ async function installCodexMcp(daemonUrl: string | null): Promise<void> {
       `Codex MCP install failed (${response.status}): ${detail}`,
     );
   }
-  process.stdout.write(" Open Design MCP installed for Codex\n");
+  process.stdout.write(" Hi Design MCP installed for Codex\n");
 }

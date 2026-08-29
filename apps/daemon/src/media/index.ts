@@ -1865,7 +1865,7 @@ async function renderOpenRouterImage(
       'authorization': `Bearer ${credentials.apiKey}`,
       'content-type': 'application/json',
       'HTTP-Referer': 'https://opendesign.dev',
-      'X-Title': 'OpenDesign',
+      'X-Title': 'HiDesign',
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(Math.max(OPENAI_IMAGE_HEADERS_TIMEOUT_MS, OPENAI_IMAGE_BODY_TIMEOUT_MS)),
@@ -2025,7 +2025,7 @@ async function renderOpenRouterVideo(
       // OpenRouter attribution headers per
       // https://openrouter.ai/docs/app-attribution
       'HTTP-Referer': 'https://opendesign.dev',
-      'X-Title': 'OpenDesign',
+      'X-Title': 'HiDesign',
     },
     body: JSON.stringify(body),
   }));
@@ -2081,7 +2081,7 @@ async function renderOpenRouterVideo(
       headers: {
         'authorization': `Bearer ${credentials.apiKey}`,
         'HTTP-Referer': 'https://opendesign.dev',
-        'X-Title': 'OpenDesign',
+        'X-Title': 'HiDesign',
       },
     }));
     const pollText = await pollResp.text();
@@ -3946,7 +3946,7 @@ function runHyperFramesRender(compAbs: string, tmpOutput: string, onProgress?: P
       ],
       {
         // Use the same Node-compatible runtime that owns the daemon and a
-        // pinned HyperFrames CLI shipped with Open Design. Do not delegate
+        // pinned HyperFrames CLI shipped with Hi Design. Do not delegate
         // native dependency selection to a user-level npx cache.
         env: {
           ...process.env,

@@ -1,6 +1,6 @@
-# Self-hosting An OpenDesign Registry
+# Self-hosting An HiDesign Registry
 
-An OpenDesign registry is a source of `open-design-marketplace.json` plus the
+An HiDesign registry is a source of `open-design-marketplace.json` plus the
 review process that produces it. In v1 this can be a static GitHub repository,
 GitHub Enterprise, S3/R2, or any HTTPS host.
 

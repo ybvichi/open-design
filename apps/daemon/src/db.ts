@@ -369,6 +369,25 @@ function migrate(db: SqliteDb): void {
 
     CREATE INDEX IF NOT EXISTS idx_routine_runs_routine
       ON routine_runs(routine_id, started_at DESC);
+
+    -- Workspace folder entity. A folder groups projects within a workspace.
+    -- Nesting is optional: parent_folder_id points at another folder in the
+    -- same workspace (or null for a top-level folder). Deleting a folder sets
+    -- the folder_id of its member projects back to null (workspace root) via
+    -- the ON DELETE SET NULL on workspace_projects.folder_id below.
+    CREATE TABLE IF NOT EXISTS workspace_folders (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      parent_folder_id TEXT,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(parent_folder_id) REFERENCES workspace_folders(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_folders_workspace
+      ON workspace_folders(workspace_id, position);
   `);
   // Forward-compatible column add for databases created before metadata_json.
   // SQLite has no IF NOT EXISTS for ALTER, so we check pragma_table_info.
@@ -390,10 +409,15 @@ function migrate(db: SqliteDb): void {
   const migratedWorkspaceProjectCols = db
     .prepare(`PRAGMA table_info(workspace_projects)`)
     .all() as DbRow[];
-  if (!migratedWorkspaceProjectCols.some((c: DbRow) => c.name === 'metadata_refresh_pending')) {
-    db.exec(
-      `ALTER TABLE workspace_projects ADD COLUMN metadata_refresh_pending INTEGER NOT NULL DEFAULT 0`,
-    );
+ if (!migratedWorkspaceProjectCols.some((c: DbRow) => c.name === 'metadata_refresh_pending')) {
+   db.exec(
+     `ALTER TABLE workspace_projects ADD COLUMN metadata_refresh_pending INTEGER NOT NULL DEFAULT 0`,
+   );
+ }
+  // Forward-compatible column add for workspace folder membership. A project
+  // at the workspace root has folder_id = NULL; assigning a folder moves it in.
+  if (!migratedWorkspaceProjectCols.some((c: DbRow) => c.name === 'folder_id')) {
+    db.exec(`ALTER TABLE workspace_projects ADD COLUMN folder_id TEXT`);
   }
   const conversationCols = db.prepare(`PRAGMA table_info(conversations)`).all() as DbRow[];
   if (!conversationCols.some((c: DbRow) => c.name === 'session_mode')) {
@@ -1065,14 +1089,15 @@ export function getWorkspaceProject(db: SqliteDb, workspaceId: string, projectId
               updated_by_workspace_member_id AS updatedByWorkspaceMemberId,
               resource_hub_resource_id AS resourceHubResourceId,
               cloud_tombstoned_at AS cloudTombstonedAt,
-              sync_state AS syncState,
-              version,
-              created_at AS createdAt,
-              updated_at AS updatedAt
-         FROM workspace_projects
-        WHERE workspace_id = ? AND project_id = ?`,
-    )
-    .get(workspaceId, projectId) as DbRow | undefined;
+             sync_state AS syncState,
+             version,
+             folder_id AS folderId,
+             created_at AS createdAt,
+             updated_at AS updatedAt
+        FROM workspace_projects
+       WHERE workspace_id = ? AND project_id = ?`,
+   )
+   .get(workspaceId, projectId) as DbRow | undefined;
 }
 
 export function listWorkspaceProjects(db: SqliteDb, workspaceId: string) {
@@ -1097,10 +1122,11 @@ export function listWorkspaceProjects(db: SqliteDb, workspaceId: string) {
               wp.resource_hub_resource_id AS resourceHubResourceId,
               wp.cloud_tombstoned_at AS cloudTombstonedAt,
               wp.sync_state AS syncState,
-              wp.version AS workspaceVersion,
-              wp.created_at AS workspaceCreatedAt,
-              wp.updated_at AS workspaceUpdatedAt
-         FROM workspace_projects wp
+             wp.version AS workspaceVersion,
+             wp.folder_id AS folderId,
+             wp.created_at AS workspaceCreatedAt,
+             wp.updated_at AS workspaceUpdatedAt
+        FROM workspace_projects wp
          JOIN projects p ON p.id = wp.project_id
         WHERE wp.workspace_id = ?
         ORDER BY MAX(p.updated_at, wp.updated_at) DESC`,
@@ -1411,6 +1437,273 @@ export function countWorkspaceProjectRefs(db: SqliteDb, projectId: string): numb
   ).get(projectId) as { count?: number } | undefined;
   return Number(row?.count ?? 0);
 }
+
+// ---------------------------------------------------------------------------
+// Workspace folders
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceFolderInput {
+  id: string;
+  workspaceId: string;
+  parentFolderId: string | null;
+  name: string;
+  position: number;
+}
+
+const WORKSPACE_FOLDER_SELECT_COLUMNS = `
+              id,
+              workspace_id AS workspaceId,
+              parent_folder_id AS parentFolderId,
+              name,
+              position,
+              created_at AS createdAt,
+              updated_at AS updatedAt`;
+
+export function createWorkspaceFolder(db: SqliteDb, input: WorkspaceFolderInput): void {
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO workspace_folders (id, workspace_id, parent_folder_id, name, position, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(input.id, input.workspaceId, input.parentFolderId, input.name, input.position, now, now);
+}
+
+export function listWorkspaceFolders(db: SqliteDb, workspaceId: string) {
+  return db
+    .prepare(
+      `SELECT${WORKSPACE_FOLDER_SELECT_COLUMNS}
+         FROM workspace_folders
+        WHERE workspace_id = ?
+        ORDER BY position, created_at`,
+    )
+    .all(workspaceId) as DbRow[];
+}
+
+export function getWorkspaceFolder(db: SqliteDb, workspaceId: string, folderId: string) {
+  return db
+    .prepare(
+      `SELECT${WORKSPACE_FOLDER_SELECT_COLUMNS}
+         FROM workspace_folders
+        WHERE workspace_id = ? AND id = ?`,
+    )
+    .get(workspaceId, folderId) as DbRow | undefined;
+}
+
+export function updateWorkspaceFolder(
+  db: SqliteDb,
+  workspaceId: string,
+  folderId: string,
+  patch: Partial<Pick<WorkspaceFolderInput, 'parentFolderId' | 'name' | 'position'>>,
+): void {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  if (patch.parentFolderId !== undefined) {
+    sets.push('parent_folder_id = ?');
+    values.push(patch.parentFolderId);
+  }
+  if (patch.name !== undefined) {
+    sets.push('name = ?');
+    values.push(patch.name);
+  }
+  if (patch.position !== undefined) {
+    sets.push('position = ?');
+    values.push(patch.position);
+  }
+  if (sets.length === 0) return;
+  sets.push('updated_at = ?');
+  values.push(Date.now());
+  values.push(workspaceId, folderId);
+  db.prepare(
+    `UPDATE workspace_folders SET ${sets.join(', ')}
+      WHERE workspace_id = ? AND id = ?`,
+  ).run(...values);
+}
+
+export function deleteWorkspaceFolder(db: SqliteDb, workspaceId: string, folderId: string): void {
+  db.prepare(
+    `DELETE FROM workspace_folders
+      WHERE workspace_id = ? AND id = ?`,
+  ).run(workspaceId, folderId);
+}
+
+/** Move a project into a folder (or back to the workspace root with null). */
+export function setProjectFolder(
+  db: SqliteDb,
+  workspaceId: string,
+  projectId: string,
+  folderId: string | null,
+): void {
+  db.prepare(
+    `UPDATE workspace_projects SET folder_id = ?, updated_at = ?
+      WHERE workspace_id = ? AND project_id = ?`,
+  ).run(folderId, Date.now(), workspaceId, projectId);
+}
+
+/** Folder id for a project within its workspace, or null when at the root. */
+export function getProjectFolderId(
+  db: SqliteDb,
+  workspaceId: string,
+  projectId: string,
+): string | null {
+  const result = db
+    .prepare(
+      `SELECT folder_id AS folderId
+         FROM workspace_projects
+        WHERE workspace_id = ? AND project_id = ?`,
+    )
+    .get(workspaceId, projectId) as { folderId?: string | null } | undefined;
+  return result?.folderId ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Folder tree navigation
+// ---------------------------------------------------------------------------
+
+/**
+ * Child folders of a parent within a workspace. Pass null for
+ * parentFolderId to list top-level folders. Uses SQLite's IS operator so
+ * null binds correctly (parent_folder_id IS NULL matches root-level rows).
+ */
+export function listSubFolders(
+  db: SqliteDb,
+  workspaceId: string,
+  parentFolderId: string | null,
+) {
+  return db
+    .prepare(
+      `SELECT${WORKSPACE_FOLDER_SELECT_COLUMNS}
+         FROM workspace_folders
+        WHERE workspace_id = ? AND parent_folder_id IS ?
+        ORDER BY position, created_at`,
+    )
+    .all(workspaceId, parentFolderId) as DbRow[];
+}
+
+/**
+ * Projects directly inside a folder (or the workspace root when folderId is
+ * null). Joins projects for metadata the same way listWorkspaceProjects does,
+ * but narrows to one folder level instead of the entire workspace.
+ */
+export function listProjectsInFolder(
+  db: SqliteDb,
+  workspaceId: string,
+  folderId: string | null,
+) {
+  return db
+    .prepare(
+      `SELECT p.id,
+              p.name,
+              p.skill_id AS skillId,
+              p.design_system_id AS designSystemId,
+              p.pending_prompt AS pendingPrompt,
+              p.metadata_json AS metadataJson,
+              p.applied_plugin_snapshot_id AS appliedPluginSnapshotId,
+              p.custom_instructions AS customInstructions,
+              p.created_at AS createdAt,
+              p.updated_at AS updatedAt,
+              wp.project_id AS workspaceProjectId,
+              wp.workspace_id AS workspaceId,
+              wp.visibility AS workspaceVisibility,
+              wp.resource_state AS resourceState,
+              wp.created_by_workspace_member_id AS createdByWorkspaceMemberId,
+              wp.updated_by_workspace_member_id AS updatedByWorkspaceMemberId,
+              wp.resource_hub_resource_id AS resourceHubResourceId,
+              wp.cloud_tombstoned_at AS cloudTombstonedAt,
+              wp.sync_state AS syncState,
+              wp.version AS workspaceVersion,
+              wp.folder_id AS folderId,
+              wp.created_at AS workspaceCreatedAt,
+              wp.updated_at AS workspaceUpdatedAt
+         FROM workspace_projects wp
+         JOIN projects p ON p.id = wp.project_id
+        WHERE wp.workspace_id = ? AND wp.folder_id IS ?
+        ORDER BY MAX(p.updated_at, wp.updated_at) DESC`,
+    )
+    .all(workspaceId, folderId) as DbRow[];
+}
+
+/** Direct project count for a folder (or root). Useful for folder badges. */
+export function countProjectsInFolder(
+  db: SqliteDb,
+  workspaceId: string,
+  folderId: string | null,
+): number {
+  const result = db
+    .prepare(
+      `SELECT COUNT(*) AS count
+         FROM workspace_projects
+        WHERE workspace_id = ? AND folder_id IS ?`,
+    )
+    .get(workspaceId, folderId) as { count?: number } | undefined;
+  return Number(result?.count ?? 0);
+}
+
+/**
+ * Breadcrumb path from the workspace root down to a folder, root-first.
+ * Uses a recursive CTE that walks parent_folder_id upward. depth 0 is the
+ * folder itself; ordering by depth DESC yields root -> ... -> folder.
+ */
+export function getFolderPath(
+  db: SqliteDb,
+  workspaceId: string,
+  folderId: string,
+): DbRow[] {
+  return db
+    .prepare(
+      `WITH RECURSIVE path AS (
+        SELECT id, workspace_id, parent_folder_id, name, position,
+               created_at, updated_at, 0 AS depth
+          FROM workspace_folders
+         WHERE workspace_id = ? AND id = ?
+        UNION ALL
+        SELECT f.id, f.workspace_id, f.parent_folder_id, f.name, f.position,
+               f.created_at, f.updated_at, p.depth + 1
+          FROM workspace_folders f
+          JOIN path p ON f.id = p.parent_folder_id
+      )
+      SELECT id,
+             workspace_id AS workspaceId,
+             parent_folder_id AS parentFolderId,
+             name,
+             position,
+             created_at AS createdAt,
+             updated_at AS updatedAt,
+             depth
+        FROM path
+        ORDER BY depth DESC`,
+    )
+    .all(workspaceId, folderId) as DbRow[];
+}
+
+/**
+ * Lightweight preview of the first N items (folders + projects) directly
+ * inside a folder. Returns only name and kind - enough for a folder node's
+ * inline preview without loading full project metadata. Folders sort first
+ * (by position), then projects (by name).
+ */
+export function listFolderPreview(
+  db: SqliteDb,
+  workspaceId: string,
+  folderId: string,
+  limit = 4,
+): Array<{ name: string; kind: 'folder' | 'project' }> {
+  return db
+    .prepare(
+      `SELECT name, kind FROM (
+          SELECT name, 'folder' AS kind, 0 AS sort_group, position AS sort_pos
+            FROM workspace_folders
+           WHERE workspace_id = ? AND parent_folder_id = ?
+          UNION ALL
+          SELECT p.name, 'project' AS kind, 1 AS sort_group, 0 AS sort_pos
+            FROM workspace_projects wp
+            JOIN projects p ON p.id = wp.project_id
+           WHERE wp.workspace_id = ? AND wp.folder_id = ?
+        )
+        ORDER BY sort_group, sort_pos, name
+        LIMIT ?`,
+    )
+    .all(workspaceId, folderId, workspaceId, folderId, limit) as Array<{ name: string; kind: 'folder' | 'project' }>;
+}
+
 
 const WORKSPACE_RESOURCE_SELECT_COLUMNS = `
               resource_type AS resourceType,

@@ -396,7 +396,7 @@ const entryFromMarketplace = (
     explicitLocalizedString(
       rawEntry.description as Parameters<typeof explicitLocalizedString>[0],
       locale,
-    ) ?? 'Agent-native OpenDesign workflow packaged as a portable plugin.';
+    ) ?? 'Agent-native HiDesign workflow packaged as a portable plugin.';
   const localized = localizePluginText({
     id,
     title: rawTitle,
@@ -545,7 +545,7 @@ const officialEntryFromManifest = (
     explicitLocalizedString(
       manifest?.description as Parameters<typeof explicitLocalizedString>[0],
       locale,
-    ) ?? 'First-party OpenDesign workflow packaged as a portable plugin.';
+    ) ?? 'First-party HiDesign workflow packaged as a portable plugin.';
   const localized = localizePluginText({
     id,
     title: rawTitle,

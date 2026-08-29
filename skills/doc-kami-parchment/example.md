@@ -1,4 +1,4 @@
-# OpenDesign Studio — Issue №26
+# HiDesign Studio — Issue №26
 
 > An open-source design studio for editorial documents and slide decks — typeset by your own coding agent.
 

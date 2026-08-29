@@ -8,7 +8,7 @@ Implementation branch: `codex/manual-edit-mode`.
 
 ## Goal
 
-Migrate the accepted manual edit-mode prototype into the production OpenDesign web app.
+Migrate the accepted manual edit-mode prototype into the production HiDesign web app.
 
 The product boundary is fixed:
 

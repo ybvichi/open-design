@@ -8,9 +8,9 @@ import { localeFromPath, localizedHref } from '../../../i18n';
 const locale = localeFromPath(Astro.url.pathname);
 const href = (path: string) => localizedHref(path, locale);
 
-const title = 'OpenDesign Events';
+const title = 'HiDesign Events';
 const description =
-  'Community events, recaps, and upcoming hands-on sessions for people building with OpenDesign.';
+  'Community events, recaps, and upcoming hands-on sessions for people building with HiDesign.';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -26,7 +26,7 @@ const jsonLd = {
     <section class="events-hero">
       <div class="events-wrap">
         <p class="events-kicker">Community · Events</p>
-        <h1>Events where OpenDesign becomes hands-on.</h1>
+        <h1>Events where HiDesign becomes hands-on.</h1>
         <p>
           Recaps from local rooms, plus upcoming sessions where builders, designers,
           educators, and community organizers make editable AI artifacts together.
@@ -39,7 +39,7 @@ const jsonLd = {
         <span class="event-launch-media">
           <img
             src="/launch-week/launch-week-card.jpg"
-            alt="OpenDesign Launch Week Vol.01"
+            alt="HiDesign Launch Week Vol.01"
             loading="eager"
           />
         </span>
@@ -59,19 +59,19 @@ const jsonLd = {
       <div class="events-wrap">
         <div class="events-section-head">
           <p class="events-kicker">Latest recap</p>
-          <h2>OpenDesign Hong Kong Workshop</h2>
+          <h2>HiDesign Hong Kong Workshop</h2>
         </div>
         <a class="event-feature" href={href('/community/open-design-hong-kong-workshop/')}>
           <span class="event-feature-media">
             <img
               src="/stories/open-design-hong-kong-workshop-cover.webp"
-              alt="Participants at the OpenDesign Hong Kong workshop"
+              alt="Participants at the HiDesign Hong Kong workshop"
               loading="eager"
             />
           </span>
           <span class="event-feature-copy">
             <span class="event-pill">Recap · Hong Kong · Aug 16</span>
-            <strong>OpenDesign Hong Kong Workshop Recap</strong>
+            <strong>HiDesign Hong Kong Workshop Recap</strong>
             <span>
               A room of builders connected design systems, live data, models, and skills
               to create interactive, shareable artifacts—and stress-test the full workflow.
@@ -93,13 +93,13 @@ const jsonLd = {
             <span class="event-card-media">
               <img
                 src="/stories/open-design-shanghai-workshop-cover.webp"
-                alt="Participants at the OpenDesign Shanghai workshop"
+                alt="Participants at the HiDesign Shanghai workshop"
                 loading="lazy"
               />
             </span>
             <span class="event-card-body">
               <span class="event-pill">Recap · Shanghai · July 25</span>
-              <strong>OpenDesign Shanghai Workshop Recap</strong>
+              <strong>HiDesign Shanghai Workshop Recap</strong>
               <span>
                 Developers, designers, product managers, students, and creators came together
                 near Fudan University to turn their own ideas into editable artifacts.
@@ -111,13 +111,13 @@ const jsonLd = {
             <span class="event-card-media">
               <img
                 src="/stories/osaka-kyoto-group-room.jpg"
-                alt="Participants gathered for the Osaka OpenDesign meetup"
+                alt="Participants gathered for the Osaka HiDesign meetup"
                 loading="lazy"
               />
             </span>
             <span class="event-card-body">
               <span class="event-pill">Recap · Osaka · July 6</span>
-              <strong>OpenDesign Osaka Meetup Recap</strong>
+              <strong>HiDesign Osaka Meetup Recap</strong>
               <span>
                 A warm offline session near Nipponbashi Station: AI-powered PPT workflows,
                 real estate brochures, local website concepts, and the lesson that editable

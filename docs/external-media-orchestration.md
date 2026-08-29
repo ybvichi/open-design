@@ -1,44 +1,44 @@
 # External Media Orchestration
 
-This note describes how an external service can use OpenDesign as a creative
-runtime while keeping media provider governance outside OpenDesign.
+This note describes how an external service can use HiDesign as a creative
+runtime while keeping media provider governance outside HiDesign.
 
-OpenDesign contributes project context, skills, design systems, previews,
+HiDesign contributes project context, skills, design systems, previews,
 artifact structure, and design-aware prompt composition. The external service
 owns caller auth, admission, templates, fanout, retries, accounting, webhooks,
 provider credentials, budgets, model routing, and provider rate limits.
 
 ## Boundary
 
-Run-scoped `mediaExecution` controls only OpenDesign-owned media generation.
+Run-scoped `mediaExecution` controls only HiDesign-owned media generation.
 It applies to:
 
 - token-gated `/api/tools/media/generate`
 - in-run `od media generate` when `OD_TOOL_TOKEN` is present
-- OpenDesign's Codex image generation prompt override
-- OpenDesign's media generation prompt contract
+- HiDesign's Codex image generation prompt override
+- HiDesign's media generation prompt contract
 
 It intentionally does not apply to external MCP media tools. If a run receives
 MCP tools from an external service, that service owns the provider policy for
 those tools.
 
-OpenDesign should not grow a generic provider router, provider account pool,
+HiDesign should not grow a generic provider router, provider account pool,
 global media budget system, or external executor API unless there is a separate
 owner decision for that product surface.
 
 ## Recommended Composition
 
-Use HTTP/SSE between the external service and OpenDesign. Avoid shelling out to
+Use HTTP/SSE between the external service and HiDesign. Avoid shelling out to
 `od` from the external service unless the integration specifically needs the CLI
 contract.
 
 1. The external service authenticates the caller and decides provider policy.
-2. The external service creates or selects an OpenDesign project.
+2. The external service creates or selects an HiDesign project.
 3. The external service starts a run with `mediaExecution` set to the desired
-   OpenDesign-owned media policy.
+   HiDesign-owned media policy.
 4. The run includes skills and MCP tools that describe the external media
    workflow.
-5. OpenDesign handles design/runtime work. External MCP media tools handle
+5. HiDesign handles design/runtime work. External MCP media tools handle
    provider execution when the external service permits it.
 6. The external service stores final provider outputs in the project through
    normal artifact or file APIs, or asks the agent to place returned assets in
@@ -58,7 +58,7 @@ For runs where the external service owns all provider execution, start with:
 }
 ```
 
-For runs where OpenDesign may use only a narrow part of its own media path,
+For runs where HiDesign may use only a narrow part of its own media path,
 use allowlists:
 
 ```json
@@ -81,9 +81,9 @@ Example `SKILL.md` fragment:
 ```md
 # Media Campaign Skill
 
-Use OpenDesign project context, design-system guidance, and artifact previews
+Use HiDesign project context, design-system guidance, and artifact previews
 to plan the campaign. When media bytes are needed, use the configured external
-media MCP tools. Do not call OpenDesign-owned media generation unless the run
+media MCP tools. Do not call HiDesign-owned media generation unless the run
 policy explicitly permits it.
 
 For every generated asset, write a short project note that records:
@@ -101,7 +101,7 @@ authority for provider execution and fulfillment rules.
 ## MCP Tool Pattern
 
 MCP is the preferred way to expose external media execution to an agent run
-without making OpenDesign own provider auth or budgets.
+without making HiDesign own provider auth or budgets.
 
 A media MCP server can expose tools such as:
 
@@ -114,10 +114,10 @@ A media MCP server can expose tools such as:
   completed media
 
 These names are illustrative. The stable contract belongs to the MCP server and
-the external service, not to OpenDesign core.
+the external service, not to HiDesign core.
 
 The MCP server should receive its own credentials from the external service or
-from its deployment environment. OpenDesign should only see the MCP tool
+from its deployment environment. HiDesign should only see the MCP tool
 surface made available to the run.
 
 ## Artifact Handoff
@@ -126,20 +126,20 @@ Prefer one of these handoff shapes:
 
 - The MCP tool returns a downloadable URL and the agent writes or imports the
   asset into the project.
-- The external service uploads the fulfilled asset through an OpenDesign
+- The external service uploads the fulfilled asset through an HiDesign
   project file/artifact API after provider completion.
 - The MCP tool returns metadata that the agent records in a project manifest or
   handoff note, while the external service keeps the provider artifact as the
   source of truth.
 
 Avoid storing provider credentials, account ids, budget ids, or retry policy in
-OpenDesign project files. Project artifacts should describe creative output,
+HiDesign project files. Project artifacts should describe creative output,
 not provider-account governance.
 
 ## Legacy Media Endpoint Caveat
 
 `POST /api/projects/:id/media/generate` predates run-scoped media policy. It is
-still available for normal OpenDesign media generation outside the in-run tool
+still available for normal HiDesign media generation outside the in-run tool
 path. The accepted v1 policy closes the cooperative in-run CLI path by routing
 `od media generate` through `/api/tools/media/generate` when `OD_TOOL_TOKEN` is
 present.
@@ -160,11 +160,11 @@ on the non-sandbox compatibility behavior.
 
 This composition pattern does not add:
 
-- `request-only` run mode in OpenDesign core
-- OpenDesign media request persistence for external provider work
-- a generic HTTP executor provider inside OpenDesign
-- provider credentials or account pools in OpenDesign
-- OpenDesign-owned provider budgets, retries, or global media limits
+- `request-only` run mode in HiDesign core
+- HiDesign media request persistence for external provider work
+- a generic HTTP executor provider inside HiDesign
+- provider credentials or account pools in HiDesign
+- HiDesign-owned provider budgets, retries, or global media limits
 - MCP tool routing based on `mediaExecution.allowedSurfaces` or
   `mediaExecution.allowedModels`
 

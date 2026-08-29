@@ -120,26 +120,26 @@ const jsonLd = [
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'OpenDesign', item: absUrl('/') },
+      { '@type': 'ListItem', position: 1, name: 'HiDesign', item: absUrl('/') },
       { '@type': 'ListItem', position: 2, name: teamContent.breadcrumbLabel, item: absUrl('/pricing/') },
     ],
   },
   {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    name: 'OpenDesign Subscription',
+    name: 'HiDesign Subscription',
     description,
     offers: [
       {
         '@type': 'Offer',
-        name: 'OpenDesign Go',
+        name: 'HiDesign Go',
         price: String(GO_PLAN.monthly.priceUsd),
         priceCurrency: 'USD',
         url: cloudSubscribeUrl('go', 'monthly'),
       },
       ...tiers.map((t) => ({
         '@type': 'Offer',
-        name: `OpenDesign ${t.tier}`,
+        name: `HiDesign ${t.tier}`,
         price: String(t.monthly.priceUsd),
         priceCurrency: 'USD',
         url: cloudSubscribeUrl(t.tier, 'monthly'),
@@ -147,7 +147,7 @@ const jsonLd = [
       ...teamTiers.flatMap((t) => [
         {
           '@type': 'Offer',
-          name: `OpenDesign ${teamTierLabel(t)} monthly`,
+          name: `HiDesign ${teamTierLabel(t)} monthly`,
           price: String(t.monthly.priceUsd),
           priceCurrency: 'USD',
           url: CLOUD_CONSOLE_URL,
@@ -159,7 +159,7 @@ const jsonLd = [
         },
         {
           '@type': 'Offer',
-          name: `OpenDesign ${teamTierLabel(t)} yearly`,
+          name: `HiDesign ${teamTierLabel(t)} yearly`,
           price: String(t.yearly.priceUsd),
           priceCurrency: 'USD',
           url: CLOUD_CONSOLE_URL,
@@ -183,7 +183,7 @@ const jsonLd = [
   showHeaderAccount
 >
   <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a href={href('/')}>OpenDesign</a>
+    <a href={href('/')}>HiDesign</a>
     <span>/</span>
     <span aria-current="page">{teamContent.breadcrumbLabel}</span>
   </nav>
@@ -265,7 +265,7 @@ const jsonLd = [
     <PricingIndividualPlans />
     <section class="pr-multimodal" aria-labelledby="pr-multimodal-title">
       <div class="pr-multimodal-copy">
-        <span class="pr-multimodal-kicker">OpenDesign Cloud</span>
+        <span class="pr-multimodal-kicker">HiDesign Cloud</span>
         <h2 id="pr-multimodal-title">{L.multimodalTitle}</h2>
         <p>{L.multimodalDescription}</p>
       </div>

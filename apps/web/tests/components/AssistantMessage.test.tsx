@@ -95,7 +95,7 @@ describe('internal control markers', () => {
   // a later turn, and `<od-title>LV奢侈品电商原型</od-title>` rendered as body text.
   it('never renders a leaked title marker as prose', () => {
     const content = [
-      '我会使用 Open Design 技能把已确认的电商流程整理为可执行的原型计划。',
+      '我会使用 Hi Design 技能把已确认的电商流程整理为可执行的原型计划。',
       '<od-title>LV奢侈品电商原型</od-title>',
       '目标已锁定为响应式 LV 奢侈品电商概念原型。',
     ].join('\n\n');
@@ -326,7 +326,7 @@ describe('AssistantMessage feedback gate', () => {
     expect(onForkFromMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('reaches Contribute (share to OpenDesign) through the More -> Share cascade', () => {
+  it('reaches Contribute (share to HiDesign) through the More -> Share cascade', () => {
     const onShare = vi.fn();
 
     render(

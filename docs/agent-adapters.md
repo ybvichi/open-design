@@ -259,7 +259,7 @@ the active-run staging implementation is in
   daemon does not generate a `.cursorrules` file.
 - `--workspace` chooses the starting workspace; `--force` and optional
   `--trust` are part of the non-interactive authority posture described in
-  §10, not a filesystem sandbox supplied by OpenDesign.
+  §10, not a filesystem sandbox supplied by HiDesign.
 
 ### 5.6 OpenCode
 
@@ -353,10 +353,10 @@ the active-run staging implementation is in
 
 ### 5.12 DeepSeek Harness
 
-- OpenDesign launches the user's official `dsh` installation; it does not
+- HiDesign launches the user's official `dsh` installation; it does not
   bundle Harness or Node. Install the tested DSH release first and use
   `DSH_BIN` only when its executable is outside the daemon's PATH.
-  OpenDesign publishes checksum-verifying bootstrap installers for users who
+  HiDesign publishes checksum-verifying bootstrap installers for users who
   do not already have the compatible Node, DSH, and pnpm toolchain. They place
   an OD-discoverable launcher in the user's local bin directory and open the
   Harness Web UI for provider setup after installation:
@@ -379,7 +379,7 @@ the active-run staging implementation is in
   downloaded PowerShell script for unattended installation. The installers
   pin the exact versions in the adapter's compatibility policy and do not use
   a global npm install.
-- The adapter also requires an OpenDesign-owned Harness profile named
+- The adapter also requires an HiDesign-owned Harness profile named
   `open-design`. The package source lives at
   [`packages/dsh-runtime`](../packages/dsh-runtime). Packaged OD builds embed
   an exact tarball and SHA-256 manifest for this thin component; they do not
@@ -409,7 +409,7 @@ the active-run staging implementation is in
   are structured. Harness writes ordinary files in the OD project cwd, so the
   existing watcher and artifact preview own delivery.
 - Phase one uses credentials already configured for Harness or inherited as
-  `DEEPSEEK_API_KEY`; OpenDesign neither stores nor reads back the secret.
+  `DEEPSEEK_API_KEY`; HiDesign neither stores nor reads back the secret.
 - Model detection comes from `dsh --profile open-design --models`. Each model
   may expose its own reasoning-effort choices; OD validates and forwards only
   one of the choices advertised for that selected model.
@@ -472,7 +472,7 @@ Cancel the existing run separately if it should stop. There is no
 
 ## 8. Selection and failure recovery
 
-OpenDesign does not implement an ordered cross-agent fallback chain. A chat
+HiDesign does not implement an ordered cross-agent fallback chain. A chat
 request explicitly names its agent, and a crash, auth failure, timeout, or
 invalid invocation remains a failure for that run. The user can select another
 agent and send the request again, but the daemon does not silently—or through a
@@ -507,7 +507,7 @@ path.
 
 The daemon delegates policy enforcement to each CLI, but its headless arg
 builders intentionally choose non-interactive permission modes. The effective
-project cwd is an execution root, not a uniform OpenDesign sandbox, and
+project cwd is an execution root, not a uniform HiDesign sandbox, and
 external-directory flags can widen a CLI's reach.
 
 - Claude runs with `--permission-mode bypassPermissions`; Cursor runs with
@@ -587,7 +587,7 @@ The engine is agent-agnostic: it iterates `AGENT_DEFS` and reads fields. A commu
 - **Usage and cost coverage.** Parsers preserve `usage` and reported cost when
   a CLI exposes them (for example Claude, Codex, OpenCode, and Qoder), and
   those events feed persisted run messages and lifecycle analytics. Coverage
-  is runtime-dependent; OpenDesign does not invent token or billing data when
+  is runtime-dependent; HiDesign does not invent token or billing data when
   a CLI omits it.
 - **Windows support.** PATH scanning and `spawn` semantics differ on Windows. Definitions
   that accept stdin should set `promptViaStdin`; argv-only definitions must declare and

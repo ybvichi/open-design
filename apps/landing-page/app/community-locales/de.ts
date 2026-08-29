@@ -2,11 +2,11 @@ import type { DeepPartial, CommunityCopy } from '../community-i18n';
 
 const de: DeepPartial<CommunityCopy> = {
   hub: {
-    title: 'Community — OpenDesign',
+    title: 'Community — HiDesign',
     desc: 'Die Open-Design-Community: Mitwirkende, die öffentlich liefern, Botschafter, die lokale Ateliers ausrichten, und Moderatoren, die den Discord warmhalten.',
-    heroTitle: 'OpenDesign <em>nimmt Gestalt an</em><br/>, wenn du es lieferst.',
+    heroTitle: 'HiDesign <em>nimmt Gestalt an</em><br/>, wenn du es lieferst.',
     heroLead:
-      'OpenDesign wird von Menschen gebaut, in aller Öffentlichkeit. Skills, DESIGN.md-Systeme, Plugins, Docs: Jeder Commit ist ein Pinselstrich. Wähl unten eine Tür und finde deinen Raum.',
+      'HiDesign wird von Menschen gebaut, in aller Öffentlichkeit. Skills, DESIGN.md-Systeme, Plugins, Docs: Jeder Commit ist ein Pinselstrich. Wähl unten eine Tür und finde deinen Raum.',
     cardMetaH: 'Automatisch geprägt beim ersten Merge',
     cardMetaS: 'PNG · geteilt auf X',
     cardHeroAlt:
@@ -21,7 +21,7 @@ const de: DeepPartial<CommunityCopy> = {
       {
         ord: 'II',
         title: 'Ambassadors',
-        sub: 'OpenDesigns <em>Stimme</em> in deiner Stadt.',
+        sub: 'HiDesigns <em>Stimme</em> in deiner Stadt.',
         body: 'Eröffne ein lokales Atelier. Ruf die Meetups, die Demos, die nächtlichen Kritiken zusammen. Gestützt durch Budget, Materialien und einen privaten Kanal zum Kernteam.',
       },
       {
@@ -33,14 +33,14 @@ const de: DeepPartial<CommunityCopy> = {
     ],
   },
   contributors: {
-    title: 'Contributors — OpenDesign',
-    desc: 'Mach bei OpenDesign mit: Maintainer, wöchentliche und Allzeit-Bestenlisten der Mitwirkenden, „good first issue“-Einstiege und ein Zero-Code-Weg, dein erstes Werk zu liefern.',
+    title: 'Contributors — HiDesign',
+    desc: 'Mach bei HiDesign mit: Maintainer, wöchentliche und Allzeit-Bestenlisten der Mitwirkenden, „good first issue“-Einstiege und ein Zero-Code-Weg, dein erstes Werk zu liefern.',
     heroTitle: 'Die Hände, die die Arbeit <em>liefern</em>.',
     heroLead:
-      'OpenDesign wird von Menschen gebaut, in aller Öffentlichkeit. Skills, DESIGN.md-Systeme, Plugins, Docs: Jeder Commit ist ein Pinselstrich. Wähl ein Issue, schick einen PR und verdien dir eine einmalige Ehrenkarte in dem Moment, in dem du gemergt wirst.',
+      'HiDesign wird von Menschen gebaut, in aller Öffentlichkeit. Skills, DESIGN.md-Systeme, Plugins, Docs: Jeder Commit ist ein Pinselstrich. Wähl ein Issue, schick einen PR und verdien dir eine einmalige Ehrenkarte in dem Moment, in dem du gemergt wirst.',
     showcase: {
       kicker: 'Plugin everything',
-      h2: 'OpenDesign als Bühne. <em>Deine Arbeit</em> als die Show.',
+      h2: 'HiDesign als Bühne. <em>Deine Arbeit</em> als die Show.',
       intro:
         'Das Atelier ist zugleich eine Galerie. Dir beim Schaffen zu helfen ist die halbe Miete; dafür zu sorgen, dass der Raum zum Schauen kommt, ist die andere. Jedes Werk, das du lieferst, landet nicht in einem Tresor, sondern an einer Wand, wo die Welt es finden kann.',
       tenets: [
@@ -70,7 +70,7 @@ const de: DeepPartial<CommunityCopy> = {
         steps: [
           {
             h4: 'Gib dem Agenten die Zeile',
-            body: 'Füge den Befehl oben in den Agenten innerhalb von OpenDesign ein oder in den, den du ohnehin zur Hand hast: Claude Code, Codex, Cursor. Er installiert sich selbst.',
+            body: 'Füge den Befehl oben in den Agenten innerhalb von HiDesign ein oder in den, den du ohnehin zur Hand hast: Claude Code, Codex, Cursor. Er installiert sich selbst.',
           },
           {
             h4: 'Weck den Skill',
@@ -87,13 +87,13 @@ const de: DeepPartial<CommunityCopy> = {
       kicker: 'Steering the ship',
       h2: 'Die <em>Maintainer</em>.',
       intro:
-        'Maintainer schützen Richtung und Qualität von OpenDesign: Sie prüfen Beiträge, halten den Standard kohärent und schaffen Raum, damit sich mehr Mitwirkende ihren Platz im Projekt verdienen.',
+        'Maintainer schützen Richtung und Qualität von HiDesign: Sie prüfen Beiträge, halten den Standard kohärent und schaffen Raum, damit sich mehr Mitwirkende ihren Platz im Projekt verdienen.',
       role: 'Maintainer',
       bios: {
         'Nagendhra-web':
-          'Nagendhra bringt den Instinkt eines Data Engineers für die Wahrheit in Produktion mit: den Fehler finden, den Grenzfall messen und ihn ordentlich beheben. In OpenDesign zeigt sich das in Deploy-Preflight-Arbeit, gehärtetem Asset-Bundling und Windows-Fixes, die das Projekt vertrauenswürdig wirken lassen, wenn Mitwirkende liefern.',
+          'Nagendhra bringt den Instinkt eines Data Engineers für die Wahrheit in Produktion mit: den Fehler finden, den Grenzfall messen und ihn ordentlich beheben. In HiDesign zeigt sich das in Deploy-Preflight-Arbeit, gehärtetem Asset-Bundling und Windows-Fixes, die das Projekt vertrauenswürdig wirken lassen, wenn Mitwirkende liefern.',
         'Sid-Qin':
-          'Sid ist der Generalist-Engineer mit dem Blick eines Designers fürs Detail: die Art von Maintainer, der sowohl den kaputten CLI-Pfad als auch die schiefe Interaktions-Affordanz bemerkt. In OpenDesign hält Sid Export-Flows, Plugin-Aktionen, Windows-Shims, MIME-Handling und Agent-Plumbing scharf genug, dass eine Community darauf aufbauen kann.',
+          'Sid ist der Generalist-Engineer mit dem Blick eines Designers fürs Detail: die Art von Maintainer, der sowohl den kaputten CLI-Pfad als auch die schiefe Interaktions-Affordanz bemerkt. In HiDesign hält Sid Export-Flows, Plugin-Aktionen, Windows-Shims, MIME-Handling und Agent-Plumbing scharf genug, dass eine Community darauf aufbauen kann.',
       },
     },
     allTime: {
@@ -116,12 +116,12 @@ const de: DeepPartial<CommunityCopy> = {
       kicker: 'Das Signal dieser Woche',
       h2: 'Zehn Mitwirkende, die <em>diese Woche</em> vorangehen.',
       intro:
-        'Eine Momentaufnahme scharfer Mitwirkender, die PRs landen, das Produkt verbessern und OpenDesign lebendig wirken lassen.',
+        'Eine Momentaufnahme scharfer Mitwirkender, die PRs landen, das Produkt verbessern und HiDesign lebendig wirken lassen.',
       rankLabel: 'Vorreiter dieser Woche',
       week: 'Letzte 7 Tage',
       handleSuffix: '· führend diese Woche',
       blurbTemplate:
-        '{name} gibt diese Woche das Tempo vor mit {prs} gemergten PRs und der Art stetigem Handwerk, das OpenDesign in Bewegung hält.',
+        '{name} gibt diese Woche das Tempo vor mit {prs} gemergten PRs und der Art stetigem Handwerk, das HiDesign in Bewegung hält.',
       statRank: 'Rang',
       statPrs: 'PRs · 7 T',
       headContributor: 'Mitwirkende:r',
@@ -164,16 +164,16 @@ const de: DeepPartial<CommunityCopy> = {
         {
           n: 'Schritt 04',
           h3: 'Merge → <em>Karte</em>.',
-          body: 'Der Bot prägt deine Ehrenkarte in dem Moment, in dem du gemergt wirst, und pusht sie in den bot-cards-Branch. Teil sie auf X mit #OpenDesign, und wir reposten die besten.',
+          body: 'Der Bot prägt deine Ehrenkarte in dem Moment, in dem du gemergt wirst, und pusht sie in den bot-cards-Branch. Teil sie auf X mit #HiDesign, und wir reposten die besten.',
         },
       ],
       cta: 'Lies den Contributing-Guide',
     },
   },
   ambassadors: {
-    title: 'Ambassadors — OpenDesign',
+    title: 'Ambassadors — HiDesign',
     desc: 'Werde Open-Design-Botschafter: Eröffne ein lokales Atelier, richte Meetups und Kritiken aus und erhalte Budget, Materialien und einen privaten Kanal zum Kernteam.',
-    heroTitle: 'Sei OpenDesigns <em>Stimme</em> in deiner Stadt.',
+    heroTitle: 'Sei HiDesigns <em>Stimme</em> in deiner Stadt.',
     heroLead:
       'Eröffne ein lokales Atelier. Ruf die Meetups, die Demos, die nächtlichen Kritiken zusammen. Wir stützen dich mit Budget, Materialien und einem privaten Kanal zum Kernteam.',
     program: {
@@ -181,7 +181,7 @@ const de: DeepPartial<CommunityCopy> = {
       h2: 'Berufung, <em>Förderung</em>, Bund.',
       applyCta: 'Über Google-Formular bewerben',
       applyNote:
-        'Botschafter machen OpenDesign aus einem Repository zu etwas, dem Mitwirkende in einem Raum begegnen können, mit Tinte auf dem Tisch und kalt gewordenem Kaffee.',
+        'Botschafter machen HiDesign aus einem Repository zu etwas, dem Mitwirkende in einem Raum begegnen können, mit Tinte auf dem Tisch und kalt gewordenem Kaffee.',
       cols: [
         {
           n: 'I · Berufung',
@@ -224,7 +224,7 @@ const de: DeepPartial<CommunityCopy> = {
       kicker: 'Im Feld',
       h2: 'Lern die <em>Botschafter</em> kennen.',
       intro:
-        'Lokale Organisatoren, Kreative und Community-Builder, die OpenDesign helfen, mehr Designer und Teams zu erreichen.',
+        'Lokale Organisatoren, Kreative und Community-Builder, die HiDesign helfen, mehr Designer und Teams zu erreichen.',
       places: [
         'Sunshine Coast, Australien',
         'Kuala Lumpur, Malaysia',
@@ -234,7 +234,7 @@ const de: DeepPartial<CommunityCopy> = {
     },
   },
   moderators: {
-    title: 'Moderators — OpenDesign',
+    title: 'Moderators — HiDesign',
     desc: 'Lern die Open-Design-Discord-Moderatoren kennen und tritt dem Raum bei, in dem AI-native Designer Arbeit liefern, Plugins öffnen, Betas knacken und einander aus der Klemme helfen.',
     heroTitle: 'Der Raum, in dem die <em>Contributors</em> abhängen.',
     heroLead:
@@ -248,11 +248,11 @@ const de: DeepPartial<CommunityCopy> = {
       cards: [
         {
           role: 'Aus dem Studio',
-          bio: 'Aus dem Gründungsteam von OpenDesign. Hofft, dass der Discord ein guter Ort zum Sein bleibt. Wink jederzeit, bei jeder Frage.',
+          bio: 'Aus dem Gründungsteam von HiDesign. Hofft, dass der Discord ein guter Ort zum Sein bleibt. Wink jederzeit, bei jeder Frage.',
         },
         {
           role: 'Verwalter des Raums',
-          bio: 'Eine geübte Hand bei Discord und Community-Pflege. Hält den Raum warm, die Türen offen, das Gespräch im Fluss. Begeistert von OpenDesign.',
+          bio: 'Eine geübte Hand bei Discord und Community-Pflege. Hält den Raum warm, die Türen offen, das Gespräch im Fluss. Begeistert von HiDesign.',
         },
       ],
       channelNotes: ['gelieferte Arbeit', 'Builder', 'frühes Feedback', 'aus der Klemme'],

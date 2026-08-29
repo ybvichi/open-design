@@ -3,7 +3,7 @@
 ## Goal
 
 Restore the Vela subscription funnel that was lost when the authenticated
-plan-selection modal was replaced by the shared OpenDesign `/pricing/` page.
+plan-selection modal was replaced by the shared HiDesign `/pricing/` page.
 The restored events must continue into the existing AMR PostHog project and
 preserve the current dashboard and alert contract. The migrated Pricing UI,
 checkout handoff, prices, and entitlements remain unchanged.
@@ -24,26 +24,26 @@ The Vela API stored the events in AMR PostHog as:
 | `subscription_plan_exposure` | `subscription_plan_exposure` | `registry_key=subscription_plan_exposure` |
 | `subscription_pricing_click` | `ui_click` | `registry_key=subscription_pricing_click` |
 
-The public Pricing page's direct OpenDesign PostHog capture is a different
+The public Pricing page's direct HiDesign PostHog capture is a different
 pipeline. Reusing the same JavaScript event name there does not restore the AMR
 funnel. The new bridge therefore terminates at Vela's authenticated analytics
-pipeline rather than OpenDesign PostHog.
+pipeline rather than HiDesign PostHog.
 
 ## Scope
 
 - Two repositories and two PRs: Vela provides the authenticated ingestion
-  boundary; OpenDesign emits from the migrated Pricing interactions.
+  boundary; HiDesign emits from the migrated Pricing interactions.
 - Only visitors with a valid Vela session and a trusted `/wallet` or
   `/dashboard` Pricing entry are included in the restored AMR funnel.
 - Anonymous or direct public Pricing visitors continue to use the existing
-  OpenDesign Pricing analytics only.
+  HiDesign Pricing analytics only.
 - Restore equivalent interactions that still exist: Go/Plus/Pro/Max exposure,
   enabled Personal subscribe/upgrade CTA, interval change, Enterprise lead
   open, and Enterprise lead submit intent.
 - Do not recreate the retired modal, removed controls, checkout-result events,
   or PII-bearing legacy lead payloads.
 - Do not change Pricing rendering, plan selection, checkout URLs, payment
-  behavior, entitlement behavior, or existing OpenDesign analytics.
+  behavior, entitlement behavior, or existing HiDesign analytics.
 
 ## Architecture
 
@@ -58,7 +58,7 @@ The endpoint:
 
 1. requires the same valid Vela user session used by the public Pricing page's
    existing subscription-context request;
-2. validates the request origin against the existing OpenDesign hosted-origin
+2. validates the request origin against the existing HiDesign hosted-origin
    policy and rejects anonymous calls with `401`;
 3. accepts only `plan_exposure` and `pricing_click` records, with a bounded
    batch size and bounded string fields;
@@ -80,7 +80,7 @@ The client supplies a bounded event ID and occurrence time so navigation-safe
 malformed timestamps and validates every plan/click payload against the
 existing registry schema before storage.
 
-### OpenDesign: Pricing compatibility emitter
+### HiDesign: Pricing compatibility emitter
 
 The Pricing page gains a small client that posts reduced events to the Vela
 endpoint with credentials and `keepalive: true`. It does not synthesize Vela's
@@ -97,7 +97,7 @@ The emitter activates only after all of the following are true:
   current interval, and first-month eligibility.
 
 The trusted surface is derived only from the browser referrer when it has an
-allowlisted OpenDesign/Vela origin and an exact `/wallet`, `/dashboard`,
+allowlisted HiDesign/Vela origin and an exact `/wallet`, `/dashboard`,
 `/cloud/wallet`, or `/cloud/dashboard` path. Query parameters never select the
 source surface, and arbitrary query strings or external referrers cannot create
 new analytics dimensions.
@@ -123,7 +123,7 @@ visible Personal plan: Go, Plus, Pro, and Max. Vela maps each record to
 - `creditsGrantedUsd`, `deployLimit`, `introOfferApplied`
 - `firstMonthEligible`, `isCurrentPlan`, `isRecommended`
 - `autoRechargeSupported=true`
-- validated optional OpenDesign campaign attribution already allowed by the
+- validated optional HiDesign campaign attribution already allowed by the
   Vela registry
 
 Go uses the legacy catalog values: zero credits, zero deploy limit, and not
@@ -150,7 +150,7 @@ Vela maps `pricing_click` inputs to the existing registry key
 - Enterprise form submit intent: `team_lead_submit` before client validation or
   network submission, preserving the legacy click meaning. Existing
   `lead_submit_invalid`, `lead_submit_attempt`, `lead_submit_success`, and
-  `lead_submit_failed` events continue independently in OpenDesign PostHog.
+  `lead_submit_failed` events continue independently in HiDesign PostHog.
 
 Disabled/current/downgrade-unavailable Personal CTAs, Team checkout CTAs,
 removed email/story/proof controls, and programmatic interval synchronization
@@ -169,9 +169,9 @@ traffic cannot write to the AMR funnel, preserving the original population.
 
 ## Rollout
 
-Deploy the Vela endpoint first. The OpenDesign emitter may then be deployed
+Deploy the Vela endpoint first. The HiDesign emitter may then be deployed
 without a compatibility window or feature migration. Until Vela is available,
-OpenDesign continues its existing local Pricing analytics and checkout behavior;
+HiDesign continues its existing local Pricing analytics and checkout behavior;
 the compatibility post simply fails open.
 
 The two PRs cross-link each other and state the deployment order. The existing
@@ -192,7 +192,7 @@ AMR dashboard and alert continue querying
 - Repository tests prove the resulting PostHog payloads remain
   `subscription_plan_exposure` and `ui_click` with the legacy `registry_key`.
 
-### OpenDesign
+### HiDesign
 
 - Pure contract tests cover Go/Plus/Pro/Max price and grant payloads, strict
   source resolution, context-aware deduplication, click classification, and

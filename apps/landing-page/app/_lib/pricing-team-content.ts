@@ -47,9 +47,9 @@ export interface TeamPricingContent {
 }
 
 const EN: TeamPricingContent = {
-  metaTitle: 'Pricing — OpenDesign',
+  metaTitle: 'Pricing — HiDesign',
   metaDescription:
-    'Compare OpenDesign Creator and Team plans, including model credits, per-seat collaboration, annual savings, and Enterprise support.',
+    'Compare HiDesign Creator and Team plans, including model credits, per-seat collaboration, annual savings, and Enterprise support.',
   breadcrumbLabel: 'Pricing',
   audienceTabsLabel: 'Plan audience',
   creatorTab: 'Creator',
@@ -92,9 +92,9 @@ const EN: TeamPricingContent = {
 };
 
 const ZH: TeamPricingContent = {
-  metaTitle: '价格方案 — OpenDesign',
+  metaTitle: '价格方案 — HiDesign',
   metaDescription:
-    '比较 OpenDesign 创作会员与团队版方案，了解模型额度、按席位协作、年付优惠和企业支持。',
+    '比较 HiDesign 创作会员与团队版方案，了解模型额度、按席位协作、年付优惠和企业支持。',
   breadcrumbLabel: '价格方案',
   audienceTabsLabel: '方案类型',
   creatorTab: '创作会员',
@@ -137,9 +137,9 @@ const ZH: TeamPricingContent = {
 };
 
 const JA: TeamPricingContent = {
-  metaTitle: '料金プラン — OpenDesign',
+  metaTitle: '料金プラン — HiDesign',
   metaDescription:
-    'OpenDesign のクリエイター向けプランと Team プランを比較。モデルクレジット、席単位の共同作業、年払い割引、Enterprise サポートを確認できます。',
+    'HiDesign のクリエイター向けプランと Team プランを比較。モデルクレジット、席単位の共同作業、年払い割引、Enterprise サポートを確認できます。',
   breadcrumbLabel: '料金プラン',
   audienceTabsLabel: 'プラン対象',
   creatorTab: 'クリエイター',
@@ -182,9 +182,9 @@ const JA: TeamPricingContent = {
 };
 
 const KO: TeamPricingContent = {
-  metaTitle: '요금제 — OpenDesign',
+  metaTitle: '요금제 — HiDesign',
   metaDescription:
-    'OpenDesign 크리에이터 및 Team 요금제의 모델 크레딧, 좌석 기반 협업, 연간 할인과 Enterprise 지원을 비교하세요.',
+    'HiDesign 크리에이터 및 Team 요금제의 모델 크레딧, 좌석 기반 협업, 연간 할인과 Enterprise 지원을 비교하세요.',
   breadcrumbLabel: '요금제',
   audienceTabsLabel: '요금제 대상',
   creatorTab: '크리에이터',
@@ -227,9 +227,9 @@ const KO: TeamPricingContent = {
 };
 
 const DE: TeamPricingContent = {
-  metaTitle: 'Preise — OpenDesign',
+  metaTitle: 'Preise — HiDesign',
   metaDescription:
-    'Vergleiche OpenDesign Creator- und Team-Pläne mit Modellguthaben, Zusammenarbeit pro Sitz, Jahresrabatten und Enterprise-Support.',
+    'Vergleiche HiDesign Creator- und Team-Pläne mit Modellguthaben, Zusammenarbeit pro Sitz, Jahresrabatten und Enterprise-Support.',
   breadcrumbLabel: 'Preise',
   audienceTabsLabel: 'Planzielgruppe',
   creatorTab: 'Creator',
@@ -272,9 +272,9 @@ const DE: TeamPricingContent = {
 };
 
 const FR: TeamPricingContent = {
-  metaTitle: 'Tarifs — OpenDesign',
+  metaTitle: 'Tarifs — HiDesign',
   metaDescription:
-    'Comparez les offres Creator et Team d’OpenDesign : crédits modèles, collaboration par siège, réductions annuelles et support Enterprise.',
+    'Comparez les offres Creator et Team d’HiDesign : crédits modèles, collaboration par siège, réductions annuelles et support Enterprise.',
   breadcrumbLabel: 'Tarifs',
   audienceTabsLabel: 'Public de l’offre',
   creatorTab: 'Créateur',
@@ -317,9 +317,9 @@ const FR: TeamPricingContent = {
 };
 
 const RU: TeamPricingContent = {
-  metaTitle: 'Тарифы — OpenDesign',
+  metaTitle: 'Тарифы — HiDesign',
   metaDescription:
-    'Сравните тарифы OpenDesign для авторов и команд: кредиты моделей, совместная работа по местам, годовые скидки и поддержка Enterprise.',
+    'Сравните тарифы HiDesign для авторов и команд: кредиты моделей, совместная работа по местам, годовые скидки и поддержка Enterprise.',
   breadcrumbLabel: 'Тарифы',
   audienceTabsLabel: 'Тип тарифа',
   creatorTab: 'Для авторов',
@@ -362,9 +362,9 @@ const RU: TeamPricingContent = {
 };
 
 const ES: TeamPricingContent = {
-  metaTitle: 'Precios — OpenDesign',
+  metaTitle: 'Precios — HiDesign',
   metaDescription:
-    'Compara los planes Creator y Team de OpenDesign: créditos de modelos, colaboración por asiento, ahorro anual y soporte Enterprise.',
+    'Compara los planes Creator y Team de HiDesign: créditos de modelos, colaboración por asiento, ahorro anual y soporte Enterprise.',
   breadcrumbLabel: 'Precios',
   audienceTabsLabel: 'Público del plan',
   creatorTab: 'Creadores',
@@ -407,9 +407,9 @@ const ES: TeamPricingContent = {
 };
 
 const PT_BR: TeamPricingContent = {
-  metaTitle: 'Preços — OpenDesign',
+  metaTitle: 'Preços — HiDesign',
   metaDescription:
-    'Compare os planos Creator e Team do OpenDesign, com créditos de modelos, colaboração por assento, economia anual e suporte Enterprise.',
+    'Compare os planos Creator e Team do HiDesign, com créditos de modelos, colaboração por assento, economia anual e suporte Enterprise.',
   breadcrumbLabel: 'Preços',
   audienceTabsLabel: 'Público do plano',
   creatorTab: 'Criadores',
@@ -452,9 +452,9 @@ const PT_BR: TeamPricingContent = {
 };
 
 const IT: TeamPricingContent = {
-  metaTitle: 'Prezzi — OpenDesign',
+  metaTitle: 'Prezzi — HiDesign',
   metaDescription:
-    'Confronta i piani Creator e Team di OpenDesign: crediti modello, collaborazione per postazione, risparmio annuale e supporto Enterprise.',
+    'Confronta i piani Creator e Team di HiDesign: crediti modello, collaborazione per postazione, risparmio annuale e supporto Enterprise.',
   breadcrumbLabel: 'Prezzi',
   audienceTabsLabel: 'Destinatari del piano',
   creatorTab: 'Creator',
@@ -497,9 +497,9 @@ const IT: TeamPricingContent = {
 };
 
 const TR: TeamPricingContent = {
-  metaTitle: 'Fiyatlandırma — OpenDesign',
+  metaTitle: 'Fiyatlandırma — HiDesign',
   metaDescription:
-    'OpenDesign Creator ve Team planlarını; model kredileri, koltuk başına iş birliği, yıllık tasarruf ve Enterprise desteğiyle karşılaştırın.',
+    'HiDesign Creator ve Team planlarını; model kredileri, koltuk başına iş birliği, yıllık tasarruf ve Enterprise desteğiyle karşılaştırın.',
   breadcrumbLabel: 'Fiyatlandırma',
   audienceTabsLabel: 'Plan hedefi',
   creatorTab: 'İçerik üretici',

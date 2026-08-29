@@ -272,7 +272,7 @@ describe("pricing contract", () => {
     assert.equal(zhTwContent.personal.bringYourOwnApiKey, "支援接入第三方 API Key");
     assert.match(
       individualPlans,
-      /可绑定其他模型服务商的 API Key，在 Open Design 中调用对应模型；本套餐不提供对外 API 服务。/,
+      /可绑定其他模型服务商的 API Key，在 Hi Design 中调用对应模型；本套餐不提供对外 API 服务。/,
     );
     assert.match(individualPlans, /class="benefit-help-trigger"/);
     assert.match(individualPlans, /class="benefit-help-tooltip"/);
@@ -687,7 +687,7 @@ describe("pricing contract", () => {
     assert.match(page, /now >= campaignStartAt && now < campaignEndAt/);
     assert.match(page, /data-pricing-campaign-surface/);
     assert.match(page, /class="pr-campaign-disclaimer"/);
-    assert.match(campaign, /套餐内的无限制模型额度与免费生成次数，仅可通过OpenDesign使用/);
+    assert.match(campaign, /套餐内的无限制模型额度与免费生成次数，仅可通过HiDesign使用/);
     assert.match(page, /<p class="pr-foot" set:html=\{footnoteHtml\} \/>\s*<p class="pr-campaign-disclaimer" data-pricing-campaign-surface hidden>\{deepSeekCampaign\.disclaimer\}<\/p>/);
     assert.doesNotMatch(page, /套餐内的<strong>无限制模型额度<\/strong>与<strong>免费生成次数<\/strong>/);
     assert.match(page, /\.pr-campaign-disclaimer\s*\{[\s\S]*font-size:\s*\.82rem;/);
@@ -803,7 +803,7 @@ describe("pricing contract", () => {
     assert.doesNotMatch(page, /\{L\.videoGeneration\}<span class="pr-soon-tag">/);
   });
 
-  it("renders exactly one OpenDesign Cloud capability section", async () => {
+  it("renders exactly one HiDesign Cloud capability section", async () => {
     const page = await readFile(PRICING_PAGE_PATH, "utf8");
 
     assert.doesNotMatch(

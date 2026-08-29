@@ -287,7 +287,7 @@ function SkillPluginCandidateCard({
         { action },
       );
       setNotice({
-        message: `OpenDesign contribution task started for ${data?.path ?? "the draft"}.`,
+        message: `HiDesign contribution task started for ${data?.path ?? "the draft"}.`,
       });
     } catch (err) {
       setNotice({ message: err instanceof Error ? err.message : String(err) });
@@ -371,7 +371,7 @@ interface Props {
   ) => Promise<{ message?: string; url?: string } | void> | { message?: string; url?: string } | void;
   activePluginActionPaths?: Set<string>;
   hiddenPluginActionPaths?: Set<string>;
-  // Click handler for the post-completion "Share to OpenDesign" submission
+  // Click handler for the post-completion "Share to HiDesign" submission
   // action. ProjectView wires this to handleSend with the bundled
   // `od-share-to-community` trigger prompt.
   onShareToOpenDesign?: () => void;
@@ -2401,7 +2401,7 @@ function PluginActionPanel({
                   <span>
                     {actionBusy && busyKey === `contribute:${folder.path}`
                       ? "Sending..."
-                      : "OpenDesign PR"}
+                      : "HiDesign PR"}
                   </span>
                 </button>
                 {onRequestOpenFile ? (
@@ -2497,7 +2497,7 @@ function pathMatchesFolderFileBasename(
 }
 
 function hasPluginFinalActionHint(content: string): boolean {
-  return /\b(Add to My plugins|OpenDesign PR|Publish repo|plugin publish|ready to publish|ready to add)\b/i.test(
+  return /\b(Add to My plugins|HiDesign PR|Publish repo|plugin publish|ready to publish|ready to add)\b/i.test(
     content,
   );
 }

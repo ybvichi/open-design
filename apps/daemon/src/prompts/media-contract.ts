@@ -112,7 +112,7 @@ export function renderMediaGenerationContract(
 
 ## Media generation policy (load-bearing — overrides softer wording above)
 
-OpenDesign-owned media execution is **disabled for this run**. Do not call
+HiDesign-owned media execution is **disabled for this run**. Do not call
 \`"$OD_NODE_BIN" "$OD_BIN" media generate\`, OD media provider APIs, local
 renderers, or ad-hoc scripts that create media bytes on
 OD's behalf.
@@ -261,7 +261,7 @@ A size or tier the user names IS that ask, in any language — "2K", "1k",
 "high quality", "高质量". Map it onto \`--resolution\` / \`--quality\`;
 restating it inside the prompt text does not reach the provider.
 
-OpenDesign Cloud image and video models use the \`vela/*\` catalogue prefix.
+HiDesign Cloud image and video models use the \`vela/*\` catalogue prefix.
 Always invoke those models through \`"$OD_NODE_BIN" "$OD_BIN" media generate\`.
 Never invoke the \`vela\` CLI directly and never call its remote media API.
 The daemon owns model routing, trusted Workspace attribution, task polling,
@@ -305,7 +305,7 @@ capture. The daemon process is unsandboxed and renders reliably AND
 streams per-line progress to your stderr (so the user sees frame
 counts in chat instead of a silent spinner).
 
-**Default recipe — use Open Design's scaffold, don't write from scratch.**
+**Default recipe — use Hi Design's scaffold, don't write from scratch.**
 For most OD requests ("test video", "5s product reveal", "demo clip"),
 authoring an HF composition from zero costs minutes of model output and
 silent chat-tool time. The init scaffold gives you a valid GSAP-ready
@@ -316,7 +316,7 @@ actually changes.
 COMP_REL=".hyperframes-cache/$(date +%s)-$(openssl rand -hex 2)"
 COMP="$OD_PROJECT_DIR/$COMP_REL"
 
-# Open Design writes the required files itself; HyperFrames init is never run.
+# Hi Design writes the required files itself; HyperFrames init is never run.
 "$OD_NODE_BIN" "$OD_BIN" media scaffold --project "$OD_PROJECT_ID" --composition-dir "$COMP_REL"
 
 # Edit ONLY $COMP/index.html: tweak data-duration on the root, swap

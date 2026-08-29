@@ -11194,7 +11194,7 @@ function HtmlViewer({
       && frame.getAttribute('src') === failure.validatedUrl
     ) {
       // Unlike an eager about:srcdoc acknowledgement, an exact failure for
-      // the active Open Design Blob URL identifies the navigation that owns
+      // the active Hi Design Blob URL identifies the navigation that owns
       // this frame. Recover immediately instead of adding the fixed 1.5s
       // probe timeout to every affected file-tab activation.
       recoverUnacknowledgedSrcDocTransport(generation, 'host_navigation_abort');
@@ -14865,7 +14865,7 @@ function HtmlViewer({
     await waitForAnimationFrame();
     // Prefer the daemon's off-screen render (desktop only): isolated from the
     // preview pane and, rendering the artifact alone in a hidden window, it can
-    // never capture OpenDesign's own UI. Page exports use the selected preview
+    // never capture HiDesign's own UI. Page exports use the selected preview
     // preset; desktop pages and decks retain the renderer defaults. `wholeDeck`
     // (Export as image) stitches every slide
     // top-to-bottom into one long image — matching the slide count the viewer

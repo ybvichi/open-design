@@ -45,7 +45,7 @@ function downloadedStatus(
   return {
     ...idleStatus(),
     availableVersion: '1.2.3-beta.4',
-    downloadPath: '/tmp/open-design-updater/Open Design Beta.dmg',
+    downloadPath: '/tmp/open-design-updater/Hi Design Beta.dmg',
     state: 'downloaded',
     ...overrides,
   };
@@ -80,7 +80,7 @@ describe('updater rocket indicator', () => {
         installResult: {
           dryRun: true,
           openedAt: '2026-07-28T00:00:00.000Z',
-          path: '/tmp/open-design-updater/Open Design Beta.dmg',
+          path: '/tmp/open-design-updater/Hi Design Beta.dmg',
         },
       }),
     ]) {
@@ -127,7 +127,7 @@ describe('updater rocket indicator', () => {
         installResult: {
           dryRun: true,
           openedAt: '2026-07-28T00:00:00.000Z',
-          path: '/tmp/open-design-updater/Open Design Beta.dmg',
+          path: '/tmp/open-design-updater/Hi Design Beta.dmg',
         },
       });
       return status;

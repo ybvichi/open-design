@@ -28,7 +28,7 @@ test('DeepSeek Harness hero CTAs are complete for every active locale', () => {
     if (code !== 'en') {
       assert.notEqual(
         actions[1]?.label,
-        'Join OpenDesign Discord',
+        'Join HiDesign Discord',
         `${code}: Discord label fell back to the English sentence`,
       );
     }
@@ -90,14 +90,14 @@ test('DeepSeek Harness tutorial exposes the official resources and connection wa
       `${code}: missing the official DeepSeek Harness repository`,
     );
 
-    // The OpenDesign walkthrough is one section per step so the TOC lists
+    // The HiDesign walkthrough is one section per step so the TOC lists
     // steps 2-5 individually instead of a combined "2-5" entry.
     const stepSectionIds = ['open-design', 'detect-harness', 'connect-profile', 'first-design-task'];
     const sectionIds = (page.rich?.sections ?? []).map(({ id }) => id);
     const stepIndexes = stepSectionIds.map((id) => sectionIds.indexOf(id));
     assert.ok(
       stepIndexes.every((index) => index !== -1),
-      `${code}: missing an OpenDesign connection step section`,
+      `${code}: missing an HiDesign connection step section`,
     );
     assert.deepEqual(
       stepIndexes,
@@ -115,7 +115,7 @@ test('DeepSeek Harness tutorial exposes the official resources and connection wa
       );
     });
     const walkthroughCopy = JSON.stringify(stepSections);
-    assert.match(walkthroughCopy, /0\.19\.1/, `${code}: missing the minimum OpenDesign version`);
+    assert.match(walkthroughCopy, /0\.19\.1/, `${code}: missing the minimum HiDesign version`);
     const imageSources = stepSections.flatMap((section) =>
       section.blocks.flatMap((block) => (block.kind === 'image' ? [block.src] : [])),
     );

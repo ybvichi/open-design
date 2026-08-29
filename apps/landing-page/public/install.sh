@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# OpenDesign MCP installer wrapper.
+# HiDesign MCP installer wrapper.
 #
 # This file is served verbatim by the static landing page at:
 #   https://open-design.ai/install.sh
@@ -16,7 +16,7 @@ set -eu
 
 usage() {
   cat <<'EOF'
-OpenDesign MCP installer
+HiDesign MCP installer
 
 Usage:
   curl -fsSL https://open-design.ai/install.sh | sh -s <agent> [options]
@@ -39,17 +39,17 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-  printf '%s\n\n' "OpenDesign install.sh: missing required <agent> argument." >&2
+  printf '%s\n\n' "HiDesign install.sh: missing required <agent> argument." >&2
   usage >&2
   exit 2
 fi
 
 if ! command -v od >/dev/null 2>&1; then
   cat >&2 <<'EOF'
-OpenDesign install.sh: `od` was not found on PATH.
+HiDesign install.sh: `od` was not found on PATH.
 
-Install and open the OpenDesign desktop app, or run the daemon from a source
-checkout so the OpenDesign CLI is available, then re-run this command.
+Install and open the HiDesign desktop app, or run the daemon from a source
+checkout so the HiDesign CLI is available, then re-run this command.
 EOF
   exit 1
 fi
@@ -58,14 +58,14 @@ od_probe="$(od mcp install --open-design-cli-probe 2>/dev/null || true)"
 if [ "${od_probe}" != "open-design-cli:mcp-install:v1" ]; then
   od_path="$(command -v od || true)"
   cat >&2 <<EOF
-OpenDesign install.sh: '${od_path}' does not look like the OpenDesign CLI.
+HiDesign install.sh: '${od_path}' does not look like the HiDesign CLI.
 
 On macOS, Linux, and WSL2, /usr/bin/od is the system octal-dump command and can
-shadow OpenDesign's CLI. Put the OpenDesign CLI earlier on PATH, then re-run
+shadow HiDesign's CLI. Put the HiDesign CLI earlier on PATH, then re-run
 this command.
 
 If you installed the macOS desktop app via the DMG or Homebrew cask, the app
-bundle does not add an 'od' shim to your shell PATH. Launch OpenDesign and use
+bundle does not add an 'od' shim to your shell PATH. Launch HiDesign and use
 Settings -> MCP server to copy the client-specific install snippet instead;
 that snippet uses absolute paths and avoids the system 'od' collision.
 EOF

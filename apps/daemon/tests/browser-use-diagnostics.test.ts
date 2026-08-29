@@ -22,10 +22,10 @@ afterEach(async () => {
 });
 
 describe('browser use diagnostics', () => {
-  it('detects Browser Use prompts from the OpenDesign Browser menu', () => {
+  it('detects Browser Use prompts from the HiDesign Browser menu', () => {
     expect(isBrowserUseRequested('hello')).toBe(false);
     expect(isBrowserUseRequested('@agent-browser\n\nBrowser tab context:')).toBe(true);
-    expect(isBrowserUseRequested('Use the selected OpenDesign Browser tab as the bound target.')).toBe(true);
+    expect(isBrowserUseRequested('Use the selected HiDesign Browser tab as the bound target.')).toBe(true);
   });
 
   it('returns a missing-registry snapshot without reading socket contents', () => {

@@ -101,7 +101,7 @@ const REPO_URL = 'https://github.com/nexu-io/open-design';
 const GITHUB_HELP_URL = `${REPO_URL}/issues/new`;
 const GITHUB_FEATURE_URL = `${REPO_URL}/pulls`;
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
-const X_URL = 'https://x.com/OpenDesignHQ';
+const X_URL = 'https://x.com/HiDesignHQ';
 const CONTACT_EMAIL_URL = 'mailto:support@open-design.ai';
 const externalLinkProps = { target: '_blank', rel: 'noreferrer noopener' } as const;
 
@@ -1148,8 +1148,8 @@ function RailSocialRow({
         className="entry-nav-rail__social-btn"
         href={X_URL}
         {...externalLinkProps}
-        aria-label="@OpenDesignHQ"
-        title="@OpenDesignHQ"
+        aria-label="@HiDesignHQ"
+        title="@HiDesignHQ"
         onClick={() => track('twitter')}
       >
         <span className="entry-nav-rail__menu-x" aria-hidden>X</span>

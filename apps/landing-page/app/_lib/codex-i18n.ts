@@ -44,15 +44,15 @@ const en: CodexCopy = {
   collectionStats: CODEX_COLLECTION.stats,
   collectionIntro: CODEX_COLLECTION.intro,
   collectionCategoryBlurbs: CODEX_COLLECTION.categories.map((c) => c.blurb),
-  collectionCloserHeading: 'Skip the setup. Design with Codex inside OpenDesign',
+  collectionCloserHeading: 'Skip the setup. Design with Codex inside HiDesign',
   filterAll: 'All',
   collectionCloserBody:
-    'OpenDesign is the open-source, agent-native design workspace that runs around Codex. It keeps your systems, skills and templates consistent, so the agent ships work you own.',
+    'HiDesign is the open-source, agent-native design workspace that runs around Codex. It keeps your systems, skills and templates consistent, so the agent ships work you own.',
 
   categoryFrontend: 'Frontend & UI',
   categoryDesignSystems: 'Design Systems',
 
-  ctaDownload: 'Download OpenDesign',
+  ctaDownload: 'Download HiDesign',
   ctaStarList: 'Star the list',
   ctaBrowseAll: 'Browse all plugins',
   ctaViewSource: 'View source',
@@ -90,9 +90,9 @@ const en: CodexCopy = {
   detailMoreOnList: 'More on the codex-design list',
   detailRelated: 'More Codex design plugins',
   finalEyebrow: 'Next step',
-  detailCloserHeading: 'Design with OpenDesign, without the setup',
+  detailCloserHeading: 'Design with HiDesign, without the setup',
   detailCloserBody:
-    'Install this plugin yourself, or run a whole curated design layer around Codex with OpenDesign. Bring your own key, own your output.',
+    'Install this plugin yourself, or run a whole curated design layer around Codex with HiDesign. Bring your own key, own your output.',
 
   skills: Object.fromEntries(
     CODEX_SKILLS.map((s) => [

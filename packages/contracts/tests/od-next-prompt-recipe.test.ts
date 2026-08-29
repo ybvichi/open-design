@@ -150,7 +150,7 @@ describe('OD Next V2 prompt recipe', () => {
     expect(prompt).toContain('canonical-deliverable check that gates production already applies');
     expect(prompt).toContain('it looks for a root `index.html`, then a single root-level html file, then a single file matching the project kind');
     // Writing outside the project directory yields `no_artifact`, which reads
-    // to the agent as "I finished" and to Open Design as "nothing delivered".
+    // to the agent as "I finished" and to Hi Design as "nothing delivered".
     expect(prompt).toContain('Write every deliverable inside the project directory');
   });
 
@@ -160,7 +160,7 @@ describe('OD Next V2 prompt recipe', () => {
 
     expect(headings).toMatchInlineSnapshot(`
       [
-        "# Open Design execution and security boundary",
+        "# Hi Design execution and security boundary",
         "## Native filesystem execution",
         "## Versioned recipe identity",
         "## Discovery, planning, and Build surface",

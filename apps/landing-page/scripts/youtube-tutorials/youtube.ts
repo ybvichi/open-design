@@ -148,7 +148,7 @@ export async function fetchCandidates(
   const videos = await fetchVideoDetails(fresh, key);
   const scored = await mapPool(videos, 4, async (v) => ({ ...v, score: await scoreCandidate(v) }));
   const candidates = scored
-    .filter((c) => c.score.isOpenDesign)
+    .filter((c) => c.score.OpenHiDesign)
     // Recommended ("worth adding") first, then highest suggested score, then
     // newest — so the actionable picks cluster at the top of the digest.
     .sort(

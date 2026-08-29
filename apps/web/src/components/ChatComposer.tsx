@@ -114,7 +114,7 @@ import { ANNOTATION_EVENT, type AnnotationEventDetail } from "./PreviewDrawOverl
  * design browser's hover "添加到对话" capture, which writes the PNG via
  * writeProjectBase64File before notifying the composer.
  */
-export const STAGE_ATTACHMENT_EVENT = 'opendesign:stage-attachment';
+export const STAGE_ATTACHMENT_EVENT = 'HiDesign:stage-attachment';
 export interface StageAttachmentEventDetail {
   attachments: ChatAttachment[];
 }

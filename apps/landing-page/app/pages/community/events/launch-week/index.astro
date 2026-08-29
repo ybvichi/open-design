@@ -49,9 +49,9 @@ const jsonLd = {
     '@type': 'VirtualLocation',
     url: new URL(Astro.url.pathname, Astro.site ?? fallbackSite).toString(),
   },
-  organizer: { '@type': 'Organization', name: 'OpenDesign', url: fallbackSite },
+  organizer: { '@type': 'Organization', name: 'HiDesign', url: fallbackSite },
   image: [ogImage],
-  performer: { '@type': 'Organization', name: 'OpenDesign' },
+  performer: { '@type': 'Organization', name: 'HiDesign' },
   isAccessibleForFree: true,
   offers: {
     '@type': 'Offer',

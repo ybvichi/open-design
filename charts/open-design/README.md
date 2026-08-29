@@ -1,7 +1,7 @@
-<!--- app-name: OpenDesign -->
+<!--- app-name: HiDesign -->
 
 ## Introduction
-This chart bootstraps an [OpenDesign](https://github.com/nexu-io/open-design) deployment on a [Kubernetes](https://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
+This chart bootstraps an [HiDesign](https://github.com/nexu-io/open-design) deployment on a [Kubernetes](https://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
 ## Prerequisites
 - Kubernetes 1.23+
@@ -15,14 +15,14 @@ To install the chart with the release name `my-release`:
 helm install my-release ./charts/open-design
 ```
 
-These commands deploy an OpenDesign application on the Kubernetes cluster in the default configuration.
+These commands deploy an HiDesign application on the Kubernetes cluster in the default configuration.
 
 > **Tip**: List all releases using `helm list`
 
 ### Architecture and Configuration Notes
 
 #### SQLite State & Concurrency Limitations
-The current OpenDesign runtime stores state in local files and SQLite. Before
+The current HiDesign runtime stores state in local files and SQLite. Before
 documenting or changing persistent daemon storage, you MUST read root
 [`AGENTS.md`](../../AGENTS.md) → **Daemon data directory contract**. This chart
 README MUST NOT restate it. Because SQLite does not support concurrent writes
@@ -31,7 +31,7 @@ from multiple network replicas, **this chart is strictly limited to 1 replica**.
 Horizontal Pod Autoscaling (HPA) is disabled by default. Do not enable HPA or scale the deployment beyond `replicas: 1` unless you have modified the application to externalize the state to a standalone database.
 
 #### Server-Sent Events (SSE) and Ingress
-OpenDesign relies on Server-Sent Events (SSE) for real-time streaming. If you enable the Ingress resource, it is critical to disable reverse-proxy buffering. If you are using the NGINX Ingress Controller, this chart automatically applies the required annotations by default:
+HiDesign relies on Server-Sent Events (SSE) for real-time streaming. If you enable the Ingress resource, it is critical to disable reverse-proxy buffering. If you are using the NGINX Ingress Controller, this chart automatically applies the required annotations by default:
 
 ```yaml
 nginx.ingress.kubernetes.io/proxy-buffering: "off"
@@ -58,7 +58,7 @@ This chart adheres to strict security defaults:
 | Name               | Description                               | Value                        |
 | ------------------ | ----------------------------------------- | ---------------------------- |
 | `commonLabels`     | Custom labels injected into all resources | `{app.kubernetes.io/environment: production}`  |
-| `image.repository` | OpenDesign image repository              | `ghcr.io/nexu-io/od`        |
+| `image.repository` | HiDesign image repository              | `ghcr.io/nexu-io/od`        |
 | `image.pullPolicy` | Image pull policy                         | `IfNotPresent`               |
 | `image.tag`        | Image tag (overrides AppVersion)          | `latest`                     |
 
@@ -158,7 +158,7 @@ Specify each parameter using the `--set key=value[,key=value]` argument to `helm
 helm install my-release --set config.nodeEnv=development ./charts/open-design
 ```
 
-The above command sets the OpenDesign node environment to `development`.
+The above command sets the HiDesign node environment to `development`.
 
 Alternatively, a YAML file that specifies the values for the parameters can be provided while installing the chart. For example,
 

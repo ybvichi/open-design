@@ -104,29 +104,29 @@ export type OpenDesignPluginCopy = {
 
 export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
   metadata: {
-    title: 'OpenDesign for Codex/ChatGPT | Install the OpenDesign Cloud Plugin',
+    title: 'HiDesign for Codex/ChatGPT | Install the HiDesign Cloud Plugin',
     description:
-      'Install OpenDesign Cloud in Codex/ChatGPT and create websites, slides, prototypes and design systems from the same task.',
+      'Install HiDesign Cloud in Codex/ChatGPT and create websites, slides, prototypes and design systems from the same task.',
     keywords:
-      'OpenDesign Codex plugin, ChatGPT desktop plugin, Codex plugin install, OpenDesign Cloud, Codex design plugin, Codex MCP',
+      'HiDesign Codex plugin, ChatGPT desktop plugin, Codex plugin install, HiDesign Cloud, Codex design plugin, Codex MCP',
   },
   hero: {
-    title: 'OpenDesign plugin for Codex/ChatGPT',
+    title: 'HiDesign plugin for Codex/ChatGPT',
     leadBefore: 'Enter the instruction below into any task in your',
     chatgptLabel: 'ChatGPT desktop app',
-    installAria: 'Install OpenDesign Cloud in Codex/ChatGPT',
+    installAria: 'Install HiDesign Cloud in Codex/ChatGPT',
     copy: 'Copy',
     github: 'View installation guide on GitHub ↗',
   },
   demo: {
     title: 'Install once. Create from Codex/ChatGPT.',
     lead:
-      'See the complete Codex and OpenDesign workspace first, then follow the real install-to-result sequence.',
+      'See the complete Codex and HiDesign workspace first, then follow the real install-to-result sequence.',
     overviewAlt:
-      'A real Codex task using the OpenDesign plugin alongside the finished Goodfield cafe website',
+      'A real Codex task using the HiDesign plugin alongside the finished Goodfield cafe website',
     overviewLabel: 'Real Codex task',
     overviewCaption:
-      'The prompt, OpenDesign handoff, generated files and finished website stay visible in one workspace.',
+      'The prompt, HiDesign handoff, generated files and finished website stay visible in one workspace.',
     stepListAria: 'The five stages in the real Codex plugin run',
     installPhase: 'Install',
     installTitle: 'Ask Codex to install it',
@@ -138,23 +138,23 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
         phase: 'Use',
         title: 'Start a fresh Codex task',
         body:
-          'After Codex finishes the installation, open the installed OpenDesign plugin in the new task and choose “Try now” to begin.',
-        alt: 'The real OpenDesign plugin detail screen in Codex with a Try now button',
+          'After Codex finishes the installation, open the installed HiDesign plugin in the new task and choose “Try now” to begin.',
+        alt: 'The real HiDesign plugin detail screen in Codex with a Try now button',
       },
       {
         phase: 'Create',
         title: 'Write the design brief',
         body:
-          'Mention OpenDesign, then describe the artifact, content, visual direction and responsive requirements.',
-        alt: 'A real Codex prompt asking OpenDesign to create a warm neighborhood cafe website',
+          'Mention HiDesign, then describe the artifact, content, visual direction and responsive requirements.',
+        alt: 'A real Codex prompt asking HiDesign to create a warm neighborhood cafe website',
       },
       {
         phase: 'Create',
         title: 'Follow the live handoff',
         body:
-          'Codex confirms the direction, creates the project and hands the work into OpenDesign while files appear live.',
+          'Codex confirms the direction, creates the project and hands the work into HiDesign while files appear live.',
         alt:
-          'A real Codex and OpenDesign workspace while the neighborhood cafe website is being generated',
+          'A real Codex and HiDesign workspace while the neighborhood cafe website is being generated',
       },
       {
         phase: 'Create',
@@ -162,24 +162,24 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
         body:
           'The same task returns the responsive Goodfield café landing page, its generated images and editable files.',
         alt:
-          'The finished Goodfield neighborhood cafe landing page generated through the OpenDesign plugin in Codex',
+          'The finished Goodfield neighborhood cafe landing page generated through the HiDesign plugin in Codex',
       },
     ],
   },
   use: {
     title: 'Start with the exact prompt.',
     lead:
-      'Select OpenDesign from Codex’s plugin menu, describe the artifact and keep refining from the same task. Codex renders the plugin mention as an OpenDesign chip.',
+      'Select HiDesign from Codex’s plugin menu, describe the artifact and keep refining from the same task. Codex renders the plugin mention as an HiDesign chip.',
     promptLabel: 'Prompt used in the recorded Codex task',
     copyPrompt: 'Copy Codex prompt',
-    galleryAria: 'Examples created with OpenDesign',
+    galleryAria: 'Examples created with HiDesign',
     templates: [
       {
         alt: 'Oryzo product landing page with a tactile cutting mat and cork object',
         label: 'Product launch',
       },
       {
-        alt: 'OpenDesign Osaka event landing page with a typographic map',
+        alt: 'HiDesign Osaka event landing page with a typographic map',
         label: 'Event page',
       },
       {
@@ -187,11 +187,11 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
         label: 'Editorial site',
       },
       {
-        alt: 'OpenDesign model timeline interface on a bright canvas',
+        alt: 'HiDesign model timeline interface on a bright canvas',
         label: 'Interactive story',
       },
     ],
-    promptListAria: 'OpenDesign Cloud prompt examples',
+    promptListAria: 'HiDesign Cloud prompt examples',
     prompts: [
       { title: 'Website' },
       { title: 'Slides' },
@@ -201,12 +201,12 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
   },
   faq: {
     title: 'Questions before you install',
-    lead: 'Codex stays in control of the task. OpenDesign handles the visual workflow.',
+    lead: 'Codex stays in control of the task. HiDesign handles the visual workflow.',
     items: [
       {
         q: 'What does the plugin add to Codex?',
         a:
-          'It gives Codex an OpenDesign workflow for websites, slides, prototypes and design systems. The plugin connects to the local OpenDesign MCP for briefs, projects and artifact generation.',
+          'It gives Codex an HiDesign workflow for websites, slides, prototypes and design systems. The plugin connects to the local HiDesign MCP for briefs, projects and artifact generation.',
       },
       {
         q: 'Which Codex products are supported?',
@@ -216,27 +216,27 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
       {
         q: 'What do I need before installing?',
         a:
-          'Use Codex CLI 0.144.6 or newer and OpenDesign 0.17.0 or newer. Install OpenDesign before registering its local MCP.',
+          'Use Codex CLI 0.144.6 or newer and HiDesign 0.17.0 or newer. Install HiDesign before registering its local MCP.',
       },
       {
         q: 'Why do I need a new Codex task?',
         a:
-          'Codex loads plugin and MCP capabilities when a task starts. A fresh task picks up the newly installed OpenDesign Cloud plugin.',
+          'Codex loads plugin and MCP capabilities when a task starts. A fresh task picks up the newly installed HiDesign Cloud plugin.',
       },
       {
-        q: 'Does the OpenDesign window need to stay open?',
+        q: 'Does the HiDesign window need to stay open?',
         a:
-          'No. The registered local MCP can start the signed OpenDesign runtime headlessly when it is needed.',
+          'No. The registered local MCP can start the signed HiDesign runtime headlessly when it is needed.',
       },
     ],
   },
   final: {
-    aria: 'Install OpenDesign Cloud in Codex/ChatGPT',
-    title: 'Bring OpenDesign into your next Codex/ChatGPT task.',
+    aria: 'Install HiDesign Cloud in Codex/ChatGPT',
+    title: 'Bring HiDesign into your next Codex/ChatGPT task.',
     bodyBeforeMention: 'Install the plugin, connect the local MCP and invoke',
     bodyAfterMention: '.',
     copy: 'Copy',
-    download: 'Download OpenDesign',
+    download: 'Download HiDesign',
     source: 'View source',
   },
   clipboard: {
@@ -245,8 +245,8 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
     failed: 'Select and copy',
   },
   schema: {
-    pageName: 'OpenDesign Cloud Plugin for Codex/ChatGPT',
-    applicationName: 'OpenDesign Cloud Plugin for Codex/ChatGPT',
+    pageName: 'HiDesign Cloud Plugin for Codex/ChatGPT',
+    applicationName: 'HiDesign Cloud Plugin for Codex/ChatGPT',
   },
 };
 

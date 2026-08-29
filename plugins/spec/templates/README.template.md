@@ -21,7 +21,7 @@ od plugin apply plugin-id --input artifact=prototype --input audience=founders -
 ## Files
 
 - `SKILL.md` - portable agent instructions.
-- `open-design.json` - versioned OpenDesign marketplace and apply metadata.
+- `open-design.json` - versioned HiDesign marketplace and apply metadata.
 - `examples/` - sample output or fixture prompts.
 - `evals/` - repeatable quality checks.
 

@@ -1,12 +1,12 @@
 ---
-title: Open Design 0.21.0 — Reliable, Start to Finish
-description: From Agent connections to live HTML previews and app relaunches, Open Design 0.21.0 makes the entire creation experience more reliable—and easier to recover when something goes wrong.
+title: Hi Design 0.21.0 — Reliable, Start to Finish
+description: From Agent connections to live HTML previews and app relaunches, Hi Design 0.21.0 makes the entire creation experience more reliable—and easier to recover when something goes wrong.
 ---
 
 ### 🌟 Codename: *Reliable, Start to Finish*
 
 🛡️ **42 PRs · 13 contributors · 4 days** — **From Agent connections to live
-HTML previews and app relaunches, Open Design 0.21.0 makes the entire creation
+HTML previews and app relaunches, Hi Design 0.21.0 makes the entire creation
 experience more reliable—and easier to recover when something goes wrong.** 🚀
 
 ## 🔥 Highlights
@@ -19,7 +19,7 @@ experience more reliable—and easier to recover when something goes wrong.** �
   preview dismisses its viewport menu like clicking anywhere else. (#7336,
   #7358) Thanks @lefarcen.
 
-- 🧰 **A working agent no longer disappears behind a broken shim.** OpenDesign
+- 🧰 **A working agent no longer disappears behind a broken shim.** HiDesign
   keeps searching when an earlier executable on PATH is stale, leaves a real
   diagnostic and repair action when nothing can launch, and supports the
   DeepSeek Harness release line users actually receive. The one-line installer
@@ -27,14 +27,14 @@ experience more reliable—and easier to recover when something goes wrong.** �
   Thanks @lefarcen.
 
 - 🌙 **Kimi works again on 0.37 and newer.** Those releases stopped accepting the
-  stdio MCP transport that OpenDesign attached to every session, turning nearly
-  every run into an opaque handshake error. OpenDesign now sends only the
+  stdio MCP transport that HiDesign attached to every session, turning nearly
+  every run into an opaque handshake error. HiDesign now sends only the
   transports each Kimi build accepts, so a message produces a streamed reply
   again instead of failing before the work begins. (#7313) Thanks @lefarcen.
 
 - 🚪 **Relaunching the app recovers from a stale local engine.** A web sidecar
   left behind by a crash could hold the app's socket and make every later launch
-  quit at startup. OpenDesign now reclaims that stale owner safely, and its
+  quit at startup. HiDesign now reclaims that stale owner safely, and its
   daemon and web processes shut down with the desktop app instead of haunting
   the next launch. (#7279) Thanks @mrcfps.
 

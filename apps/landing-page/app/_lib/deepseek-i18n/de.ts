@@ -22,17 +22,17 @@ export const de: DeepseekCopyOverride = {
     'Schließ den Loop: annotiere echte Seiten, kompiliere Motion-Assets, nimm deine Skill-Bibliothek mit.',
     'Mach den Harness selbst zum Design-Workspace: Preview-Panels, Workbenches und Boards neben dem Chat.',
   ],
-  collectionCloserHeading: 'Spar dir das Setup. Designe mit DeepSeek Harness in OpenDesign',
+  collectionCloserHeading: 'Spar dir das Setup. Designe mit DeepSeek Harness in HiDesign',
   filterAll: 'Alle',
   collectionCloserBody:
-    'OpenDesign ist der quelloffene, agent-native Design-Workspace rund um DeepSeek Harness. Er hält Systeme, Skills und Templates konsistent, damit der Agent Arbeit liefert, die dir gehört.',
+    'HiDesign ist der quelloffene, agent-native Design-Workspace rund um DeepSeek Harness. Er hält Systeme, Skills und Templates konsistent, damit der Agent Arbeit liefert, die dir gehört.',
 
   categoryVision: 'Vision & Eingabe',
   categoryCanvas: 'Canvas & generatives UI',
   categoryWorkflow: 'Design-Workflow',
   categoryWorkspace: 'Workspace & Vorschau',
 
-  ctaDownload: 'OpenDesign herunterladen',
+  ctaDownload: 'HiDesign herunterladen',
   ctaStarList: 'DeepSeek Harness mit einem Star versehen',
   ctaGuide: 'So designst du mit DeepSeek Harness',
   ctaBrowseAll: 'Alle Plugins ansehen',
@@ -71,9 +71,9 @@ export const de: DeepseekCopyOverride = {
   detailMoreOnList: 'Mehr im DeepSeek-Harness-Repo',
   detailRelated: 'Weitere DeepSeek-Harness-Design-Plugins',
   finalEyebrow: 'Nächster Schritt',
-  detailCloserHeading: 'Mit OpenDesign designen, ohne Setup',
+  detailCloserHeading: 'Mit HiDesign designen, ohne Setup',
   detailCloserBody:
-    'Installiere dieses Plugin selbst, oder leg mit OpenDesign eine ganze kuratierte Design-Ebene um DeepSeek Harness. Eigener Key, eigenes Ergebnis.',
+    'Installiere dieses Plugin selbst, oder leg mit HiDesign eine ganze kuratierte Design-Ebene um DeepSeek Harness. Eigener Key, eigenes Ergebnis.',
 
   skills: {
     modlens: {

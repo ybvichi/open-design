@@ -30,10 +30,10 @@ import { SocialShareGrid } from './SocialShareGrid';
 import { enterpriseUrl } from './enterpriseUrl';
 
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
-const X_URL = 'https://x.com/OpenDesignHQ';
-const THREADS_URL = 'https://www.threads.com/@opendesign.ai';
+const X_URL = 'https://x.com/HiDesignHQ';
+const THREADS_URL = 'https://www.threads.com/@HiDesign.ai';
 const YOUTUBE_URL = 'https://www.youtube.com/@Open-Design-ai';
-const INSTAGRAM_URL = 'https://www.instagram.com/opendesign.ai/';
+const INSTAGRAM_URL = 'https://www.instagram.com/HiDesign.ai/';
 const LINKEDIN_URL = 'https://www.linkedin.com/company/open-design-ai/';
 const XIAOHONGSHU_URL =
   'https://www.xiaohongshu.com/user/profile/691effad000000003002978f';

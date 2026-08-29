@@ -1,17 +1,17 @@
-# OpenDesign Authenticated Pricing Analytics Emitter Implementation Plan
+# HiDesign Authenticated Pricing Analytics Emitter Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Send migrated Pricing interactions to Vela's authenticated compatibility endpoint so the existing AMR subscription funnel resumes without changing the Pricing or checkout flow.
 
-**Architecture:** A pure controller builds reduced, strictly bounded bridge records and a transport posts them to Vela with credentials and keepalive. The page activates the controller only after authenticated pricing context and a trusted wallet/dashboard source resolve; existing OpenDesign PostHog events remain independent.
+**Architecture:** A pure controller builds reduced, strictly bounded bridge records and a transport posts them to Vela with credentials and keepalive. The page activates the controller only after authenticated pricing context and a trusted wallet/dashboard source resolve; existing HiDesign PostHog events remain independent.
 
 **Tech Stack:** Astro 6, TypeScript, Node test runner, Playwright, PostHog wrapper (unchanged)
 
 ## Global Constraints
 
 - Base the work on the latest `nexu-io/open-design/main`.
-- Do not change Pricing UI, prices, entitlements, CTA destinations, checkout behavior, or existing OpenDesign analytics.
+- Do not change Pricing UI, prices, entitlements, CTA destinations, checkout behavior, or existing HiDesign analytics.
 - Only authenticated Vela sessions arriving from trusted wallet/dashboard surfaces enter the compatibility funnel.
 - Compatibility delivery is best effort and must never block navigation or form submission.
 - Never include email, company, lead free text, raw URL, or raw referrer in the bridge request.
@@ -196,7 +196,7 @@ The compatibility script waits for this event, resolves the trusted source, crea
 
 - [ ] **Step 4: Restore Enterprise submit intent timing**
 
-Dispatch `pricing:enterprise-submit` from the form's synchronous `submit` event before validation. Remove the compatibility dispatch from `od:lead-success`; retain the existing OpenDesign success bridge and non-PII lead analytics unchanged.
+Dispatch `pricing:enterprise-submit` from the form's synchronous `submit` event before validation. Remove the compatibility dispatch from `od:lead-success`; retain the existing HiDesign success bridge and non-PII lead analytics unchanged.
 
 - [ ] **Step 5: Run browser, contract, and full landing tests**
 
@@ -220,7 +220,7 @@ git add apps/landing-page/app/pages/pricing/index.astro \
 git commit -m "fix(analytics): relay authenticated pricing funnel events"
 ```
 
-### Task 4: Validate, document dependency, and update the OpenDesign PR
+### Task 4: Validate, document dependency, and update the HiDesign PR
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-08-23-restore-pricing-plan-exposure-design.md` only if implementation reveals a factual mismatch
@@ -243,7 +243,7 @@ With an authenticated fixture, trigger initial Personal exposure, interval chang
 
 - [ ] **Step 3: Update PR #7299 through `odc`**
 
-Cross-link the Vela PR, state that Vela must deploy first, list exact restored interactions, and remove the obsolete claim that direct OpenDesign PostHog capture restores AMR.
+Cross-link the Vela PR, state that Vela must deploy first, list exact restored interactions, and remove the obsolete claim that direct HiDesign PostHog capture restores AMR.
 
 - [ ] **Step 4: Request independent review**
 

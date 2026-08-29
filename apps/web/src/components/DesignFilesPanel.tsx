@@ -336,9 +336,9 @@ const USEFUL_TIPS: ReadonlyArray<{ key: keyof Dict; url?: string }> = [
   { key: 'designFiles.usefulInfoTip5' },
   { key: 'designFiles.usefulInfoTip6', url: 'https://discord.gg/mHAjSMV6gz' },
   { key: 'designFiles.usefulInfoTip7', url: 'https://github.com/nexu-io/open-design' },
-  { key: 'designFiles.usefulInfoTip8', url: 'https://x.com/OpenDesignHQ' },
-  { key: 'designFiles.usefulInfoTip16', url: 'https://www.threads.com/@opendesign.ai' },
-  { key: 'designFiles.usefulInfoTip17', url: 'https://www.instagram.com/opendesign.ai/' },
+  { key: 'designFiles.usefulInfoTip8', url: 'https://x.com/HiDesignHQ' },
+  { key: 'designFiles.usefulInfoTip16', url: 'https://www.threads.com/@HiDesign.ai' },
+  { key: 'designFiles.usefulInfoTip17', url: 'https://www.instagram.com/HiDesign.ai/' },
   { key: 'designFiles.usefulInfoTip18', url: 'https://www.youtube.com/@Open-Design-ai' },
   { key: 'designFiles.usefulInfoTip19', url: 'https://www.linkedin.com/company/open-design-ai/' },
   {
@@ -1744,7 +1744,7 @@ export function DesignFilesPanel({
                               void handlePluginFolderAgentAction(folder.path, 'contribute')
                             }
                           >
-                            {sharingFolder === `contribute:${folder.path}` ? 'Sending…' : 'OpenDesign PR'}
+                            {sharingFolder === `contribute:${folder.path}` ? 'Sending…' : 'HiDesign PR'}
                           </button>
                         </div>
                       ) : null}

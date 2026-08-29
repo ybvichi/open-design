@@ -85,7 +85,7 @@ for (const direction of ['ltr', 'rtl'] as const) {
     await mockAmrPersonalWorkspace(page);
     await page.setViewportSize({ width: 700, height: 600 });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
+    await page.getByText('Loading HiDesign…').waitFor({ state: 'hidden', timeout: T.long });
     await expect(page.getByTestId('entry-nav-account')).toBeVisible();
     await page.locator('html').evaluate((element, dir) => element.setAttribute('dir', dir), direction);
 
@@ -134,7 +134,7 @@ test('[P1] update ready prompt paints above the composer and its agent picker', 
   // desktop window puts it across the centered composer and model popover.
   await page.setViewportSize({ width: 700, height: 600 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading HiDesign…').waitFor({ state: 'hidden', timeout: T.long });
   await expect(page.getByTestId('home-hero')).toBeVisible();
 
   // The updater host moved into the nav rail footer with the entry topbar's

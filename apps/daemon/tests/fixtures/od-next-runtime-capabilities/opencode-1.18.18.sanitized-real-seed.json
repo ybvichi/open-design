@@ -5,7 +5,7 @@
   "recordingDigest": "sha256:b1224716a340401879cfb2f366d1252e9f837ce24050d9b0dfa4430f89492fc5",
   "anonymizationVersion": "od-runtime-evidence/v1",
   "evidenceReview": "open_design_best_effort",
-  "note": "Locally recorded structural evidence reviewed by Open Design. It does not imply OpenCode upstream endorsement and is valid only for the exact reviewed tuple.",
+  "note": "Locally recorded structural evidence reviewed by Hi Design. It does not imply OpenCode upstream endorsement and is valid only for the exact reviewed tuple.",
   "caseCoverage": [
     {
       "caseId": "main_run",
@@ -70,7 +70,7 @@
       "minimumEvidence": "L0",
       "source": "open_design_process_group_cancel",
       "nativeChildTerminal": "unavailable",
-      "limitation": "Abrupt native CLI termination leaves the root Task and Child tool running in the OpenCode export; Open Design therefore owns cancellation at the physical Run/process-group boundary and does not invent a Child terminal.",
+      "limitation": "Abrupt native CLI termination leaves the root Task and Child tool running in the OpenCode export; Hi Design therefore owns cancellation at the physical Run/process-group boundary and does not invent a Child terminal.",
       "evidence": {
         "hostRunStatus": "canceled",
         "hostSignal": "SIGKILL",

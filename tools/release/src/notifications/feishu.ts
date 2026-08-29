@@ -181,10 +181,10 @@ function buildCard(): FeishuCard {
       title: {
         tag: "plain_text",
         content: releaseState === "partial"
-          ? `⚠️ Open Design ${channelLabel} ${version} · 未更新 ${channelLabel} latest`
+          ? `⚠️ Hi Design ${channelLabel} ${version} · 未更新 ${channelLabel} latest`
           : smokeFailures.length > 0
-          ? `⚠️ Open Design ${channelLabel} ${version} · ${smokeFailures.join("、")}`
-          : `🚀 Open Design ${channelLabel} ${version}`,
+          ? `⚠️ Hi Design ${channelLabel} ${version} · ${smokeFailures.join("、")}`
+          : `🚀 Hi Design ${channelLabel} ${version}`,
       },
     },
     elements,

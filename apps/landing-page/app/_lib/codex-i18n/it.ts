@@ -8,7 +8,7 @@ export const it: CodexCopyOverride = {
   collectionEyebrow: 'Raccolta curata',
   collectionHeading: 'I plugin di design che fanno spedire UI vere a Codex',
   collectionLede:
-    'OpenAI Codex scrive codice funzionante. Lasciato a sé stesso ripiega su font sicuri, spaziature medie e Helvetica centrato. Questi sono i plugin che gli danno gusto: skill estetiche e regole di design system. Installane uno, oppure usali tutti dentro OpenDesign.',
+    'OpenAI Codex scrive codice funzionante. Lasciato a sé stesso ripiega su font sicuri, spaziature medie e Helvetica centrato. Questi sono i plugin che gli danno gusto: skill estetiche e regole di design system. Installane uno, oppure usali tutti dentro HiDesign.',
   collectionStats: [
     { value: '50', label: 'plugin selezionati' },
     { value: '13', label: 'repo di origine' },
@@ -20,13 +20,13 @@ export const it: CodexCopyOverride = {
     'Scavalca le scelte estetiche predefinite di Codex prima che venga scritta una sola riga.',
     'Trasforma token e componenti in regole che Codex segue invece di inventare.',
   ],
-  collectionCloserHeading: 'Salta il setup. Progetta con Codex dentro OpenDesign',
+  collectionCloserHeading: 'Salta il setup. Progetta con Codex dentro HiDesign',
   filterAll: 'Tutti',
   collectionCloserBody:
-    'OpenDesign è il design workspace open source e agent-native che lavora attorno a Codex. Tiene coerenti sistemi, skill e template, così l’agente consegna lavoro che ti appartiene.',
+    'HiDesign è il design workspace open source e agent-native che lavora attorno a Codex. Tiene coerenti sistemi, skill e template, così l’agente consegna lavoro che ti appartiene.',
   categoryFrontend: 'Frontend e UI',
   categoryDesignSystems: 'Design system',
-  ctaDownload: 'Scarica OpenDesign',
+  ctaDownload: 'Scarica HiDesign',
   ctaStarList: 'Metti una star alla lista',
   ctaBrowseAll: 'Sfoglia tutti i plugin',
   ctaViewSource: 'Vedi il sorgente',
@@ -61,9 +61,9 @@ export const it: CodexCopyOverride = {
   detailMoreOnList: 'Altro sulla lista codex-design',
   detailRelated: 'Altri plugin di design per Codex',
   finalEyebrow: 'Prossimo passo',
-  detailCloserHeading: 'Progetta con OpenDesign, senza il setup',
+  detailCloserHeading: 'Progetta con HiDesign, senza il setup',
   detailCloserBody:
-    'Installa questo plugin da solo, oppure porta attorno a Codex un intero strato di design curato con OpenDesign. Usa la tua chiave, resta padrone dell’output.',
+    'Installa questo plugin da solo, oppure porta attorno a Codex un intero strato di design curato con HiDesign. Usa la tua chiave, resta padrone dell’output.',
   skills: {
     'gpt-taste': {
       tagline:

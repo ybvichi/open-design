@@ -1,7 +1,7 @@
 ---
-title: 'OpenDesign : j''ai testé l''alternative open-source à Claude Design'
+title: 'HiDesign : j''ai testé l''alternative open-source à Claude Design'
 youtubeId: a4IiWxtjyUY
-summary: 'Test complet d''OpenDesign, l''alternative open-source à Claude Design, avec installation, import de projets, création de slides et export PPTX.'
+summary: 'Test complet d''HiDesign, l''alternative open-source à Claude Design, avec installation, import de projets, création de slides et export PPTX.'
 date: 2026-05-02
 category: Review
 durationSeconds: 637

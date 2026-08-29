@@ -6,7 +6,7 @@
 // exactly two models for everyone and nothing at all once the campaign window
 // closes. The Vela wallet snapshot is now the source of truth for which models
 // are included in Coding Plan, so the badge must follow that response instead
-// of a duplicated per-tier table in Open Design.
+// of a duplicated per-tier table in Hi Design.
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
