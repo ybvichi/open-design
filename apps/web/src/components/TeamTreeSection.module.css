@@ -1,0 +1,219 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 1;
+  min-height: 0;
+}
+
+.tree {
+  margin: 15px 0 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.teamNode {
+}
+
+.teamRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  border-radius: 8px;
+  transition: background-color 120ms var(--ease-out);
+}
+
+.teamRow:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.teamRow.isActiveRow {
+  background: var(--bg-subtle);
+}
+
+.expandBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 30px;
+  padding: 0;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  flex-shrink: 0;
+}
+.expandBtn:hover {
+  background: transparent !important;
+}
+
+.expandBtnHidden {
+  display: none;
+}
+
+.teamLabel {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  height: 33px;
+  min-height: 33px;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+  transition: color 120ms var(--ease-out);
+}
+
+.teamLabelNoExpand {
+  padding-left: 26px;
+}
+
+.teamLabel:hover {
+  background: transparent !important;
+  color: var(--text);
+}
+
+.teamIcon {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+}
+
+.teamName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folderList {
+  margin: 1px 0 2px 0px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folderRow {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 33px;
+  min-height: 33px;
+  padding: 0 7px 0 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: color-mix(in srgb, var(--text) 65%, transparent);
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+
+.folderRow:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+}
+
+.folderRow.isActive {
+  background: var(--bg-subtle);
+  color: var(--selected);
+}
+
+.folderIcon {
+  flex-shrink: 0;
+}
+
+.folderName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Action icon area — hidden by default, visible on row hover. */
+.actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease-out);
+}
+
+.teamRow:hover .actions,
+.folderRow:hover .actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.actionIcon {
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  cursor: pointer;
+}
+
+.actionIcon:hover {
+  color: var(--text);
+}
+
+.footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.createTeamBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: color-mix(in srgb, var(--text) 65%, transparent);
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+
+.createTeamBtn:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+}
+
+.createTeamBtn span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Neutralize the global `button:active { transform: translateY(1px) }` from
+   primitives.css so tree buttons don't drift on click. */
+.teamLabel:active,
+.folderRow:active,
+.createTeamBtn:active,
+.expandBtn:active {
+  transform: none !important;
+}

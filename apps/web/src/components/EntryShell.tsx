@@ -1644,8 +1644,10 @@ export function EntryShell({
           // Keep the account slot neutral until Cloud answers successfully;
           // only a successful null context (or known local sign-out) may show
           // the sign-in card.
-          footerNotice={accountFooterNotice}
-        />
+         footerNotice={accountFooterNotice}
+         activeTeamId={route.kind === 'home' ? route.teamId : undefined}
+         activeFolderId={route.kind === 'home' ? route.folderId : undefined}
+       />
         {projectSearchOpen ? (
           <ProjectSearchModal
             // Search spans personal drafts plus the shared workspace catalog.
@@ -1993,10 +1995,16 @@ export function EntryShell({
             {view === 'board' ? (
               <TeamSlotPlaceholder icon="kanban" title={t('entry.navBoard')} />
             ) : null}
-            {view === 'workspace-settings' ? (
-              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
-            ) : null}
-          </div>
+           {view === 'workspace-settings' ? (
+             <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
+           ) : null}
+           {view === 'team-space' ? (
+             <TeamSlotPlaceholder icon="folder" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.teamId : undefined} />
+           ) : null}
+           {view === 'team-folder' ? (
+             <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
+           ) : null}
+         </div>
         </main>
       </div>
       <NewProjectModal

@@ -79,6 +79,7 @@ import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
 import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 import type { EntryHomeView } from '../router';
+import { TeamTreeSection } from './TeamTreeSection';
 import type {
   AccountMenuClickProps,
   TrackingWorkspacePage,
@@ -253,6 +254,10 @@ interface Props {
   updaterSlot?: ReactNode;
   /** Optional notice shown above the footer controls. */
   footerNotice?: ReactNode;
+  /** Active team id from the route (team-space / team-folder views). */
+  activeTeamId?: string;
+  /** Active folder id from the route (team-folder view). */
+  activeFolderId?: string;
 }
 
 interface NavButtonProps {
@@ -1177,9 +1182,11 @@ export function EntryNavRail({
   billing,
   balanceUsd,
   onOpenSettings,
-  onSignedOut,
-  updaterSlot,
-  footerNotice,
+ onSignedOut,
+ updaterSlot,
+ footerNotice,
+ activeTeamId,
+ activeFolderId,
 }: Props) {
   const { t } = useI18n();
   const analytics = useAnalytics();
@@ -1804,7 +1811,12 @@ export function EntryNavRail({
             </NavButton>
           </>
         )}
-      </div>
+        <TeamTreeSection
+          workspaceItems={visibleWorkspaceItems}
+          activeTeamId={activeTeamId}
+          activeFolderId={activeFolderId}
+        />
+     </div>
       {/* The footer always has the social row to show now, so it no longer
           collapses to nothing. `footerUpdaterSlot` is only ever set in the
           signed-out shell: with a cloud identity the updater host rides the

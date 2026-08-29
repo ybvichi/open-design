@@ -30,6 +30,11 @@ export type EntryHomeView =
   | 'members'
   | 'board'
   | 'workspace-settings'
+  // Team tree destinations. `/team/:teamId` opens a team workspace page;
+  // `/team/:teamId/folder/:folderId` opens a folder page. Both are empty
+  // placeholders for now — the team tree in the rail drives navigation.
+  | 'team-space'
+  | 'team-folder'
   // Full-page personal Settings surface. `/settings` renders the same
   // SettingsDialog component in its `page` presentation instead of the modal.
   | 'settings';
@@ -46,6 +51,10 @@ export type Route =
        * select a specific brand without leaving the tab.
        */
       brandId?: string;
+      /** Team id for the team-space / team-folder views. */
+      teamId?: string;
+      /** Folder id for the team-folder view. */
+      folderId?: string;
     }
   | { kind: 'design-system-create' }
   | { kind: 'design-system-detail'; designSystemId: string }
@@ -160,6 +169,14 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'workspace-settings' && !parts[1]) {
     return { kind: 'home', view: 'workspace-settings' };
   }
+  // Team tree routes: /team/:teamId → team-space, /team/:teamId/folder/:folderId → team-folder
+  if (parts[0] === 'team' && parts[1]) {
+    const teamId = decodeURIComponent(parts[1]);
+    if (parts[2] === 'folder' && parts[3]) {
+      return { kind: 'home', view: 'team-folder', teamId, folderId: decodeURIComponent(parts[3]) };
+    }
+    return { kind: 'home', view: 'team-space', teamId };
+  }
   // Phase 2B / spec §11.6 — marketplace deep UI routes. Two paths:
   //   /marketplace            → catalog grid (MarketplaceView)
   //   /marketplace/<pluginId> → detail page (PluginDetailView)
@@ -192,6 +209,14 @@ export function buildPath(route: Route): string {
     if (route.view === 'members') return '/members';
     if (route.view === 'board') return '/board';
     if (route.view === 'workspace-settings') return '/workspace-settings';
+    if (route.view === 'team-space') {
+      return route.teamId ? `/team/${encodeURIComponent(route.teamId)}` : '/';
+    }
+    if (route.view === 'team-folder') {
+      return route.teamId && route.folderId
+        ? `/team/${encodeURIComponent(route.teamId)}/folder/${encodeURIComponent(route.folderId)}`
+        : '/';
+    }
     if (route.view === 'settings') return '/settings';
     return '/';
   }

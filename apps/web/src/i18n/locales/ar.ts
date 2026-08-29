@@ -861,6 +861,8 @@ export const ar: Dict = {
   'entry.navBoard': 'Board',
   'entry.navTeamSection': 'Team',
   'entry.teamSlotNote': 'This space is provided by the team service. Integration is in progress.',
+  'entry.teamSpaceNote': 'Team workspace page — content coming soon.',
+  'entry.teamFolderNote': 'Folder page — content coming soon.',
   "entry.cloudCalloutTitle": "HiDesign Cloud",
   'entry.cloudRecovering': 'Account connection interrupted. Recovering automatically…',
   'entry.authExpiredBody': 'Your sign-in has expired. Sign in to continue using HiDesign Cloud.',

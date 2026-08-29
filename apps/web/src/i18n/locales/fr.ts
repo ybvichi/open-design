@@ -861,6 +861,8 @@ export const fr: Dict = {
   'entry.navBoard': 'Tableau',
   'entry.navTeamSection': 'Équipe',
   'entry.teamSlotNote': "Cet espace est fourni par le service d'équipe. L'intégration est en cours.",
+  "entry.teamSpaceNote": "Team workspace page — content coming soon.",
+  "entry.teamFolderNote": "Folder page — content coming soon.",
   "entry.cloudCalloutTitle": "HiDesign Cloud",
   'entry.cloudRecovering': 'Account connection interrupted. Recovering automatically…',
   'entry.authExpiredBody': 'Your sign-in has expired. Sign in to continue using HiDesign Cloud.',

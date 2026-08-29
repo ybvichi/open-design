@@ -868,6 +868,8 @@ export const zhTW: Dict = {
   "entry.navBoard": "看板",
   "entry.navTeamSection": "團隊",
   "entry.teamSlotNote": "此檢視由團隊服務提供，接入中。",
+  "entry.teamSpaceNote": "Team workspace page — content coming soon.",
+  "entry.teamFolderNote": "Folder page — content coming soon.",
   "entry.cloudCalloutTitle": "HiDesign Cloud 版",
   'entry.cloudRecovering': '帳號連線中斷，正在自動恢復…',
   'entry.authExpiredBody': '登入狀態已過期。登入後即可繼續使用 HiDesign Cloud。',

@@ -1978,9 +1978,11 @@ function displayTabFor(
     'all-projects': t('entry.navAllProjects'),
     members: t('entry.navMembers'),
     board: t('entry.navBoard'),
-    'workspace-settings': t('entry.navWorkspaceSettings'),
-    settings: t('settings.title'),
-  };
+   'workspace-settings': t('entry.navWorkspaceSettings'),
+   'team-space': t('entry.navTeamSection'),
+   'team-folder': t('entry.navTeamSection'),
+   settings: t('settings.title'),
+ };
   const entryIcon: Record<EntryHomeView, IconName> = {
     home: 'home',
     onboarding: 'sparkles',
@@ -1996,9 +1998,11 @@ function displayTabFor(
     'all-projects': 'folder',
     members: 'users',
     board: 'kanban',
-    'workspace-settings': 'settings',
-    settings: 'settings',
-  };
+   'workspace-settings': 'settings',
+   'team-space': 'folder',
+   'team-folder': 'folder-filled',
+   settings: 'settings',
+ };
   return {
     id: tab.id,
     title: entryTitle[tab.view],

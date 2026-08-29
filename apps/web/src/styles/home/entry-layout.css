@@ -185,7 +185,7 @@
   border-right: 0;
 }
 .entry--rail-open .entry-nav-rail {
-  overflow: visible;
+  overflow: hidden
 }
 
 /* ── Collapse cascade ──────────────────────────────────────────────────────
@@ -319,6 +319,8 @@
   min-height: 0;
   width: 100%;
   padding: 0 10px;
+  overflow: hidden;
+  overflow-y: auto;
 }
 .entry-nav-rail__footer {
   position: relative;
@@ -821,6 +823,7 @@
   appearance: none;
   width: 100%;
   height: 33px;
+  min-height: 33px;
   padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 8px;

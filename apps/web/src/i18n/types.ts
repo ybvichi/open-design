@@ -1254,8 +1254,10 @@ export interface Dict {
   'entry.draftsDescription': string;
   'entry.allProjectsDescription': string;
   'entry.navBoard': string;
-  'entry.navTeamSection': string;
-  'entry.teamSlotNote': string;
+ 'entry.navTeamSection': string;
+ 'entry.teamSpaceNote': string;
+ 'entry.teamFolderNote': string;
+ 'entry.teamSlotNote': string;
   'entry.cloudCalloutTitle': string;
   'entry.cloudRecovering': string;
   'entry.authExpiredBody': string;
