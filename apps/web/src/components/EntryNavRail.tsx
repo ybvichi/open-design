@@ -50,6 +50,7 @@ import {
 import { resetCloudSignInTipDismissal } from './CloudSignInTip';
 import { SignOutConfirmDialog } from './SignOutConfirmDialog';
 import { notifyAmrLoginStatusChanged } from './amrLoginPolling';
+import { getStoredUserInfo } from '../auth/auth';
 import { Icon } from './Icon';
 import { GITHUB_STARS_FALLBACK_LABEL, formatStars, useGithubStars } from './useGithubStars';
 import { PlanWordmark, planBadgeTierForWorkspace } from './PlanWordmark';
@@ -98,8 +99,6 @@ import {
 import { WorkbenchCampaignBadge } from './WorkbenchCampaignBadge';
 
 const REPO_URL = 'https://github.com/nexu-io/open-design';
-const GITHUB_HELP_URL = `${REPO_URL}/issues/new`;
-const GITHUB_FEATURE_URL = `${REPO_URL}/pulls`;
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 const X_URL = 'https://x.com/HiDesignHQ';
 const CONTACT_EMAIL_URL = 'mailto:support@open-design.ai';
@@ -199,6 +198,21 @@ function attributableWorkspaceDirectory(
 // The rail's destination ids are the entry-shell home views (kept in sync with
 // the router so `navigate({ kind: 'home', view })` type-checks for every item).
 export type EntryView = EntryHomeView;
+
+/**
+ * Deterministic avatar background color from a display name.
+ * Same name always maps to the same hue; white text stays readable at the
+ * chosen saturation/lightness.
+ */
+function avatarColorFor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    hash |= 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 58%, 45%)`;
+}
 
 interface Props {
   view: EntryView;
@@ -566,11 +580,14 @@ export function EntryTopRightCluster({
   const permissions = context?.permissions;
   const workspaceSettingsUrl = context?.workspaceSettingsUrl?.trim() || null;
 
-  // Account identity (real). No email field on the context → the head shows the
-  // avatar + name only.
-  const displayName = context?.displayName?.trim() || '';
-  const accountName = displayName || t('app.brand');
-  const accountInitial = accountName.charAt(0).toUpperCase() || '·';
+ // Account identity (real). No email field on the context → the head shows the
+ // avatar + name only.
+ const ssoDisplayName = getStoredUserInfo()?.displayName;
+ const ssoEmail = getStoredUserInfo()?.email || null;
+ const displayName = (typeof ssoDisplayName === 'string' ? ssoDisplayName.trim() : '') || '';
+ const accountName = displayName || t('app.brand');
+ const accountInitial = accountName.charAt(0).toUpperCase() || '·';
+ const accountAvatarColor = avatarColorFor(accountName);
 
   // Billing chip: prefer the real summary metadata; fall back to the context
   // plan-tier hint when metadata has not loaded. Money is a separate,
@@ -639,7 +656,7 @@ export function EntryTopRightCluster({
   // display name). The workspace context carries no email, so lazily read the
   // vela login-status projection the first time the menu opens — never on
   // mount, so shells without an open menu spend zero requests on it.
-  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState<string | null>(ssoEmail);
   useEffect(() => {
     if (!accountOpen) return;
     // Refetch on EVERY open (the previous value stays visible while the read
@@ -829,7 +846,11 @@ export function EntryTopRightCluster({
                 aria-label={accountName}
                 data-testid="entry-nav-account"
               >
-                <span className="entry-nav-rail__account-avatar" aria-hidden>
+                <span
+                  className="entry-nav-rail__account-avatar"
+                  style={{ background: accountAvatarColor }}
+                  aria-hidden
+                >
                   {accountInitial}
                   {messageUnreadCount > 0 ? (
                     <span className="entry-nav-rail__account-avatar-dot" data-testid="account-avatar-unread-dot" />
@@ -843,7 +864,13 @@ export function EntryTopRightCluster({
                       backdrop would swallow those events and insta-close. */}
                   <div className="entry-nav-rail__account-menu" role="menu">
                     <div className="entry-nav-rail__account-head">
-                      <span className="entry-nav-rail__account-head-avatar" aria-hidden>{accountInitial}</span>
+                      {/* <span
+                        className="entry-nav-rail__account-head-avatar"
+                        style={{ background: accountAvatarColor }}
+                        aria-hidden
+                      >
+                        {accountInitial}
+                      </span> */}
                       <span className="entry-nav-rail__account-head-name">{accountName}</span>
                       {accountEmail ? (
                         <span className="entry-nav-rail__account-head-email">{accountEmail}</span>
@@ -926,35 +953,6 @@ export function EntryTopRightCluster({
                         <span className="entry-nav-rail__menu-item-dot" aria-hidden />
                       ) : null}
                     </button>
-                    {/* #5517's account menu goes 设置 → GitHub 帮助 → 功能建议 → 社交行,
-                        with no theme row, no language submenu, and no divider in
-                        between. Both controls still have a home in 设置·通用 (theme
-                        segmented control + language picker), so dropping the
-                        duplicates here costs no capability. */}
-                    <a
-                      className="entry-nav-rail__menu-item"
-                      role="menuitem"
-                      href={GITHUB_HELP_URL}
-                      {...externalLinkProps}
-                      onClick={() => {
-                        trackAccountAction('github_help');
-                        closeAccountMenu();
-                      }}
-                    >
-                      <Icon name="comment" size={15} /> {t('entry.accountGithubHelp')}
-                    </a>
-                    <a
-                      className="entry-nav-rail__menu-item"
-                      role="menuitem"
-                      href={GITHUB_FEATURE_URL}
-                      {...externalLinkProps}
-                      onClick={() => {
-                        trackAccountAction('feature_request');
-                        closeAccountMenu();
-                      }}
-                    >
-                      <Icon name="sparkles" size={15} /> {t('entry.accountFeatureRequest')}
-                    </a>
                     {/* The Discord/X/mail social row used to sit here (#5517).
                         It now lives in the nav rail's footer — see
                         `RailSocialRow` — so the account menu stays a pure list
@@ -1817,7 +1815,7 @@ export function EntryNavRail({
         {footerUpdaterSlot ? (
           <div className="entry-rail-actions">{footerUpdaterSlot}</div>
         ) : null}
-        <RailSocialRow page={analyticsPage} dimensions={workspaceDimensions} />
+        {/* <RailSocialRow page={analyticsPage} dimensions={workspaceDimensions} /> */}
       </div>
       </div>
 

@@ -952,7 +952,7 @@ export function NewProjectPanel({
           ) : null}
         </div>
 
-        {showDesignSystemPicker ? (
+        {/* {showDesignSystemPicker ? (
           <DesignSystemPicker
             designSystems={selectableDesignSystems}
             defaultDesignSystemId={defaultDesignSystemId}
@@ -962,7 +962,7 @@ export function NewProjectPanel({
             onChange={handleDesignSystemChange}
             loading={loading}
           />
-        ) : null}
+        ) : null} */}
 
         {tab === 'media' ? (
           <div

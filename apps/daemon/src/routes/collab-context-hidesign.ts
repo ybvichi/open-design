@@ -1,4 +1,6 @@
 import type { Express, Request, Response } from 'express';
+import { generateDeterministicId } from '../ids.js';
+import { getSsoUser } from '../sso-user.js';
 
 /**
  * Mock mirror of workspace collab-context routes.
@@ -15,16 +17,14 @@ import type { Express, Request, Response } from 'express';
 
 export interface RegisterCollabContextHideSignRoutesDeps {
   env?: NodeJS.ProcessEnv;
+  /** Daemon data root — used to read the SSO session for display-name injection. */
+  dataDir?: string;
 }
 
 // --- Mock data -----------------------------------------------------------
 
-const MOCK_WORKSPACE_ID = 'tljbioajfmjv52wm1h86ybow';
-const MOCK_WORKSPACE_MEMBER_ID = 'ahcneo83tesu0t0ntulp2n4f';
-const MOCK_WORKSPACE_NAME = "ybvichi's workspace";
-
-const MOCK_TEAM_WORKSPACE_ID = 'ww9pzftmmqux8grn4im25v94';
-const MOCK_TEAM_WORKSPACE_MEMBER_ID = 'su4iqloxqpvz32izn8ibnnlq';
+const TEAM_WORKSPACE_ID = generateDeterministicId('mock-team-workspace');
+const TEAM_WORKSPACE_MEMBER_ID = generateDeterministicId('mock-team-workspace-member');
 const MOCK_TEAM_WORKSPACE_NAME = '测试团队';
 
 const ALL_PERMISSIONS = {
@@ -36,69 +36,6 @@ const ALL_PERMISSIONS = {
   canWriteSyncedFiles: true,
   canViewWorkspaceSettings: true,
   canManageSharedResources: true,
-};
-
-const MOCK_WORKSPACE_DIRECTORY = {
-  items: [
-    {
-      workspaceId: MOCK_WORKSPACE_ID,
-      workspaceName: MOCK_WORKSPACE_NAME,
-      workspaceType: 'personal' as const,
-      workspaceMemberId: MOCK_WORKSPACE_MEMBER_ID,
-      role: 'owner' as const,
-      memberStatus: 'active' as const,
-      lifecycleState: 'active' as const,
-    },
-    {
-      workspaceId: MOCK_TEAM_WORKSPACE_ID,
-      workspaceName: MOCK_TEAM_WORKSPACE_NAME,
-      workspaceIconKey: 'spark',
-      workspaceType: 'team' as const,
-      workspaceMemberId: MOCK_TEAM_WORKSPACE_MEMBER_ID,
-      role: 'owner' as const,
-      memberStatus: 'active' as const,
-      lifecycleState: 'active' as const,
-    },
-  ],
-  activeWorkspaceId: MOCK_WORKSPACE_ID,
-};
-
-const MOCK_CONTEXTS: Record<string, { context: Record<string, unknown> }> = {
-  [MOCK_WORKSPACE_ID]: {
-    context: {
-      workspaceId: MOCK_WORKSPACE_ID,
-      workspaceType: 'personal',
-      workspaceMemberId: MOCK_WORKSPACE_MEMBER_ID,
-      role: 'owner',
-      memberStatus: 'active',
-      lifecycleState: 'active',
-     billingState: 'active',
-      planId: 'team_max',
-      providerMode: 'platform_credits',
-      seatSummary: { seatLimit: 1, usedSeats: 1, availableSeats: 0, isSeatFull: true },
-     permissions: ALL_PERMISSIONS,
-     workspaceName: MOCK_WORKSPACE_NAME,
-   },
- },
- [MOCK_TEAM_WORKSPACE_ID]: {
-   context: {
-     workspaceId: MOCK_TEAM_WORKSPACE_ID,
-     workspaceType: 'team',
-     workspaceMemberId: MOCK_TEAM_WORKSPACE_MEMBER_ID,
-     role: 'owner',
-     memberStatus: 'active',
-     lifecycleState: 'active',
-     billingState: 'active',
-      planId: 'team_max',
-      providerMode: 'platform_credits',
-      seatSummary: { seatLimit: 10, usedSeats: 1, availableSeats: 9, isSeatFull: false },
-      permissions: ALL_PERMISSIONS,
-      workspaceName: MOCK_TEAM_WORKSPACE_NAME,
-      teamId: MOCK_TEAM_WORKSPACE_ID,
-      teamName: MOCK_TEAM_WORKSPACE_NAME,
-      workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
-    },
-  },
 };
 
 function makeBilling(workspaceId: string, workspaceMemberId: string) {
@@ -145,10 +82,91 @@ function makeBilling(workspaceId: string, workspaceMemberId: string) {
   };
 }
 
-const MOCK_BILLING: Record<string, ReturnType<typeof makeBilling>> = {
-  [MOCK_WORKSPACE_ID]: makeBilling(MOCK_WORKSPACE_ID, MOCK_WORKSPACE_MEMBER_ID),
-  [MOCK_TEAM_WORKSPACE_ID]: makeBilling(MOCK_TEAM_WORKSPACE_ID, MOCK_TEAM_WORKSPACE_MEMBER_ID),
-};
+/**
+ * Build mock workspace data from the SSO session so the personal workspace
+ * carries the signed-in user's displayName and IDs derived from their username.
+ * Team workspace data stays fixed.
+ */
+function buildMockData(dataDir?: string) {
+  const user = getSsoUser(dataDir);
+  const username = user?.username ?? '';
+  const displayName = user?.displayName ?? '';
+
+  const seed = username || 'mock-personal-workspace';
+  const personalWorkspaceId = generateDeterministicId(seed);
+  const personalMemberId = generateDeterministicId(`${seed}-member`);
+  const personalWorkspaceName = (displayName+'的地盘') || "ybvichi's workspace";
+
+  const directory = {
+    items: [
+      {
+        workspaceId: personalWorkspaceId,
+        workspaceName: personalWorkspaceName,
+        workspaceType: 'personal' as const,
+        workspaceMemberId: personalMemberId,
+        role: 'owner' as const,
+        memberStatus: 'active' as const,
+        lifecycleState: 'active' as const,
+      },
+      {
+        workspaceId: TEAM_WORKSPACE_ID,
+        workspaceName: MOCK_TEAM_WORKSPACE_NAME,
+        workspaceIconKey: 'spark',
+        workspaceType: 'team' as const,
+        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+        role: 'owner' as const,
+        memberStatus: 'active' as const,
+        lifecycleState: 'active' as const,
+      },
+    ],
+    activeWorkspaceId: personalWorkspaceId,
+  };
+
+  const contexts: Record<string, { context: Record<string, unknown> }> = {
+    [personalWorkspaceId]: {
+      context: {
+        workspaceId: personalWorkspaceId,
+        workspaceType: 'personal',
+        workspaceMemberId: personalMemberId,
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+        billingState: 'active',
+        planId: 'team_max',
+        providerMode: 'platform_credits',
+        seatSummary: { seatLimit: 1, usedSeats: 1, availableSeats: 0, isSeatFull: true },
+        permissions: ALL_PERMISSIONS,
+        workspaceName: personalWorkspaceName,
+      },
+    },
+    [TEAM_WORKSPACE_ID]: {
+      context: {
+        workspaceId: TEAM_WORKSPACE_ID,
+        workspaceType: 'team',
+        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+        billingState: 'active',
+        planId: 'team_max',
+        providerMode: 'platform_credits',
+        seatSummary: { seatLimit: 10, usedSeats: 1, availableSeats: 9, isSeatFull: false },
+        permissions: ALL_PERMISSIONS,
+        workspaceName: MOCK_TEAM_WORKSPACE_NAME,
+        teamId: TEAM_WORKSPACE_ID,
+        teamName: MOCK_TEAM_WORKSPACE_NAME,
+        workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
+      },
+    },
+  };
+
+  const billing: Record<string, ReturnType<typeof makeBilling>> = {
+    [personalWorkspaceId]: makeBilling(personalWorkspaceId, personalMemberId),
+    [TEAM_WORKSPACE_ID]: makeBilling(TEAM_WORKSPACE_ID, TEAM_WORKSPACE_MEMBER_ID),
+  };
+
+  return { directory, contexts, billing, personalWorkspaceId };
+}
 
 // --- Helpers --------------------------------------------------------------
 
@@ -167,32 +185,34 @@ export function registerCollabContextHideSignRoutes(
   app: Express,
   deps: RegisterCollabContextHideSignRoutesDeps = {},
 ): void {
-  void deps;
-
   app.get('/api/workspace/directory', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/directory', req);
-    res.json(MOCK_WORKSPACE_DIRECTORY);
+    const { directory } = buildMockData(deps.dataDir);
+    res.json(directory);
   });
 
   app.get('/api/workspace/context', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/context', req);
+    const { contexts, personalWorkspaceId } = buildMockData(deps.dataDir);
     const wsId = req.header('x-od-workspace-id') ?? '';
-    const ctx = MOCK_CONTEXTS[wsId] ?? MOCK_CONTEXTS[MOCK_WORKSPACE_ID];
+    const ctx = contexts[wsId] ?? contexts[personalWorkspaceId];
     res.json(ctx);
   });
 
   app.get('/api/workspace/billing', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/billing', req);
+    const { billing, personalWorkspaceId } = buildMockData(deps.dataDir);
     const wsId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
-    const billing = MOCK_BILLING[wsId] ?? MOCK_BILLING[MOCK_WORKSPACE_ID];
-    res.json(billing);
+    const entry = billing[wsId] ?? billing[personalWorkspaceId];
+    res.json(entry);
   });
 
   app.put('/api/workspace/active', (req: Request, res: Response) => {
     logRequest('PUT', '/api/workspace/active', req);
+    const { contexts } = buildMockData(deps.dataDir);
     const body = req.body as { workspaceId?: unknown; workspaceMemberId?: unknown } | null;
     const wsId = typeof body?.workspaceId === 'string' ? body.workspaceId : '';
-    const entry = MOCK_CONTEXTS[wsId];
+    const entry = contexts[wsId];
     if (!entry) {
       res.status(404).json({ error: 'workspace_not_visible' });
       return;

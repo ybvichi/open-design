@@ -1267,12 +1267,12 @@ export function DesignSystemCreationFlow({
                 {designSystems.length > 0 ? (
                   <div className="ds-design-md-reference-picker">
                     <span>{t('dsCreate.referenceLabel')}</span>
-                    <DesignSystemPicker
+                    {/* <DesignSystemPicker
                       designSystems={designSystems}
                       selectedId={referenceDesignSystemId}
                       onChange={handleReferenceDesignSystemChange}
                       showCreateAction={false}
-                    />
+                    /> */}
                     {referenceDesignSystemLoading ? (
                       <span className="ds-design-md-reference-status">
                         {t('dsCreate.referenceLoading')}

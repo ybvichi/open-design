@@ -5283,6 +5283,19 @@ function AppInner() {
         </div>
       );
     }
+  } else if (
+    route.kind === 'home'
+    && route.view !== 'onboarding'
+    && (projectsLoading || workspaceContextLoading)
+  ) {
+    // Hold the loading shell until the recent-projects list and the workspace
+    // context have both settled. Entering Home with half-loaded data flashed
+    // stale/empty cards and mis-attributed the workspace scope on cold boot.
+    appMain = (
+      <div className="entry-shell entry-shell--no-header">
+        <CenteredLoader label={t('entry.loadingWorkspace')} />
+      </div>
+    );
   } else {
     appMain = (
       <EntryView

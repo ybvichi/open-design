@@ -368,6 +368,10 @@ export interface WorkspaceDirectoryItem {
   role: CollabMemberRole;
   memberStatus: WorkspaceMemberStatus;
   lifecycleState: WorkspaceLifecycleState;
+  /** Signed-in user's display name, injected from the SSO session for
+   * personal workspaces so identity surfaces (avatar, byline) can label
+   * without a separate context fetch. */
+  displayName?: string;
 }
 
 /** GET /api/workspace/directory. OD's local workspace switcher data source. */

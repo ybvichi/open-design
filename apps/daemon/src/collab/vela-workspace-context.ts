@@ -215,6 +215,8 @@ function mapVelaWorkspaceDirectoryItem(input: unknown): WorkspaceDirectoryItem |
   };
   const workspaceIconKey = str(raw.workspaceIconKey);
   if (workspaceIconKey) item.workspaceIconKey = workspaceIconKey;
+  const displayName = str(raw.displayName);
+  if (displayName) item.displayName = displayName;
   return item;
 }
 

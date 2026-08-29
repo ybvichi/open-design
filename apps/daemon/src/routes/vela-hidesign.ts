@@ -1,60 +1,73 @@
 import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { getSsoUser } from '../sso-user.js';
 
 /**
 * Mock mirror of the Vela (AMR) integration routes under
  * `/api/integrations/vela/*` (and `/api/amr/models`).
-*
-* Every endpoint logs the incoming request (method, path, query + body
-* parameters) just like the real `/api/integrations/vela/*` routes do, but
-* returns canned mock data captured from the authenticated API analysis
-* document (`api-analysis.md`) instead of spawning the vela CLI or proxying
-* to the AMR API. This lets downstream consumers develop against a stable
-* surface while the real backend is unavailable.
+ *
+ * Every endpoint logs the incoming request (method, path, query + body
+ * parameters) just like the real `/api/integrations/vela/*` routes do, but
+ * returns canned mock data captured from the authenticated API analysis
+ * document (`api-analysis.md`) instead of spawning the vela CLI or proxying
+ * to the AMR API. This lets downstream consumers develop against a stable
+ * surface while the real backend is unavailable.
  */
 
 export interface RegisterVela2HideSignRoutesDeps {
   env?: NodeJS.ProcessEnv;
+  /** Daemon data root — used to read the SSO session for user identity. */
+  dataDir?: string;
 }
 
 const BASE = '/api/integrations/vela';
 
 // --- Mock data (captured from api-analysis.md, authenticated session) -----
 
-const MOCK_STATUS = {
-  loggedIn: true,
-  sessionState: 'authenticated',
-  loginInFlight: false,
-  profile: 'prod',
-  user: {
-    id: 'ahcneo83tesu0t0ntulp2n4f',
-    email: '3858516840@qq.com',
-    name: 'ybvichi',
-    image: 'https://avatars.githubusercontent.com/u/317187511?v=4',
-  },
- account: {
-    plan: 'team_max',
-    balanceUsd: '999999.0000',
- },
-  configPath: 'C:\\Users\\yebo\\.amr\\config.json',
-  consoleOrigin: 'https://amr-api.open-design.ai',
-};
+function buildMockStatus(dataDir?: string) {
+  const sso = getSsoUser(dataDir);
+  const username = sso?.username || 'ybvichi';
+  const email = sso?.email || `${username}@hikvision.com.cn`;
+  return {
+    loggedIn: true,
+    sessionState: 'authenticated',
+    loginInFlight: false,
+    profile: 'prod',
+    user: {
+      id: 'ahcneo83tesu0t0ntulp2n4f',
+      email,
+      name: username,
+      image: 'https://avatars.githubusercontent.com/u/317187511?v=4',
+    },
+    account: {
+      plan: 'team_max',
+      balanceUsd: '999999.0000',
+    },
+    configPath: 'C:\\Users\\yebo\\.amr\\config.json',
+    consoleOrigin: 'https://amr-api.open-design.ai',
+  };
+}
 
-const MOCK_WALLET = {
-  status: 'available',
-  profile: 'prod',
-  user: {
-    id: 'ahcneo83tesu0t0ntulp2n4f',
-    email: '3858516840@qq.com',
-    name: 'ybvichi',
-  },
- codingPlanModels: [] as unknown[],
- updatedAt: null,
- fetchedAt: '2026-08-27T11:39:02.938Z',
- stale: false,
- source: 'vela_api',
-  balanceUsd: '999999.0000',
-};
+function buildMockWallet(dataDir?: string) {
+  const sso = getSsoUser(dataDir);
+  const username = sso?.username || 'ybvichi';
+  const email = sso?.email || `${username}@hikvision.com.cn`;
+  return {
+    status: 'available',
+    profile: 'prod',
+    user: {
+      id: 'ahcneo83tesu0t0ntulp2n4f',
+      email,
+      name: username,
+    },
+    codingPlanModels: [] as unknown[],
+    updatedAt: null,
+    fetchedAt: '2026-08-27T11:39:02.938Z',
+    stale: false,
+    source: 'vela_api',
+    balanceUsd: '999999.0000',
+  };
+}
 
 const MOCK_MESSAGES = {
   messages: [] as unknown[],
@@ -96,12 +109,12 @@ export function registerVela2HideSignRoutes(
 
   app.get(`${BASE}/status`, (req: Request, res: Response) => {
     logRequest('GET', '/status', req);
-    res.json(MOCK_STATUS);
+    res.json(buildMockStatus(deps.dataDir));
   });
 
   app.get(`${BASE}/wallet`, (req: Request, res: Response) => {
     logRequest('GET', '/wallet', req);
-    res.json(MOCK_WALLET);
+    res.json(buildMockWallet(deps.dataDir));
   });
 
   app.get(`${BASE}/message-center-public/messages`, (req: Request, res: Response) => {

@@ -5369,10 +5369,11 @@ export async function startServer({
     }).catch(() => undefined);
   };
  let workspaceAnalyticsService: AnalyticsService | null = null;
-  registerCollabContextHideSignRoutes(app);
-  registerVela2HideSignRoutes(app, { env: process.env });
+  registerCollabContextHideSignRoutes(app, { dataDir: RUNTIME_DATA_DIR });
+  registerVela2HideSignRoutes(app, { env: process.env, dataDir: RUNTIME_DATA_DIR });
   registerCollabContextRoutes(app, {
     workspaceContext: collab.workspaceContext,
+    dataDir: RUNTIME_DATA_DIR,
     configuredEnv: configuredAmrEnv,
     verifyWorkspaceReadAuthority: verifyWorkspaceContextReadAuthority,
     readCachedWorkspaceAuthority: cachedWorkspaceContextForRequest,

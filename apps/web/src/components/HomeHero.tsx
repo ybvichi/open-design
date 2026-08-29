@@ -2069,14 +2069,14 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
 
       {onDesignSystemChange || onPickWorkingDir ? (
         <div className="home-hero__workdir-row">
-          {onDesignSystemChange ? (
+          {/* {onDesignSystemChange ? (
             <DesignSystemPicker
               variant="home"
               designSystems={designSystems}
               selectedId={selectedDesignSystemId}
               onChange={onDesignSystemChange}
             />
-          ) : null}
+          ) : null} */}
           {onDesignSystemChange && onPickWorkingDir ? (
             <span className="home-hero__workdir-divider" aria-hidden />
           ) : null}
@@ -2732,15 +2732,16 @@ function FooterInputOption({
         ? designSystems.find((system) => system.title === currentTitle)?.id ?? null
         : null;
     return (
-      <DesignSystemPicker
-        variant="footer"
-        label={label}
-        designSystems={designSystems}
-        selectedId={selectedId}
-        onChange={(id) =>
-          onChange(id == null ? noneTitle : designSystems.find((system) => system.id === id)?.title ?? noneTitle)
-        }
-      />
+      // <DesignSystemPicker
+      //   variant="footer"
+      //   label={label}
+      //   designSystems={designSystems}
+      //   selectedId={selectedId}
+      //   onChange={(id) =>
+      //     onChange(id == null ? noneTitle : designSystems.find((system) => system.id === id)?.title ?? noneTitle)
+      //   }
+      // />
+      <></>
     );
   }
   if (field.type === 'select' && Array.isArray(field.options)) {

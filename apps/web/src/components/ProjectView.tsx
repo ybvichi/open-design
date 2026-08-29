@@ -11708,14 +11708,15 @@ export function ProjectView({
                 </span>
               )}
               designSystemPicker={(
-                <DesignSystemPicker
-                  variant="icon"
-                  designSystems={designSystems}
-                  selectedId={projectDesignSystemId ?? null}
-                  workspaceContext={projectRunWorkspaceContext}
-                  disabled={projectMutationReadOnly}
-                  onChange={handleChangeDesignSystemId}
-                />
+                // <DesignSystemPicker
+                //   variant="icon"
+                //   designSystems={designSystems}
+                //   selectedId={projectDesignSystemId ?? null}
+                //   workspaceContext={projectRunWorkspaceContext}
+                //   disabled={projectMutationReadOnly}
+                //   onChange={handleChangeDesignSystemId}
+                // />
+                <></>
               )}
             />
           ) : (
