@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
+import { motion, useReducedMotion } from 'motion/react';
+import type { Variants } from 'motion/react';
 import { Icon } from '../components/Icon';
 import { UpdaterPopup } from '../components/UpdaterPopup';
 import { useAppVersion } from '../analytics/provider';
@@ -32,6 +34,38 @@ const AuthContext = createContext<AuthContextValue>({
 /** 在组件树中获取当前认证信息 */
 export function useAuth(): AuthContextValue {
   return useContext(AuthContext);
+}
+
+/* Staggered entrance variants for the login screen. Each child fades in
+   and slides up with a spring easing. Respects prefers-reduced-motion. */
+function useLoginVariants() {
+  const reduced = useReducedMotion();
+  return {
+    container: {
+      hidden: { opacity: 0 },
+      visible: {
+        opacity: 1,
+        transition: reduced ? { duration: 0 } : { staggerChildren: 0.06, delayChildren: 0.1 },
+      },
+    } as Variants,
+    item: {
+      hidden: { opacity: 0, y: reduced ? 0 : 12 },
+      visible: {
+        opacity: 1,
+        y: 0,
+        transition: reduced ? { duration: 0.15 } : { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 },
+      },
+    } as Variants,
+    card: {
+      hidden: { opacity: 0, y: reduced ? 0 : 16, scale: reduced ? 1 : 0.97 },
+      visible: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        transition: reduced ? { duration: 0.2 } : { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 },
+      },
+    } as Variants,
+  };
 }
 
 /**
@@ -163,6 +197,7 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const { container: containerVariants, item: itemVariants, card: cardVariants } = useLoginVariants();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -212,29 +247,55 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
     }
   }
 
-  return (
-    <div className={styles.backdrop}>
-      {/* <div className={styles.topLeftLogo}>
-        <span className="od-brand-glyph" style={{ width: 80, height: 80, display: 'inline-block' }} />
-      </div> */}
-      <div className={styles.topRightUpdater}>
+ return (
+   <div className={styles.backdrop}>
+     <div className={styles.splitImage} aria-hidden />
+     <div className={styles.splitContent}>
+     <div className={styles.topRightUpdater}>
         <UpdaterPopup />
       </div>
       {appVersion && appVersion !== '0.0.0' ? (
-        <div className={styles.bottomLeftVersion}>当前版本：v{appVersion}</div>
-      ) : null}
-      <div className={styles.card}>
-        <div className={styles.brand}>
-          <span className={styles.brandMark} aria-hidden>
-            <Icon name="lock" size={20} />
+        <div className={styles.bottomLeftVersion}>
+          <span className={styles.versionBadge}>
+            <span className={styles.versionDot} />
+            v{appVersion}
           </span>
-          <h1 className={styles.title}>Hi Design</h1>
-          <p className={styles.subtitle}>请用OA账号登录</p>
-          {/* {fingerprint ? <p className={styles.fingerprint}>{fingerprint}</p> : null} */}
         </div>
+      ) : null}
+      {/* Animated aurora background layers */}
+      <div className={styles.aurora} aria-hidden>
+        <div className={`${styles.auroraBlob} ${styles.auroraBlob1}`} />
+        <div className={`${styles.auroraBlob} ${styles.auroraBlob2}`} />
+        <div className={`${styles.auroraBlob} ${styles.auroraBlob3}`} />
+      </div>
+      <div className={styles.gridOverlay} aria-hidden />
+      <div className={styles.vignette} aria-hidden />
+      <motion.div
+        className={styles.card}
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div
+          className={styles.brand}
+          variants={containerVariants}
+        >
+          <motion.span className={styles.brandMark} variants={itemVariants} aria-hidden>
+            <span className={styles.brandRing} aria-hidden />
+            <Icon name="lock" size={20} />
+          </motion.span>
+          <motion.h1 className={styles.title} variants={itemVariants}>Hi Design</motion.h1>
+          <motion.p className={styles.subtitle} variants={itemVariants}>请用OA账号登录</motion.p>
+          {/* {fingerprint ? <p className={styles.fingerprint}>{fingerprint}</p> : null} */}
+        </motion.div>
 
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          <label className={styles.field}>
+        <motion.form
+          className={styles.form}
+          onSubmit={handleSubmit}
+          noValidate
+          variants={containerVariants}
+        >
+          <motion.label className={styles.field} variants={itemVariants}>
             <span className={styles.fieldLabel}>用户名</span>
             <input
               className={styles.input}
@@ -246,9 +307,9 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
               autoFocus
               spellCheck={false}
             />
-          </label>
+          </motion.label>
 
-          <label className={styles.field}>
+          <motion.label className={styles.field} variants={itemVariants}>
             <span className={styles.fieldLabel}>密 码</span>
             <span className={styles.inputWrap}>
               <input
@@ -269,23 +330,25 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
                 <Icon name={showPassword ? 'eye-off' : 'eye'} size={16} />
               </button>
             </span>
-          </label>
+          </motion.label>
 
-          <label className={styles.remember}>
+          <motion.label className={styles.remember} variants={itemVariants}>
             <input
               type="checkbox"
               checked={remember}
               onChange={(event) => setRemember(event.target.checked)}
             />
             <span>记住登录状态</span>
-          </label>
+          </motion.label>
 
-          {error ? <p className={styles.error}>{error}</p> : null}
+          {error ? <motion.p className={styles.error} variants={itemVariants} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{error}</motion.p> : null}
 
-          <button type="submit" className={styles.submit} disabled={pending}>
+          <motion.button type="submit" className={styles.submit} disabled={pending} variants={itemVariants} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
             {pending ? '登录中…' : '登录'}
-          </button>
-        </form></div>
-    </div>
-  );
+          </motion.button>
+        </motion.form>
+     </motion.div>
+     </div>
+   </div>
+ );
 }
