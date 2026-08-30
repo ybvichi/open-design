@@ -18,6 +18,16 @@ interface LoginGateProps {
   children: ReactNode;
 }
 
+/** Landscape background images for the login split panel. One is picked at
+    random per mount so each page load/refresh shows a different backdrop. */
+const LANDSCAPE_IMAGES = [
+  '/upgrade/landscape-1.jpg',
+  '/upgrade/landscape-2.jpg',
+  '/upgrade/landscape-3.jpg',
+  '/upgrade/landscape-4.jpg',
+  '/upgrade/landscape-5.jpg',
+];
+
 /** 认证上下文数据 */
 export interface AuthContextValue {
   /** 当前登录用户名 */
@@ -197,9 +207,18 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const { container: containerVariants, item: itemVariants, card: cardVariants } = useLoginVariants();
+ const { container: containerVariants, item: itemVariants, card: cardVariants } = useLoginVariants();
+ const [bgIndex, setBgIndex] = useState(() => Math.floor(Math.random() * LANDSCAPE_IMAGES.length));
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+ useEffect(() => {
+   const CAROUSEL_INTERVAL = 6000;
+   const id = setInterval(() => {
+      setBgIndex((prev) => (prev + 1) % LANDSCAPE_IMAGES.length);
+   }, CAROUSEL_INTERVAL);
+    return () => clearInterval(id);
+  }, []);
+
+ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     const name = username.trim();
@@ -248,9 +267,17 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
   }
 
  return (
-   <div className={styles.backdrop}>
-     <div className={styles.splitImage} aria-hidden />
-     <div className={styles.splitContent}>
+  <div className={styles.backdrop}>
+    <div className={styles.splitImage} aria-hidden>
+        {LANDSCAPE_IMAGES.map((src, i) => (
+          <div
+            key={src}
+            className={styles.splitImageLayer}
+            style={{ backgroundImage: `url('${src}')`, opacity: i === bgIndex ? 1 : 0 }}
+          />
+        ))}
+      </div>
+    <div className={styles.splitContent}>
      <div className={styles.topRightUpdater}>
         <UpdaterPopup />
       </div>

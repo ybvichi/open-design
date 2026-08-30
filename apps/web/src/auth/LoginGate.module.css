@@ -45,9 +45,23 @@
   flex: 0 0 38.2%;
  position: relative;
  overflow: hidden;
-  background-image: url('/upgrade/cloud-signin-aurora.jpg');
- background-size: cover;
- background-position: center;
+}
+
+/* Stacked background layers for the aurora carousel. Only the active
+   layer has opacity 1; the rest fade out for a crossfade transition. */
+.splitImageLayer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: opacity 1200ms ease-in-out;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splitImageLayer {
+    transition: none;
+  }
 }
 
 /* Gradient overlay on the image so it blends into the right panel. */
@@ -55,13 +69,13 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
+  /* background: linear-gradient(
     to right,
     color-mix(in srgb, var(--bg-app) 20%, transparent) 0%,
     transparent 40%,
     transparent 60%,
     color-mix(in srgb, var(--bg-app) 90%, transparent) 100%
-  );
+  ); */
 }
 
 /* Right panel: ~62% (golden-ratio complement), holds aurora + card. */
@@ -73,6 +87,20 @@
   justify-content: center;
   padding: 24px;
   overflow: hidden;
+ background-image: url('/upgrade/hero-home-1440.webp');
+ background-size: cover;
+background-position: right bottom;
+ box-shadow: -24px 0 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Darkening overlay on the hero background so the glass card stays readable. */
+.splitContent::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* background: color-mix(in srgb, var(--bg-app) 45%, transparent); */
 }
 
 @media (max-width: 768px) {
