@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { generateDeterministicId } from '../ids.js';
+import { getDefaultTeamId, getTeamMemberId, getTestTeamId } from '../ids.js';
 import { getSsoUser } from '../sso-user.js';
 
 /**
@@ -90,17 +90,17 @@ function buildMockData(dataDir?: string) {
   const username = user?.username ?? '';
   const displayName = user?.displayName ?? '';
 
-  const seed = username || 'mock-personal-workspace';
-  const personalWorkspaceId = generateDeterministicId(`${seed}-workspace-id`);
-  const personalMemberId = generateDeterministicId(`${seed}-member-id`);
-  const personalWorkspaceName = (displayName + '的地盘') || "ybvichi's workspace";
+  // const seed = username || 'mock-personal-workspace';
+  // const personalWorkspaceId = generateDeterministicId(`${seed}-workspace-id`);
+  // const personalMemberId = generateDeterministicId(`${seed}-member-id`);
+  // const personalWorkspaceName = (displayName + '的地盘') || "ybvichi's workspace";
 
-  const TEAM_WORKSPACE_ID = generateDeterministicId(`one-persion-team-workspace-id-${seed}`);
-  const TEAM_WORKSPACE_MEMBER_ID = generateDeterministicId(TEAM_WORKSPACE_ID);
+  const TEAM_WORKSPACE_ID = getDefaultTeamId();
+  const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
   const MOCK_TEAM_WORKSPACE_NAME = '一人团队';
 
-  const TEAM_WORKSPACE_ID2 = generateDeterministicId(`new-team-workspace-id-${seed}`);
-  const TEAM_WORKSPACE_MEMBER_ID2 = generateDeterministicId(TEAM_WORKSPACE_ID2);
+  const TEAM_WORKSPACE_ID2 = getTestTeamId();
+  const TEAM_WORKSPACE_MEMBER_ID2 = getTeamMemberId(TEAM_WORKSPACE_ID2);
   const MOCK_TEAM_WORKSPACE_NAME2 = '测试团队';
 
   const directory = {
@@ -197,11 +197,10 @@ function buildMockData(dataDir?: string) {
   };
 
   const billing: Record<string, ReturnType<typeof makeBilling>> = {
-    [personalWorkspaceId]: makeBilling(personalWorkspaceId, personalMemberId),
     [TEAM_WORKSPACE_ID]: makeBilling(TEAM_WORKSPACE_ID, TEAM_WORKSPACE_MEMBER_ID),
   };
 
-  return { directory, contexts, billing, personalWorkspaceId };
+  return { directory, contexts, billing };
 }
 
 // --- Helpers --------------------------------------------------------------
@@ -229,17 +228,17 @@ export function registerCollabContextHideSignRoutes(
 
   app.get('/api/workspace/context', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/context', req);
-    const { contexts, personalWorkspaceId } = buildMockData(deps.dataDir);
+    const { contexts } = buildMockData(deps.dataDir);
     const wsId = req.header('x-od-workspace-id') ?? '';
-    const ctx = contexts[wsId] ?? contexts[personalWorkspaceId];
+    const ctx = contexts[wsId];
     res.json(ctx);
   });
 
   app.get('/api/workspace/billing', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/billing', req);
-    const { billing, personalWorkspaceId } = buildMockData(deps.dataDir);
+    const { billing } = buildMockData(deps.dataDir);
     const wsId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
-    const entry = billing[wsId] ?? billing[personalWorkspaceId];
+    const entry = billing[wsId];
     res.json(entry);
   });
 

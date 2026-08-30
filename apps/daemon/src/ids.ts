@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
- 
- // Lowercase alphanumeric alphabet, matching the Vela workspace ID format
+import { getSsoUser } from './sso-user.js';
+
+// Lowercase alphanumeric alphabet, matching the Vela workspace ID format
  // (e.g. "tljbioajfmjv52wm1h86ybow"). 36 symbols → ~5.17 bits per character.
  const LOWERCASE_ALPHANUM = 'abcdefghijklmnopqrstuvwxyz0123456789';
  
@@ -67,4 +68,62 @@ function hashBytes(seed: string, length: number): Uint8Array {
     input = digest.toString('hex');
   }
   return out;
+}
+
+/**
+ * Create a new team ID.
+ *
+ * When `seed` is provided, generates a deterministic ID from it so the same
+ * seed always yields the same team ID. When omitted, falls back to a random
+ * value + timestamp as the seed for `generateDeterministicId`.
+ */
+export function createTeamId(seed?: string): string {
+  return generateDeterministicId(seed ?? generateShortId() + Date.now().toString(36));
+}
+
+let runtimeDataDir: string | undefined;
+
+/** Set the daemon runtime data dir once at startup (called by server.ts). */
+export function setRuntimeDataDir(dir: string): void {
+  runtimeDataDir = dir;
+}
+
+/**
+ * Derive the current account's team member ID from a team ID.
+ *
+ * The member ID is deterministically derived from `${teamId}_${username}`.
+ * When `username` is provided it is used directly; otherwise the username
+ * is resolved from the SSO session. Same team + account always yields the
+ * same member ID.
+ */
+export function getTeamMemberId(teamId: string, username?: string): string {
+  if (username === undefined) {
+    const user = getSsoUser(runtimeDataDir);
+    username = user?.username ?? '';
+  }
+  return generateDeterministicId(`${teamId}_${username}`);
+}
+
+/**
+ * Get the current user's default team ID.
+ *
+ * Deterministic per account: the same user always gets the same default
+ * team ID, derived from `default_team_${username}`.
+ */
+export function getDefaultTeamId(): string {
+  const user = getSsoUser(runtimeDataDir);
+  const username = user?.username ?? '';
+  return createTeamId(`default_team_${username}`);
+}
+
+/**
+ * Get the current user's test team ID.
+ *
+ * Deterministic per account: the same user always gets the same test
+ * team ID, derived from `test_team_${username}`.
+ */
+export function getTestTeamId(): string {
+  const user = getSsoUser(runtimeDataDir);
+  const username = user?.username ?? '';
+  return createTeamId(`test_team_${username}`);
 }

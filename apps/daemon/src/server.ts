@@ -59,6 +59,7 @@ import {
 } from './prompts/stable-sections.js';
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
 import { resolveProjectRoot } from './project-root.js';
+import { setRuntimeDataDir } from './ids.js';
 import { OPEN_DESIGN_PLUGIN_ID } from './mcp-observability.js';
 import {
   resolveDaemonCliPath,
@@ -1268,6 +1269,7 @@ const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT, {
 });
 const SANDBOX_RUNTIME = resolveSandboxRuntimeConfig(SANDBOX_MODE_ENABLED, RUNTIME_DATA_DIR);
 ensureSandboxRuntimeDirs(SANDBOX_RUNTIME);
+setRuntimeDataDir(RUNTIME_DATA_DIR);
 const PLUGIN_LOCKFILE_PATH = path.join(RUNTIME_DATA_DIR, 'od-plugin-lock.json');
 // Canonical (realpath-resolved) form of RUNTIME_DATA_DIR for the few callers
 // that compare it against a user-supplied realpath() result. On macOS, /var
