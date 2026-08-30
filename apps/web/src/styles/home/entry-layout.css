@@ -2630,6 +2630,12 @@
   background: color-mix(in srgb, var(--text-strong) 84%, var(--brand, #87ea5c));
   transform: translateY(-1px);
 }
+/* Subtle press: drift back toward the base ink so the click doesn't flash a
+   high-contrast background. */
+.entry-blank__cta:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 92%, var(--brand, #87ea5c));
+  transform: translateY(1px);
+}
 .entry-section__head {
   display: flex;
   align-items: baseline;
@@ -7596,7 +7602,7 @@ button.entry-nav-rail__menu-credits-row:active:not(:disabled) {
   padding: 13px;
   border: 0;
   border-radius: var(--radius-sm, 8px);
-  background: var(--accent);
+  background: var(--text-strong);
   color: var(--accent-contrast, #fff);
   font-size: 14px;
   font-weight: 600;
@@ -7604,11 +7610,10 @@ button.entry-nav-rail__menu-credits-row:active:not(:disabled) {
   transition: filter 120ms, background 120ms, color 120ms;
 }
 .entry-invite__submit:hover:not(:disabled) {
-  /* Hold the accent fill — the global button:hover rule would repaint it to
+  /* Hold the dark fill — the global button:hover rule would repaint it to
      --bg-subtle and hide the white label. */
-  background: var(--accent);
+  background: color-mix(in srgb, var(--text-strong) 88%, #fff);
   color: var(--accent-contrast, #fff);
-  filter: brightness(1.05);
 }
 .entry-invite__submit:disabled {
   background: var(--bg-subtle);

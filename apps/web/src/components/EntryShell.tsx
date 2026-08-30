@@ -144,6 +144,7 @@ import {
 } from './agentModelSelection';
 import { AgentIcon } from './AgentIcon';
 import { CommunityView } from './CommunityView';
+import { SquareView } from './SquareView';
 import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
 import { TeamSpaceView } from './TeamSpaceView';
 import {
@@ -1077,6 +1078,7 @@ export function EntryShell({
   // route) and a reload, instead of snapping back to collapsed.
   const [railOpen, setRailOpen] = useState<boolean>(readStoredRailOpen);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // ⌘K / Ctrl+K opens the project search palette — same as clicking the rail
   // search box. ⌘B / Ctrl+B toggles the nav rail — same as the pinned Home
@@ -1638,6 +1640,8 @@ export function EntryShell({
           balanceUsd={workspaceBalanceUsd}
           onOpenSettings={onOpenSettings}
           onInvite={() => changeView('members')}
+          inviteOpen={inviteOpen}
+          onInviteOpenChange={setInviteOpen}
           onSignInCloud={() => navigate({ kind: 'home', view: 'onboarding' })}
           onSignedOut={onSignedOut}
           updaterSlot={updaterSlot}
@@ -1834,6 +1838,7 @@ export function EntryShell({
                 onSkillsChanged={onSkillsChanged}
               />
             ) : null}
+            {view === 'square' ? <SquareView /> : null}
             {view === 'community' ? (
               <CommunityView
                 onRemixTemplate={({ templateId, prompt }) => {
@@ -2000,12 +2005,22 @@ export function EntryShell({
              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
            ) : null}
           {view === 'team-space' ? (
-            <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} />
+            <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} />
           ) : null}
-           {view === 'team-folder' ? (
-             <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
-           ) : null}
-         </div>
+          {view === 'team-folder' ? (
+            <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
+          ) : null}
+          {view === 'personal-all' ? (
+            <div className="entry-section">
+              <h1 className="entry-section__title">{t('personalFunc.all')}</h1>
+            </div>
+          ) : null}
+          {view === 'shared-with-me' ? (
+            <div className="entry-section">
+              <h1 className="entry-section__title">{t('personalFunc.shared')}</h1>
+            </div>
+          ) : null}
+        </div>
         </main>
       </div>
       <NewProjectModal

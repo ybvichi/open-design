@@ -24,20 +24,24 @@ export type EntryHomeView =
   // template gallery surfaced as a rail destination (rather than only a home
   // sub-section); the rest are team-workspace slots (project spaces + members +
   // board + workspace settings) whose views are provided by other lanes.
-  | 'community'
-  | 'drafts'
-  | 'all-projects'
+ | 'community'
+ | 'drafts'
+ // Hi广场 — community plaza surface. Empty placeholder for now.
+ | 'square'
+ | 'all-projects'
   | 'members'
   | 'board'
   | 'workspace-settings'
   // Team tree destinations. `/team/:teamId` opens a team workspace page;
   // `/team/:teamId/folder/:folderId` opens a folder page. Both are empty
   // placeholders for now — the team tree in the rail drives navigation.
-  | 'team-space'
-  | 'team-folder'
-  // Full-page personal Settings surface. `/settings` renders the same
-  // SettingsDialog component in its `page` presentation instead of the modal.
-  | 'settings';
+ | 'team-space'
+ | 'team-folder'
+ // Full-page personal Settings surface. `/settings` renders the same
+ // SettingsDialog component in its `page` presentation instead of the modal.
+ | 'personal-all'
+ | 'shared-with-me'
+ | 'settings';
 
 export type Route =
   | {
@@ -71,9 +75,9 @@ export type Route =
       conversationId?: string | null;
       fileName: string | null;
     }
-  | { kind: 'marketplace' }
-  | { kind: 'marketplace-detail'; pluginId: string }
-  // Team collaboration demo surface. Drives the live presence + sync loop
+ | { kind: 'marketplace' }
+ | { kind: 'marketplace-detail'; pluginId: string }
+ // Team collaboration demo surface. Drives the live presence + sync loop
   // against the real daemon routes with a clearly-stubbed demo identity (real
   // B identity / D visibility integration pending). Deep-linkable so a second
   // browser tab can join the same project and appear in the presence overlay.
@@ -143,16 +147,25 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'integrations') {
     return { kind: 'home', view: 'integrations' };
   }
-  if (parts[0] === 'settings') {
-    return { kind: 'home', view: 'settings' };
-  }
-  if (parts[0] === 'collab-demo') {
+ if (parts[0] === 'settings') {
+   return { kind: 'home', view: 'settings' };
+ }
+ if (parts[0] === 'personal-all' && !parts[1]) {
+   return { kind: 'home', view: 'personal-all' };
+ }
+ if (parts[0] === 'shared-with-me' && !parts[1]) {
+   return { kind: 'home', view: 'shared-with-me' };
+ }
+ if (parts[0] === 'collab-demo') {
     return { kind: 'collab-demo', projectId: parts[1] ? decodeURIComponent(parts[1]) : null };
   }
   if (parts[0] === 'community') {
     // Community is now a rail destination inside the entry shell so the nav rail
     // stays visible alongside the gallery.
     return { kind: 'home', view: 'community' };
+  }
+  if (parts[0] === 'square' && !parts[1]) {
+    return { kind: 'home', view: 'square' };
   }
   if (parts[0] === 'drafts' && !parts[1]) {
     return { kind: 'home', view: 'drafts' };
@@ -204,6 +217,7 @@ export function buildPath(route: Route): string {
     }
     if (route.view === 'integrations') return '/integrations';
     if (route.view === 'community') return '/community';
+    if (route.view === 'square') return '/square';
     if (route.view === 'drafts') return '/drafts';
     if (route.view === 'all-projects') return '/all-projects';
     if (route.view === 'members') return '/members';
@@ -218,6 +232,8 @@ export function buildPath(route: Route): string {
         : '/';
     }
     if (route.view === 'settings') return '/settings';
+    if (route.view === 'personal-all') return '/personal-all';
+    if (route.view === 'shared-with-me') return '/shared-with-me';
     return '/';
   }
   if (route.kind === 'marketplace') return '/marketplace';

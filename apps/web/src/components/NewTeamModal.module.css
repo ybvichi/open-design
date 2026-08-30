@@ -258,13 +258,20 @@
 }
 
 .submit {
-  background: var(--accent, #79a8ff);
-  border-color: var(--accent, #79a8ff);
-  color: #fff;
+  background: var(--text-strong);
+  border-color: var(--text-strong);
+  border-radius: var(--radius-pill);
+  color: var(--accent-contrast, #fff);
 }
 
 .submit:hover:not(:disabled) {
-  opacity: 0.92;
+  background: color-mix(in srgb, var(--text-strong) 88%, #fff);
+  border-color: var(--text-strong);
+}
+
+.submit:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 92%, #fff);
+  border-color: var(--text-strong);
 }
 
 .submit:disabled {

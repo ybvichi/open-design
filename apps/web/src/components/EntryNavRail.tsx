@@ -81,6 +81,7 @@ import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4
 import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 import type { EntryHomeView } from '../router';
 import { TeamTreeSection } from './TeamTreeSection';
+import { PersonalFuncSection } from './PersonalFuncSection';
 import type {
   AccountMenuClickProps,
   TrackingWorkspacePage,
@@ -99,6 +100,7 @@ import {
   workspaceAnalyticsDimensions,
 } from '../analytics/workspace';
 import { WorkbenchCampaignBadge } from './WorkbenchCampaignBadge';
+import { avatarColorFor } from '../utils/avatarColor';
 
 const REPO_URL = 'https://github.com/nexu-io/open-design';
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
@@ -201,21 +203,6 @@ function attributableWorkspaceDirectory(
 // the router so `navigate({ kind: 'home', view })` type-checks for every item).
 export type EntryView = EntryHomeView;
 
-/**
- * Deterministic avatar background color from a display name.
- * Same name always maps to the same hue; white text stays readable at the
- * chosen saturation/lightness.
- */
-function avatarColorFor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    hash |= 0;
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 58%, 45%)`;
-}
-
 interface Props {
   view: EntryView;
   onViewChange: (view: EntryView) => void;
@@ -240,6 +227,10 @@ interface Props {
   onOpenSettings?: (section?: EntrySettingsSection) => void;
   /** Open the members / invite slot (B's InviteDialog). */
   onInvite?: () => void;
+  /** Controlled invite-dialog open state. When provided, the parent owns the
+   *  dialog visibility so other surfaces (e.g. TeamSpaceView) can trigger it. */
+  inviteOpen?: boolean;
+  onInviteOpenChange?: (open: boolean) => void;
   /** Start the cloud sign-in / team flow from the local-state callout. */
   onSignInCloud?: () => void;
   /** Clear app-owned model-source state after the daemon confirms sign-out. */
@@ -1183,6 +1174,9 @@ export function EntryNavRail({
   billing,
   balanceUsd,
   onOpenSettings,
+  onInvite,
+  inviteOpen: inviteOpenProp,
+  onInviteOpenChange,
  onSignedOut,
  updaterSlot,
  footerNotice,
@@ -1194,6 +1188,7 @@ export function EntryNavRail({
   const analyticsPage = entryViewToTracking(view);
   const workspaceDimensions = workspaceAnalyticsDimensions(context);
   const communityLabel = t('pluginsHome.title');
+  const plazaLabel = t('entry.navPlaza');
   // #5517 renamed the rail's first item from 最近 (Recents) to 首页 (Home) —
   // the key keeps its historical name, the VALUE now reads Home in every
   // locale (polish round 2, ref 1db2d00c2).
@@ -1242,7 +1237,9 @@ export function EntryNavRail({
   const railIdentity = workspaceIdentityCacheKey(context);
   const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] = useState(false);
   const [workspaceSwitchingId, setWorkspaceSwitchingId] = useState<string | null>(null);
- const [inviteOpen, setInviteOpen] = useState(false);
+ const [internalInviteOpen, setInternalInviteOpen] = useState(false);
+  const inviteOpen = inviteOpenProp ?? internalInviteOpen;
+  const setInviteOpen = onInviteOpenChange ?? setInternalInviteOpen;
   const [newTeamOpen, setNewTeamOpen] = useState(false);
  const inviteTarget = resolveWorkspaceInviteTarget(context);
   // The invite dialog's seat-gate upgrade entry uses the same public Pricing
@@ -1678,6 +1675,15 @@ export function EntryNavRail({
         >
           <Icon name="globe" size={16} />
         </NavButton>
+        <NavButton
+          active={view === 'square'}
+          ariaLabel={plazaLabel}
+          label={plazaLabel}
+          onClick={() => selectView('square')}
+          testId="entry-nav-plaza"
+        >
+          <Icon name="sparkles" size={16} />
+        </NavButton>
 
         {context ? (
           <div className="entry-nav-rail__team-section">
@@ -1818,6 +1824,7 @@ export function EntryNavRail({
             </NavButton>
           </>
         )}
+       <PersonalFuncSection />
        <TeamTreeSection
          workspaceItems={visibleWorkspaceItems}
          activeTeamId={activeTeamId}
