@@ -242,6 +242,22 @@ export function registerCollabContextHideSignRoutes(
     res.json(entry);
   });
 
+  app.put('/api/workspace/billing/interests/:clientId', (req: Request, res: Response) => {
+    logRequest('PUT', '/api/workspace/billing/interests/:clientId', req);
+    const clientId = req.params.clientId ?? '';
+    const body = req.body as { generation?: unknown } | null;
+    const generation = typeof body?.generation === 'string' ? body.generation.trim() : '0';
+    res.json({
+      clientId,
+      acceptedGeneration: generation,
+      leaseExpiresAt: '9999-12-31T23:59:59.000Z',
+    });
+  });
+  app.delete('/api/workspace/billing/interests/:clientId', (req: Request, res: Response) => {
+    logRequest('DELETE', '/api/workspace/billing/interests/:clientId', req);
+    res.json({ ok: true, released: true });
+  });
+
   app.put('/api/workspace/active', (req: Request, res: Response) => {
     logRequest('PUT', '/api/workspace/active', req);
     const { contexts } = buildMockData(deps.dataDir);
