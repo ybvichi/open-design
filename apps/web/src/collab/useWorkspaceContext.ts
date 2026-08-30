@@ -529,7 +529,7 @@ function chooseWorkspaceForTab(
   const chosen =
     exact
     ?? restartDefault
-    ?? visible.find((item) => item.workspaceType === 'personal')
+    ?? visible.find((item) => item.workspaceType === 'team')
     ?? visible[0]
     ?? null;
   writeWorkspaceSelection(

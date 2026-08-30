@@ -307,6 +307,7 @@ export interface WorkspaceCollabContext {
   workspaceId: string;
   workspaceType: WorkspaceType;
   workspaceMemberId: string;
+  isDefaultTeam?:boolean;
   role: CollabMemberRole;
   memberStatus: WorkspaceMemberStatus;
   lifecycleState: WorkspaceLifecycleState;
@@ -372,6 +373,7 @@ export interface WorkspaceDirectoryItem {
    * personal workspaces so identity surfaces (avatar, byline) can label
    * without a separate context fetch. */
   displayName?: string;
+  isDefaultTeam?: boolean;
 }
 
 /** GET /api/workspace/directory. OD's local workspace switcher data source. */

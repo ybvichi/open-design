@@ -57,6 +57,7 @@ import { PlanWordmark, planBadgeTierForWorkspace } from './PlanWordmark';
 import { RemixIcon } from './RemixIcon';
 import { InviteDialog } from './InviteDialog';
 import { MessageCenter } from './MessageCenter';
+import { NewTeamModal } from './NewTeamModal';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
 import { useI18n } from '../i18n';
 import { useDismissOnOutsideInteraction } from '../hooks/useDismissOnOutsideInteraction';
@@ -1241,8 +1242,9 @@ export function EntryNavRail({
   const railIdentity = workspaceIdentityCacheKey(context);
   const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] = useState(false);
   const [workspaceSwitchingId, setWorkspaceSwitchingId] = useState<string | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const inviteTarget = resolveWorkspaceInviteTarget(context);
+ const [inviteOpen, setInviteOpen] = useState(false);
+  const [newTeamOpen, setNewTeamOpen] = useState(false);
+ const inviteTarget = resolveWorkspaceInviteTarget(context);
   // The invite dialog's seat-gate upgrade entry uses the same public Pricing
   // destination as the credits chip's twin decision in EntryTopRightCluster.
   const upgradeUrl = workspaceUpgradeUrl(context, billing);
@@ -1276,6 +1278,7 @@ export function EntryNavRail({
             workspaceType: context.workspaceType,
             workspaceMemberId: context.workspaceMemberId,
             role: context.role,
+            isDefaultTeam:true,
             memberStatus: context.memberStatus,
             lifecycleState: context.lifecycleState,
           } satisfies WorkspaceDirectoryItem]
@@ -1478,7 +1481,7 @@ export function EntryNavRail({
       <div className="entry-nav-rail__panel">
       <div className="entry-nav-rail__group">
 
-        {context ? (
+        {context&&false ? (
           <div className="entry-nav-rail__team-wrap">
             <button
               type="button"
@@ -1514,7 +1517,7 @@ export function EntryNavRail({
                     data-testid="workspace-switcher-list"
                   >
                     {visibleWorkspaceItems.map((item) => {
-                      const active = item.workspaceId === context.workspaceId;
+                      const active = item.workspaceId === context?.workspaceId;
                       // Older daemon directory payloads can omit workspaceName.
                       // Keep those rows identifiable and actionable by falling
                       // back to the stable workspace id instead of crashing.
@@ -1555,7 +1558,10 @@ export function EntryNavRail({
                     className="entry-nav-rail__workspace-actions"
                     data-testid="workspace-switcher-actions"
                   >
-                    <div className="entry-nav-rail__menu-divider" />
+                   <div className="entry-nav-rail__menu-divider" />
+                    {/* "邀请成员" and "新建团队" temporarily disabled — moved to
+                        TeamTreeSection. Re-enable when the team tree owns the
+                        full create/invite flow.
                     {canAccessInviteFlow && inviteTarget.kind !== 'unavailable' ? (
                       <button
                         type="button"
@@ -1579,11 +1585,11 @@ export function EntryNavRail({
                         <Icon name="share" size={15} /> {t('workspaceSwitcher.invite')}
                       </button>
                     ) : null}
-                    {/* Creating a workspace is a B console flow (its sidebar owns the
-                        create dialog; there is no route or query param that opens it
-                        directly), so this entry links OUT instead of doing local work.
-                        With no console URL there is nowhere to send the user — render
-                        nothing rather than a control that silently does nothing. */}
+                    Creating a workspace is a B console flow (its sidebar owns the
+                    create dialog; there is no route or query param that opens it
+                    directly, so this entry links OUT instead of doing local work.
+                    With no console URL there is nowhere to send the user — render
+                    nothing rather than a control that silently does nothing.
                     {workspaceSettingsUrl ? (
                       <a
                         className="entry-nav-rail__menu-item"
@@ -1604,7 +1610,8 @@ export function EntryNavRail({
                         <Icon name="plus" size={15} /> {t('workspaceSwitcher.createTeam')}
                       </a>
                     ) : null}
-                  </div>
+                    */}
+                 </div>
                 </div>
               </>
             ) : null}
@@ -1811,11 +1818,12 @@ export function EntryNavRail({
             </NavButton>
           </>
         )}
-        <TeamTreeSection
-          workspaceItems={visibleWorkspaceItems}
-          activeTeamId={activeTeamId}
-          activeFolderId={activeFolderId}
-        />
+       <TeamTreeSection
+         workspaceItems={visibleWorkspaceItems}
+         activeTeamId={activeTeamId}
+         activeFolderId={activeFolderId}
+          onCreateTeam={() => setNewTeamOpen(true)}
+       />
      </div>
       {/* The footer always has the social row to show now, so it no longer
           collapses to nothing. `footerUpdaterSlot` is only ever set in the
@@ -1860,8 +1868,12 @@ export function EntryNavRail({
               }
             : undefined
         }
+     />
+      <NewTeamModal
+        open={newTeamOpen}
+        onClose={() => setNewTeamOpen(false)}
       />
-      {/* Top-right floating cluster: campaign badge (slot) + credits pill +
+     {/* Top-right floating cluster: campaign badge (slot) + credits pill +
           the account module, portaled to document.body so all ride the
           workbench top-right corner in one flex row. Extracted so the project
           route can mount the same cluster without the rail (see

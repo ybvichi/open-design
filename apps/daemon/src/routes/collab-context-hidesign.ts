@@ -23,9 +23,7 @@ export interface RegisterCollabContextHideSignRoutesDeps {
 
 // --- Mock data -----------------------------------------------------------
 
-const TEAM_WORKSPACE_ID = generateDeterministicId('mock-team-workspace');
-const TEAM_WORKSPACE_MEMBER_ID = generateDeterministicId('mock-team-workspace-member');
-const MOCK_TEAM_WORKSPACE_NAME = '测试团队';
+
 
 const ALL_PERMISSIONS = {
   canManageMembers: true,
@@ -93,57 +91,76 @@ function buildMockData(dataDir?: string) {
   const displayName = user?.displayName ?? '';
 
   const seed = username || 'mock-personal-workspace';
-  const personalWorkspaceId = generateDeterministicId(seed);
-  const personalMemberId = generateDeterministicId(`${seed}-member`);
-  const personalWorkspaceName = (displayName+'的地盘') || "ybvichi's workspace";
+  const personalWorkspaceId = generateDeterministicId(`${seed}-workspace-id`);
+  const personalMemberId = generateDeterministicId(`${seed}-member-id`);
+  const personalWorkspaceName = (displayName + '的地盘') || "ybvichi's workspace";
+
+  const TEAM_WORKSPACE_ID = generateDeterministicId(`one-persion-team-workspace-id-${seed}`);
+  const TEAM_WORKSPACE_MEMBER_ID = generateDeterministicId(TEAM_WORKSPACE_ID);
+  const MOCK_TEAM_WORKSPACE_NAME = '一人团队';
+
+  const TEAM_WORKSPACE_ID2 = generateDeterministicId(`new-team-workspace-id-${seed}`);
+  const TEAM_WORKSPACE_MEMBER_ID2 = generateDeterministicId(TEAM_WORKSPACE_ID2);
+  const MOCK_TEAM_WORKSPACE_NAME2 = '测试团队';
 
   const directory = {
     items: [
-      {
-        workspaceId: personalWorkspaceId,
-        workspaceName: personalWorkspaceName,
-        workspaceType: 'personal' as const,
-        workspaceMemberId: personalMemberId,
-        role: 'owner' as const,
-        memberStatus: 'active' as const,
-        lifecycleState: 'active' as const,
-      },
+      // {
+      //   workspaceId: personalWorkspaceId,
+      //   workspaceName: personalWorkspaceName,
+      //   workspaceType: 'personal' as const,
+      //   workspaceMemberId: personalMemberId,
+      //   role: 'owner' as const,
+      //   memberStatus: 'active' as const,
+      //   lifecycleState: 'active' as const,
+      // },
       {
         workspaceId: TEAM_WORKSPACE_ID,
         workspaceName: MOCK_TEAM_WORKSPACE_NAME,
         workspaceIconKey: 'spark',
         workspaceType: 'team' as const,
         workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+        isDefaultTeam: true,
         role: 'owner' as const,
         memberStatus: 'active' as const,
         lifecycleState: 'active' as const,
       },
-    ],
-    activeWorkspaceId: personalWorkspaceId,
-  };
-
-  const contexts: Record<string, { context: Record<string, unknown> }> = {
-    [personalWorkspaceId]: {
-      context: {
-        workspaceId: personalWorkspaceId,
-        workspaceType: 'personal',
-        workspaceMemberId: personalMemberId,
+      {
+        workspaceId: TEAM_WORKSPACE_ID2,
+        workspaceName: MOCK_TEAM_WORKSPACE_NAME2,
+        workspaceType: 'team',
+        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID2,
         role: 'owner',
         memberStatus: 'active',
         lifecycleState: 'active',
-        billingState: 'active',
-        planId: 'team_max',
-        providerMode: 'platform_credits',
-        seatSummary: { seatLimit: 1, usedSeats: 1, availableSeats: 0, isSeatFull: true },
-        permissions: ALL_PERMISSIONS,
-        workspaceName: personalWorkspaceName,
-      },
-    },
+      }
+    ],
+    activeWorkspaceId: TEAM_WORKSPACE_ID,
+  };
+
+  const contexts: Record<string, { context: Record<string, unknown> }> = {
+    // [personalWorkspaceId]: {
+    //   context: {
+    //     workspaceId: personalWorkspaceId,
+    //     workspaceType: 'personal',
+    //     workspaceMemberId: personalMemberId,
+    //     role: 'owner',
+    //     memberStatus: 'active',
+    //     lifecycleState: 'active',
+    //     billingState: 'active',
+    //     planId: 'team_max',
+    //     providerMode: 'platform_credits',
+    //     seatSummary: { seatLimit: 1, usedSeats: 1, availableSeats: 0, isSeatFull: true },
+    //     permissions: ALL_PERMISSIONS,
+    //     workspaceName: personalWorkspaceName,
+    //   },
+    // },
     [TEAM_WORKSPACE_ID]: {
       context: {
         workspaceId: TEAM_WORKSPACE_ID,
         workspaceType: 'team',
         workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+        isDefaultTeam: true,
         role: 'owner',
         memberStatus: 'active',
         lifecycleState: 'active',
@@ -155,7 +172,26 @@ function buildMockData(dataDir?: string) {
         workspaceName: MOCK_TEAM_WORKSPACE_NAME,
         teamId: TEAM_WORKSPACE_ID,
         teamName: MOCK_TEAM_WORKSPACE_NAME,
-        workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
+        //workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
+      },
+    },
+    [TEAM_WORKSPACE_ID2]: {
+      context: {
+        workspaceId: TEAM_WORKSPACE_ID2,
+        workspaceType: 'team',
+        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID2,
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+        billingState: 'active',
+        planId: 'team_max',
+        providerMode: 'platform_credits',
+        seatSummary: { seatLimit: 10, usedSeats: 1, availableSeats: 9, isSeatFull: false },
+        permissions: ALL_PERMISSIONS,
+        workspaceName: MOCK_TEAM_WORKSPACE_NAME2,
+        teamId: TEAM_WORKSPACE_ID,
+        teamName: MOCK_TEAM_WORKSPACE_NAME2,
+        //workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
       },
     },
   };

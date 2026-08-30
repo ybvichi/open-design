@@ -145,6 +145,7 @@ import {
 import { AgentIcon } from './AgentIcon';
 import { CommunityView } from './CommunityView';
 import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
+import { TeamSpaceView } from './TeamSpaceView';
 import {
   notifyTeamProjectsChanged,
   notifyWorkspaceBillingRefresh,
@@ -1998,9 +1999,9 @@ export function EntryShell({
            {view === 'workspace-settings' ? (
              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
            ) : null}
-           {view === 'team-space' ? (
-             <TeamSlotPlaceholder icon="folder" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.teamId : undefined} />
-           ) : null}
+          {view === 'team-space' ? (
+            <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} />
+          ) : null}
            {view === 'team-folder' ? (
              <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
            ) : null}

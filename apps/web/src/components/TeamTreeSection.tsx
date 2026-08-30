@@ -35,19 +35,6 @@ const MOCK_FOLDERS_BY_TEAM_NAME: Record<string, TeamFolder[]> = {
   ],
 };
 
-/**
- * A mock "测试团队" entry used when the workspace directory is empty
- * (e.g. not signed in) so the tree is never blank during development.
- */
-const MOCK_TEAM: WorkspaceDirectoryItem = {
-  workspaceId: 'mock-test-team',
-  workspaceName: '测试团队',
-  workspaceType: 'team',
-  workspaceMemberId: 'mock-member',
-  role: 'owner',
-  memberStatus: 'active',
-  lifecycleState: 'active',
-};
 
 function foldersForTeam(teamName: string): TeamFolder[] {
   return MOCK_FOLDERS_BY_TEAM_NAME[teamName] ?? [];
@@ -60,6 +47,8 @@ interface Props {
   activeTeamId?: string;
   /** The active folder id (from route), for highlight state. */
   activeFolderId?: string;
+  /** Called when the user clicks "新建团队" in the footer. */
+  onCreateTeam?: () => void;
 }
 
 interface TeamNodeProps {
@@ -149,19 +138,13 @@ function TeamNode({ team, activeTeamId, activeFolderId }: TeamNodeProps) {
   );
 }
 
-export function TeamTreeSection({ workspaceItems, activeTeamId, activeFolderId }: Props) {
+export function TeamTreeSection({ workspaceItems, activeTeamId, activeFolderId, onCreateTeam }: Props) {
   const t = useT();
   // Only show team workspaces in the tree.
   const teamItems = workspaceItems.filter(
-    (item) => item.workspaceType === 'team',
+    (item) => item.workspaceType === 'team'&&!item.isDefaultTeam
   );
-  // Ensure "测试团队" always appears so the tree is never empty during dev.
-  const hasTestTeam = teamItems.some(
-    (item) => item.workspaceName === '测试团队',
-  );
-  const items = hasTestTeam
-    ? teamItems
-    : [...teamItems, MOCK_TEAM];
+  const items = [...teamItems];
 
   if (items.length === 0) return null;
 
@@ -178,7 +161,11 @@ export function TeamTreeSection({ workspaceItems, activeTeamId, activeFolderId }
         ))}
       </div>
       <div className={styles.footer}>
-        <button type="button" className={styles.createTeamBtn}>
+        <button
+          type="button"
+          className={styles.createTeamBtn}
+          onClick={() => onCreateTeam?.()}
+        >
           <Icon name="plus" size={14} />
           <span>{t('workspaceSwitcher.createTeam')}</span>
         </button>
