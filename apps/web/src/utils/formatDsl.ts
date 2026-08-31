@@ -1632,6 +1632,23 @@ const resourcesPaths = {
     "vue.min.js": `${RES_PREX}vue.min.js`,
     "vuex.min.js": `${RES_PREX}vuex.umd.js`,
 }
+// h-icon-xxx 的 snake_case 片段 → PascalCase 片段
+const H_ICON_SEG_MAP = { f: 'Fill', sm: 'Sm' };
+/**
+ * 将 h-icon- 类名后的 key 转换为 icons.json 中的 id（大驼峰）。
+ * 规则：按 - 或 _ 拆段，丢弃 brand 前缀，_f → Fill、_sm → Sm，
+ * 其余段首字母大写后拼接（兼容下划线与横杆两种写法）。
+ * 例：close_f → CloseFill，brand_qq → Qq，angle_down_sm → AngleDownSm，
+ * angle-down-sm → AngleDownSm。
+ * @param {string} iconKey - h-icon- 后的 key，如 "close_f" 或 "close-f"
+ * @returns {string} 大驼峰图标 id，如 "CloseFill"
+ */
+function hIconClassToId(iconKey) {
+    let parts = iconKey.split(/[-_]/);
+    if (parts[0] === 'brand') parts = parts.slice(1);
+    return parts.map(seg => H_ICON_SEG_MAP[seg] || (seg.charAt(0).toUpperCase() + seg.slice(1))).join('');
+}
+
 export function partialHtmlToIframeWeb(html: string, callback: ((data: unknown) => void) | undefined, width = 1920, height = 1080) {
     let conversation_id = 'c_' + Math.random();
     let iframe = document.createElement('iframe')
@@ -1814,8 +1831,10 @@ export function partialHtmlToIframeWeb(html: string, callback: ((data: unknown) 
                         if (dom.tagName === "I" && dom.className.indexOf('h-icon-') > -1) {
                             const match = dom.className.match(/h-icon-([^\s]+)/);
                             if (match) {
-                                const iconName = match[1].replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()).replace(/^[a-z]/, letter => letter.toUpperCase());
+                                //const iconName = match[1].replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()).replace(/^[a-z]/, letter => letter.toUpperCase());
                                 // iconName 即为大驼峰命名后的图标名，例如：ArrowDown, UserInfo
+                                const iconName = hIconClassToId(match[1]);
+                                // iconName 即为大驼峰命名后的图标名，例如：ArrowDown, CloseFill    
                                 fontIcons.add(iconName);
                                 dom.setAttribute('hiktempiconname', iconName);
                                 dom.setAttribute('component-key', iconName);

@@ -770,7 +770,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
 
   // Fetch remote animation data; fall back to the bundled JSON on failure.
   useEffect(() => {
-    fetch(`${AI_BUILDER_WEB_PREX}/public/webresources/lottie/hero-animation.json`)
+    fetch(`${AI_BUILDER_WEB_PREX}/public/webresources/lottie/hero-animation.json?s=${Math.random()}`)
       .then((res) => {
         if (!res.ok){
           return defaultAnimationData
