@@ -76,8 +76,14 @@ function getLoopbackDirectAgent(): Promise<unknown | null> {
   if (loopbackAgentPromise) return loopbackAgentPromise;
   loopbackAgentPromise = (async () => {
     try {
-      const mod = await import("undici");
-      return new mod.Agent();
+      // `undici` ships with Node 24 but not as a typed package in this
+      // workspace, so the specifier is kept non-literal: TypeScript
+      // then types the dynamic import as untyped (no "Cannot find
+      // module 'undici'"), and esbuild leaves it as a runtime import
+      // under `packages: external`. Node resolves it from its bundle.
+      const specifier = "undici";
+      const mod = (await import(specifier)) as { Agent?: new () => unknown };
+      return mod.Agent ? new mod.Agent() : null;
     } catch {
       return null;
     }
