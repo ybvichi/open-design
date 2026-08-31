@@ -87,7 +87,7 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
       let uedro = null;
       try {
         const uedroResult = await uedroLogin(username, password);
-        if (uedroResult.ok) {
+        if (uedroResult?.ok) {
           uedro = uedroResult
         }
       } catch (uedroErr: any) {
@@ -113,9 +113,10 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
         result?.cookies,
         uedro
       );
-      const response: LoginResponse = {
+      const response: any = {
         ok: true,
         username,
+        uedro,
         userInfo: result?.userInfo||uedro?.userInfo
       };
       res.json(response);
@@ -163,7 +164,8 @@ export function registerAuthRoutes(app: Express, deps: RegisterAuthRoutesDeps): 
       const result = await hicooValidate(session, dataDir, FOR_DESIGNER_DIR);
       const uedroResult = await uedroValidate(session.uedro?.cookies);
       if ((!result.ok&&!session.userInfo)//OA登录没成功并且也没有得到用户信息，说明后续没有其他的系统登录成功过
-        || !uedroResult.ok // 如果羽点超时，需要重登录
+        //先注释下只要Hicoo登录通过了，就通过
+        //|| !uedroResult.ok // 如果羽点超时，需要重登录
       ) {
         // 会话失效，清除本地 session
         clearSsoSession();

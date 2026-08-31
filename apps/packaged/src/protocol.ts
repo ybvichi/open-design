@@ -1,5 +1,7 @@
 import { protocol } from "electron";
 
+import { isHarmlessSocketOptionError } from "./logging.js";
+
 const OD_SCHEME = "od";
 const OD_ENTRY_URL = `${OD_SCHEME}://app/`;
 type OdProtocolFetch = (request: Request) => Promise<Response>;
@@ -40,8 +42,74 @@ const defaultRetryDelay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Whether a hostname resolves to this machine. The `od://` proxy only
+ * ever targets the local web sidecar (127.0.0.1 / localhost / ::1), so
+ * a loopback target can safely bypass any configured HTTP proxy — the
+ * request never leaves the machine, and routing it through an external
+ * proxy (corporate VPN, Clash, V2ray, …) is what breaks login on the
+ * subset of clients that have a proxy set without a loopback bypass.
+ */
+export function isLoopbackHost(hostname: string): boolean {
+  // Strip brackets from the IPv6 literal form ([::1]) before comparing.
+  const host = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
+  return (
+    host === "localhost" ||
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    host.startsWith("127.")
+  );
+}
+
+/**
+ * Lazily create a single undici `Agent` with no proxy wiring. Used as the
+ * `dispatcher` for loopback targets so the fetch ignores `HTTP_PROXY` /
+ * `HTTPS_PROXY` / `ALL_PROXY` regardless of `NODE_USE_ENV_PROXY` or the
+ * Electron session proxy. Dynamic-imported + defensive: if the bundled
+ * undici is not resolvable in some Electron build, the bypass degrades
+ * to plain `fetch` (no worse than today).
+ */
+let loopbackAgentPromise: Promise<unknown | null> | null = null;
+
+function getLoopbackDirectAgent(): Promise<unknown | null> {
+  if (loopbackAgentPromise) return loopbackAgentPromise;
+  loopbackAgentPromise = (async () => {
+    try {
+      const mod = await import("undici");
+      return new mod.Agent();
+    } catch {
+      return null;
+    }
+  })();
+  return loopbackAgentPromise;
+}
+
+type OdFetchInit = RequestInit & { dispatcher?: unknown };
+
+/**
+ * Wrap a base `fetch` so loopback targets are issued with a direct
+ * undici dispatcher, bypassing any proxy. Exported so unit tests can
+ * pin that a loopback target receives a `dispatcher` and a non-loopback
+ * target does not.
+ */
+export function createLoopbackBypassFetch(
+  baseFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = fetch,
+): OdProtocolFetch {
+  return async (request: Request): Promise<Response> => {
+    if (isLoopbackHost(new URL(request.url).hostname)) {
+      const agent = await getLoopbackDirectAgent();
+      const init: OdFetchInit = agent == null ? {} : { dispatcher: agent };
+      return baseFetch(request, init as RequestInit);
+    }
+    return baseFetch(request);
+  };
+}
+
+/**
  * Fetch the rewritten sidecar target, absorbing transient socket throws
- * for idempotent requests.
+ * for idempotent requests — and for non-idempotent requests when the
+ * throw is a harmless pre-connect socket-option error.
  *
  * A single transient fetch failure must never become the document the
  * window renders: undici can throw mid-fetch from socket internals (the
@@ -50,9 +118,18 @@ const defaultRetryDelay = (ms: number): Promise<void> =>
  * (`od://app/`) the synthetic 502 from `buildProxyErrorResponse` IS the
  * whole window — the React app never mounts and nothing reloads it.
  * GET/HEAD carry no body, so re-issuing the Request per attempt is safe;
- * non-idempotent methods keep single-attempt semantics. Responses that
- * resolve — including upstream 5xx — are never retried here: those are
- * app-level answers the renderer owns.
+ * non-idempotent methods stay single-attempt for arbitrary errors, but
+ * a harmless `setTypeOfService EINVAL` is retried too because that
+ * throw happens during socket setup — before any request bytes are
+ * written — so re-issuing is side-effect-free even for
+ * `POST /api/auth/login`, the exact flow that failed on VPN/macOS
+ * clients. Responses that resolve — including upstream 5xx — are never
+ * retried here: those are app-level answers the renderer owns.
+ *
+ * Each attempt clones the source request so a retried POST keeps a
+ * re-sendable body stream: `new Request(target, request)` would null
+ * the source body after the first attempt, so `request.clone()` tees a
+ * fresh copy per attempt without disturbing the original.
  *
  * Deliberately not conditioned on `Sec-Fetch-Dest: document`: uniform
  * idempotent retry is simpler, and Sec-Fetch header presence on a custom
@@ -64,24 +141,26 @@ async function fetchOdTargetWithTransientRetry(
   fetchImpl: OdProtocolFetch,
   options: OdProxyRetryOptions,
 ): Promise<Response> {
-  const attempts = OD_PROXY_RETRYABLE_METHODS.has(request.method)
-    ? (options.attempts ?? OD_PROXY_RETRY_ATTEMPTS)
-    : 1;
+  const isIdempotent = OD_PROXY_RETRYABLE_METHODS.has(request.method);
+  const maxAttempts = options.attempts ?? OD_PROXY_RETRY_ATTEMPTS;
   const backoffMs = options.backoffMs ?? OD_PROXY_RETRY_BACKOFF_MS;
   const delay = options.delay ?? defaultRetryDelay;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await fetchImpl(new Request(target, request));
+      return await fetchImpl(new Request(target, request.clone()));
     } catch (error) {
       lastError = error;
-      if (attempt === attempts) break;
+      const harmless = isHarmlessSocketOptionError(error);
+      const retryable = isIdempotent || harmless;
+      if (!retryable || attempt === maxAttempts) break;
       const waitMs = backoffMs * attempt;
       // Main-process console output lands in the packaged desktop logs, so
       // real-world transient frequency stays diagnosable.
       console.warn("[open-design packaged] od:// proxy fetch failed; retrying", {
         attempt,
-        attempts,
+        maxAttempts,
+        harmless,
         message: error instanceof Error ? error.message : String(error),
         target,
         waitMs,
@@ -117,6 +196,13 @@ function buildProxyErrorResponse(error: unknown, target: string): Response {
  * renderer fetch flows through here and gets proxied to the local web
  * sidecar via Node's global `fetch` (which is undici under the hood).
  *
+ * The default `fetchImpl` is `createLoopbackBypassFetch()`, which routes
+ * loopback targets through a direct undici `Agent` so a client-side
+ * HTTP proxy (corporate VPN, Clash, V2ray, …) can never intercept the
+ * renderer-to-sidecar hop. That is the root fix for
+ * `OD_PROTOCOL_PROXY_FAILED` surfacing on the subset of clients that
+ * have a proxy configured without a loopback bypass.
+ *
  * Pulled out as a named export so unit tests can drive it with a stub
  * `fetchImpl` without spinning up Electron, and so the try/catch
  * stays auditable from one place.
@@ -133,12 +219,14 @@ function buildProxyErrorResponse(error: unknown, target: string): Response {
  * Idempotent requests first pass through
  * `fetchOdTargetWithTransientRetry`, so a one-off transient throw on
  * the top navigation cannot end up as the 502 document covering the
- * window; the 502 remains the exhaustion fallback.
+ * window; the 502 remains the exhaustion fallback. Non-idempotent
+ * requests are retried only when the throw is the harmless
+ * `setTypeOfService EINVAL` shape (pre-connect, side-effect-free).
  */
 export async function handleOdRequest(
   request: Request,
   webRuntimeUrl: string,
-  fetchImpl: OdProtocolFetch = fetch,
+  fetchImpl: OdProtocolFetch = createLoopbackBypassFetch(),
   retryOptions: OdProxyRetryOptions = {},
 ): Promise<Response> {
   const target = toWebRuntimeUrl(webRuntimeUrl, request.url);

@@ -266,9 +266,9 @@ export async function uedroLogout(cookies: Cookie[]): Promise<UedroLogoutResult>
  *
  * 通过 GET /uedro/web/login/v1/userInfo 判断：响应 code === '0' 即有效。
  */
-export async function uedroValidate(cookies: Cookie[]): Promise<UedroValidResult> {
+export async function uedroValidate(cookies: Cookie[]): Promise<any> {
   if (!cookies?.length) {
-    return { ok: false };
+    return { ok: false,errorType:1,error:"no cookies" };
   }
   try {
     const result = await rawRequest('GET', UEDRO_IS_LOGIN_URL, cookies, {
@@ -276,10 +276,10 @@ export async function uedroValidate(cookies: Cookie[]): Promise<UedroValidResult
     });
     const parsed = parseUedroResponse(result.body);
     if (parsed.code !== '0') {
-      return { ok: false };
+      return { ok: false,errorType:2,error:parsed};
     }
     return { ok: true,basicInfo:parsed };
-  } catch {
-    return { ok: false };
+  } catch(error) {
+    return { ok: false,errorType:3,error };
   }
 }
