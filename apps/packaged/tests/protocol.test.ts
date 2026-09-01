@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createLoopbackBypassFetch, handleOdRequest, isLoopbackHost } from '../src/protocol.js';
+import { createLoopbackBypassFetch, handleOdRequest, isLoopbackHost, isTransientConnectionError } from '../src/protocol.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -181,19 +181,22 @@ describe('od:// protocol transient retry', () => {
 
     expect(response.status).toBe(502);
     const body = (await response.json()) as { error: string; code?: string };
-    expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
-    expect(body.code).toBe('EINVAL');
-    expect(calls).toBe(3);
-  });
+     expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
+     expect(body.code).toBe('EINVAL');
+      expect(calls).toBe(4);
+   });
 
-  it('does not retry non-idempotent methods', async () => {
-    let calls = 0;
-    const fetchImpl: typeof fetch = async () => {
-      calls += 1;
-      // A real transport error — not the harmless setTypeOfService
-      // shape — must never be retried for a non-idempotent method.
-      throw new Error('socket hang up');
-    };
+   it('does not retry non-idempotent methods', async () => {
+     let calls = 0;
+     const fetchImpl: typeof fetch = async () => {
+       calls += 1;
+       // A real transport error — not the harmless setTypeOfService
+       // shape — must never be retried for a non-idempotent method.
+        // Use a non-transient error: `socket hang up` is now retried
+        // via isTransientConnectionError, so a generic internal error
+        // is the correct non-retryable shape for this test.
+        throw new Error('internal server error');
+     };
 
     const response = await handleOdRequest(
       new Request('od://app/api/codex-pets/sync', { method: 'POST' }),
@@ -202,13 +205,77 @@ describe('od:// protocol transient retry', () => {
       noDelay,
     );
 
-    expect(response.status).toBe(502);
-    expect(calls).toBe(1);
-  });
+     expect(response.status).toBe(502);
+     expect(calls).toBe(1);
+   });
 
-  // The #895 login regression on the non-idempotent path: a harmless
-  // `setTypeOfService EINVAL` throws during socket setup, before any
-  // request bytes are written, so retrying POST /api/auth/login is
+    // The cold-start race: the web sidecar has bound its TCP socket
+    // (IPC status reports a URL) but the first HTTP request is dropped
+    // — especially on Windows where Defender / AV briefly intercepts
+    // the loopback connection. `socket hang up` indicates the connection
+    // was dropped before the server processed the request, so re-issuing
+    // is side-effect-free even for POST /api/auth/login.
+    it('retries a POST whose first attempt throws socket hang up and returns the eventual success', async () => {
+      let calls = 0;
+      const fetchImpl: typeof fetch = async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('socket hang up');
+        return new Response('ok', { status: 200 });
+      };
+
+      const response = await handleOdRequest(
+        new Request('od://app/api/auth/login', { method: 'POST' }),
+        'http://127.0.0.1:17579/',
+        fetchImpl,
+        noDelay,
+      );
+
+      expect(response.status).toBe(200);
+      expect(calls).toBe(2);
+    });
+
+    it('retries a POST up to the budget on socket hang up before returning 502', async () => {
+      let calls = 0;
+      const fetchImpl: typeof fetch = async () => {
+        calls += 1;
+        throw new Error('socket hang up');
+      };
+
+      const response = await handleOdRequest(
+        new Request('od://app/api/auth/login', { method: 'POST' }),
+        'http://127.0.0.1:17579/',
+        fetchImpl,
+        noDelay,
+      );
+
+      expect(response.status).toBe(502);
+      const body = (await response.json()) as { error: string; message: string };
+      expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
+      expect(body.message).toContain('socket hang up');
+      expect(calls).toBe(4);
+    });
+
+    it('does not retry a POST on a non-transient error', async () => {
+      let calls = 0;
+      const fetchImpl: typeof fetch = async () => {
+        calls += 1;
+        throw new Error('timeout');
+      };
+
+      const response = await handleOdRequest(
+        new Request('od://app/api/auth/login', { method: 'POST' }),
+        'http://127.0.0.1:17579/',
+        fetchImpl,
+        noDelay,
+      );
+
+      expect(response.status).toBe(502);
+      expect(calls).toBe(1);
+    });
+
+   // The #895 login regression on the non-idempotent path: a harmless
+   // `setTypeOfService EINVAL` throws during socket setup, before any
+   // request bytes are written, so retrying POST /api/auth/login is
   // side-effect-free. Without this, a single transient EINVAL on a
   // login POST surfaces as OD_PROTOCOL_PROXY_FAILED on VPN/macOS
   // clients while GET flows absorbed it via the idempotent retry.
@@ -247,12 +314,12 @@ describe('od:// protocol transient retry', () => {
 
     expect(response.status).toBe(502);
     const body = (await response.json()) as { error: string; code?: string };
-    expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
-    expect(body.code).toBe('EINVAL');
-    expect(calls).toBe(3);
-  });
+     expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
+     expect(body.code).toBe('EINVAL');
+      expect(calls).toBe(4);
+   });
 
-  it('re-sends the buffered body when retrying a POST on harmless EINVAL', async () => {
+   it('re-sends the buffered body when retrying a POST on harmless EINVAL', async () => {
     const sentBodies: string[] = [];
     let calls = 0;
     const fetchImpl: typeof fetch = async (input) => {
@@ -311,9 +378,9 @@ describe('od:// protocol transient retry', () => {
       },
     });
 
-    expect(waits).toEqual([150, 300]);
-  });
-});
+      expect(waits).toEqual([200, 400, 600]);
+   });
+ });
 
 // The packaged `od://` proxy only ever targets the local web sidecar
 // (127.0.0.1:9529). Clients with a system / env HTTP proxy that lacks a
@@ -356,7 +423,77 @@ describe('od:// protocol loopback proxy bypass', () => {
     // Loopback hop is issued with a direct undici dispatcher so no
     // client proxy can intercept it.
     expect(seen[0]!.dispatcher).toBeTruthy();
-    // External hosts keep plain fetch semantics (no dispatcher override).
-    expect(seen[1]!.dispatcher).toBeUndefined();
+     // External hosts keep plain fetch semantics (no dispatcher override).
+     expect(seen[1]!.dispatcher).toBeUndefined();
+   });
+ });
+
+// Transient connection errors (socket hang up, ECONNRESET, ECONNREFUSED,
+// EPIPE, UND_ERR_SOCKET, UND_ERR_CLOSED) indicate the connection was
+// dropped or refused before the server processed the request — no request
+// bytes reached the application layer, so re-issuing is safe even for
+// non-idempotent methods. This is the cold-start race on Windows where
+// Defender / AV briefly intercepts the loopback connection.
+describe('isTransientConnectionError', () => {
+  it('recognizes socket hang up by message', () => {
+    expect(isTransientConnectionError(new Error('socket hang up'))).toBe(true);
+  });
+
+  it('recognizes other side closed by message', () => {
+    expect(isTransientConnectionError(new Error('other side closed'))).toBe(true);
+  });
+
+  it('recognizes connect ECONNREFUSED by message', () => {
+    expect(isTransientConnectionError(new Error('connect ECONNREFUSED 127.0.0.1:9529'))).toBe(true);
+  });
+
+  it('recognizes ECONNRESET by code', () => {
+    const err = new Error('read ECONNRESET') as NodeJS.ErrnoException;
+    err.code = 'ECONNRESET';
+    expect(isTransientConnectionError(err)).toBe(true);
+  });
+
+  it('recognizes ECONNREFUSED by code', () => {
+    const err = new Error('connect ECONNREFUSED') as NodeJS.ErrnoException;
+    err.code = 'ECONNREFUSED';
+    expect(isTransientConnectionError(err)).toBe(true);
+  });
+
+  it('recognizes EPIPE by code', () => {
+    const err = new Error('write EPIPE') as NodeJS.ErrnoException;
+    err.code = 'EPIPE';
+    expect(isTransientConnectionError(err)).toBe(true);
+  });
+
+  it('recognizes UND_ERR_SOCKET by code', () => {
+    const err = new Error('Socket closed') as NodeJS.ErrnoException;
+    err.code = 'UND_ERR_SOCKET';
+    expect(isTransientConnectionError(err)).toBe(true);
+  });
+
+  it('recognizes UND_ERR_CLOSED by code', () => {
+    const err = new Error('closed') as NodeJS.ErrnoException;
+    err.code = 'UND_ERR_CLOSED';
+    expect(isTransientConnectionError(err)).toBe(true);
+  });
+
+  it('does not classify a generic error as transient', () => {
+    expect(isTransientConnectionError(new Error('internal server error'))).toBe(false);
+  });
+
+  it('does not classify an EINVAL setTypeOfService error as transient', () => {
+    // That is the harmless socket-option shape, handled separately by
+    // isHarmlessSocketOptionError — it must not also match here, or the
+    // retry path would double-count it.
+    const err = new Error('setTypeOfService EINVAL') as NodeJS.ErrnoException;
+    err.code = 'EINVAL';
+    expect(isTransientConnectionError(err)).toBe(false);
+  });
+
+  it('returns false for non-Error values', () => {
+    expect(isTransientConnectionError(null)).toBe(false);
+    expect(isTransientConnectionError(undefined)).toBe(false);
+    expect(isTransientConnectionError('socket hang up')).toBe(false);
+    expect(isTransientConnectionError({ message: 'socket hang up' })).toBe(false);
   });
 });

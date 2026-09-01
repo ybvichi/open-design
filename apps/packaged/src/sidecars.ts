@@ -205,6 +205,86 @@ const DAEMON_MIGRATION_STATUS_TIMEOUT_MS = 30 * 60 * 1000;
 const STATUS_POLL_INITIAL_MS = 150;
 const STATUS_POLL_MAX_MS = 1500;
 
+// HTTP readiness probe budget. After the web sidecar reports a URL via
+// IPC (TCP socket bound), the first actual HTTP request can still get
+// dropped — especially on Windows where Defender / AV briefly intercepts
+// the loopback connection. This probe sends a HEAD request with retries
+// until any HTTP response is received, bridging the gap between "socket
+// bound" and "server ready to handle requests." Best-effort: if the probe
+// fails entirely, startup proceeds anyway and the od:// retry logic is
+// the safety net.
+const HTTP_READY_TIMEOUT_MS = 10_000;
+const HTTP_READY_POLL_INITIAL_MS = 100;
+const HTTP_READY_POLL_MAX_MS = 1_000;
+
+type OdFetchInit = RequestInit & { dispatcher?: unknown };
+
+// Lazily create a single undici `Agent` with no proxy wiring, mirroring
+// the approach in protocol.ts. The readiness probe must hit the loopback
+// sidecar directly, bypassing any configured HTTP proxy, so the probe
+// itself is not the thing that fails on proxy-configured clients.
+let probeAgentPromise: Promise<unknown | null> | null = null;
+
+function getProbeDirectAgent(): Promise<unknown | null> {
+  if (probeAgentPromise) return probeAgentPromise;
+  probeAgentPromise = (async () => {
+    try {
+      // Non-literal specifier avoids TS2307 (undici ships with Node but
+      // has no type declarations in this workspace).
+      const specifier = "undici";
+      const mod = (await import(specifier)) as { Agent?: new () => unknown };
+      return mod.Agent ? new mod.Agent() : null;
+    } catch {
+      return null;
+    }
+  })();
+  return probeAgentPromise;
+}
+
+/**
+ * Probe the web sidecar with an HTTP HEAD request until it responds.
+ * `waitForStatus` returns when the sidecar reports a URL via IPC (TCP
+ * socket bound), but on some Windows machines the first HTTP request
+ * is dropped by Defender / AV before the server is fully ready to handle
+ * it — surfacing as `socket hang up` in the renderer. This probe bridges
+ * that gap by issuing real HTTP requests until one succeeds, so the
+ * renderer's first navigation lands on a server that is actually ready.
+ *
+ * Best-effort: if the probe times out, startup proceeds anyway. The
+ * od:// protocol retry logic (isTransientConnectionError) is the safety
+ * net for any residual first-request drops.
+ *
+ * Exported so unit tests can drive it with a stub fetch without
+ * spinning up a real sidecar.
+ */
+export async function waitForHttpReady(
+  url: string,
+  timeoutMs = HTTP_READY_TIMEOUT_MS,
+  fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = fetch,
+): Promise<boolean> {
+  const startedAt = Date.now();
+  let pollDelayMs = HTTP_READY_POLL_INITIAL_MS;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const agent = await getProbeDirectAgent();
+      const init: OdFetchInit = agent == null ? {} : { dispatcher: agent };
+      const response = await fetchImpl(url, { ...init, method: "HEAD" });
+      // Any HTTP response — even a 4xx/5xx — means the server is
+      // accepting connections and processing requests. We are not
+      // checking the sidecar's health, just its readiness to talk.
+      if (response.status >= 100 && response.status < 600) return true;
+    } catch {
+      // Connection refused / socket hang up / ECONNRESET — server not
+      // ready yet. Keep polling.
+    }
+    const remaining = timeoutMs - (Date.now() - startedAt);
+    if (remaining <= 0) break;
+    await sleep(Math.min(pollDelayMs, remaining));
+    pollDelayMs = Math.min(pollDelayMs * 2, HTTP_READY_POLL_MAX_MS);
+  }
+  return false;
+}
+
 // Baseline status wait budget by platform, before the daemon-only legacy
 // migration override. win32 gets the wider AV-scan headroom, linux gets the
 // same headroom for AppImage FUSE cold starts; every other OS keeps the 35s
@@ -748,8 +828,21 @@ export async function startPackagedSidecars(
       baseStatusTimeoutMs(),
       { child: web.child, logPath: logPathFor(paths, APP_KEYS.WEB) },
     );
-    if (webStatus.url == null) throw new Error("web did not report a URL");
-    options.onPhase?.("web-ready");
+     if (webStatus.url == null) throw new Error("web did not report a URL");
+      // Bridge the gap between "TCP socket bound" (IPC status reports a
+      // URL) and "HTTP server ready to handle requests." On some Windows
+      // machines the first HTTP request is dropped by Defender / AV
+      // before the server finishes its accept-loop setup, surfacing as
+      // `socket hang up` in the renderer. Best-effort: if the probe
+      // times out, startup proceeds anyway and the od:// retry logic
+      // (isTransientConnectionError) is the safety net.
+      const httpReady = await waitForHttpReady(webStatus.url);
+      if (!httpReady) {
+        console.warn("[open-design packaged] web sidecar HTTP readiness probe timed out; proceeding with od:// retry as safety net", {
+          url: webStatus.url,
+        });
+      }
+     options.onPhase?.("web-ready");
 
     return {
       daemon: daemonStatus,

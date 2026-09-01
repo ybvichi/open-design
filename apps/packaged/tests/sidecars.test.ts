@@ -32,6 +32,7 @@ import {
   resolvePackagedElectronNodeCommand,
   resolvePackagedPathEnv,
   waitForStatus,
+  waitForHttpReady,
 } from '../src/sidecars.js';
 import type { PackagedNamespacePaths } from '../src/paths.js';
 
@@ -630,8 +631,77 @@ describe('waitForStatus child-exit fast-fail', () => {
 
       expect(captured).toBeInstanceOf(Error);
       expect((captured as Error).message).toContain('sidecar status pid 1234 did not match spawned pid 5678');
-    } finally {
-      await server.close();
-    }
+     } finally {
+       await server.close();
+     }
+   });
+ });
+
+describe('waitForHttpReady', () => {
+  it('returns true when the HTTP probe gets a response', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response('ok', { status: 200 });
+    };
+
+    const result = await waitForHttpReady(
+      'http://127.0.0.1:9529/',
+      5_000,
+      fetchImpl,
+    );
+
+    expect(result).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it('retries on connection failure and returns true once the server responds', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (calls < 3) throw new Error('socket hang up');
+      return new Response('ok', { status: 200 });
+    };
+
+    const result = await waitForHttpReady(
+      'http://127.0.0.1:9529/',
+      5_000,
+      fetchImpl,
+    );
+
+    expect(result).toBe(true);
+    expect(calls).toBe(3);
+  });
+
+  it('returns false when the probe times out without ever getting a response', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      throw new Error('connect ECONNREFUSED');
+    };
+
+    const result = await waitForHttpReady(
+      'http://127.0.0.1:9529/',
+      500,
+      fetchImpl,
+    );
+
+    expect(result).toBe(false);
+    // Should have polled multiple times before timing out.
+    expect(calls).toBeGreaterThan(1);
+  });
+
+  it('accepts any HTTP status as readiness, including 4xx/5xx', async () => {
+    const fetchImpl = async () => {
+      return new Response('not found', { status: 404 });
+    };
+
+    const result = await waitForHttpReady(
+      'http://127.0.0.1:9529/',
+      5_000,
+      fetchImpl,
+    );
+
+    expect(result).toBe(true);
   });
 });

@@ -29,8 +29,8 @@ function toWebRuntimeUrl(webRuntimeUrl: string, requestUrl: string): string {
 }
 
 const OD_PROXY_RETRYABLE_METHODS = new Set(["GET", "HEAD"]);
-const OD_PROXY_RETRY_ATTEMPTS = 3;
-const OD_PROXY_RETRY_BACKOFF_MS = 150; // 150ms, 300ms — throw path only, ~450ms worst-case added
+const OD_PROXY_RETRY_ATTEMPTS = 4;
+const OD_PROXY_RETRY_BACKOFF_MS = 200; // 200ms, 400ms, 600ms — throw path only, ~1.2s worst-case added
 
 type OdProxyRetryOptions = {
   attempts?: number;
@@ -59,6 +59,47 @@ export function isLoopbackHost(hostname: string): boolean {
     host === "::1" ||
     host === "0.0.0.0" ||
     host.startsWith("127.")
+  );
+}
+
+/**
+ * Whether a fetch error is a transient connection-level failure that
+ * is safe to retry even for non-idempotent methods (POST, PUT, …).
+ *
+ * `socket hang up`, `ECONNRESET`, `ECONNREFUSED`, and undici's
+ * `UND_ERR_SOCKET` all indicate the connection was dropped or refused
+ * before the server processed the request — no request bytes reached
+ * the application layer, so re-issuing the request cannot cause
+ * duplicate side effects. This is the cold-start race: the web sidecar
+ * has bound its TCP socket (IPC status reports a URL) but the first
+ * HTTP request hits before the server is fully ready to handle it,
+ * and on some Windows machines Defender / AV briefly intercepts the
+ * loopback connection and drops it.
+ *
+ * Match strategy:
+ *   1. `code` is authoritative when present: ECONNRESET, ECONNREFUSED,
+ *      EPIPE, UND_ERR_SOCKET, or UND_ERR_CLOSED qualify.
+ *   2. When `code` is absent, fall back to the message string for the
+ *      undici-specific `socket hang up` and `other side closed` shapes
+ *      that surface without a structured code on some Node builds.
+ */
+export function isTransientConnectionError(value: unknown): boolean {
+  if (!(value instanceof Error)) return false;
+  const code = (value as NodeJS.ErrnoException).code;
+  if (typeof code === "string" && code.length > 0) {
+    return (
+      code === "ECONNRESET" ||
+      code === "ECONNREFUSED" ||
+      code === "EPIPE" ||
+      code === "UND_ERR_SOCKET" ||
+      code === "UND_ERR_CLOSED"
+    );
+  }
+  const message = typeof value.message === "string" ? value.message : "";
+  return (
+    message.includes("socket hang up") ||
+    message.includes("other side closed") ||
+    message.includes("connect ECONNREFUSED")
   );
 }
 
@@ -158,7 +199,8 @@ async function fetchOdTargetWithTransientRetry(
     } catch (error) {
       lastError = error;
       const harmless = isHarmlessSocketOptionError(error);
-      const retryable = isIdempotent || harmless;
+      const transient = isTransientConnectionError(error);
+      const retryable = isIdempotent || harmless || transient;
       if (!retryable || attempt === maxAttempts) break;
       const waitMs = backoffMs * attempt;
       // Main-process console output lands in the packaged desktop logs, so
@@ -167,12 +209,13 @@ async function fetchOdTargetWithTransientRetry(
         attempt,
         maxAttempts,
         harmless,
+        transient,
         message: error instanceof Error ? error.message : String(error),
         target,
         waitMs,
       });
-      await delay(waitMs);
-    }
+     await delay(waitMs);
+   }
   }
   throw lastError;
 }
