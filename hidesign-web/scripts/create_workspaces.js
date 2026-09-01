@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   workspace_name      VARCHAR(255) NOT NULL,
   owner_username      VARCHAR(128) NOT NULL,
   owner_displayname   VARCHAR(128),
+  owner_email         VARCHAR(255),
   created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   PRIMARY KEY (workspace_id)

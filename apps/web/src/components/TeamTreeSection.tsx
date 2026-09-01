@@ -14,6 +14,7 @@ import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
 import { navigate } from '../router';
 import { Icon } from './Icon';
+import { Skeleton } from './Loading';
 import { useT } from '../i18n';
 import styles from './TeamTreeSection.module.css';
 
@@ -29,10 +30,10 @@ export interface TeamFolder {
  * Add entries here as needed during development.
  */
 const MOCK_FOLDERS_BY_TEAM_NAME: Record<string, TeamFolder[]> = {
-  '测试团队': [
-    { id: 'folder-design', name: '设计稿' },
-    { id: 'folder-prototype', name: '原型' },
-  ],
+  // '测试团队': [
+  //   { id: 'folder-design', name: '设计稿' },
+  //   { id: 'folder-prototype', name: '原型' },
+  // ],
 };
 
 
@@ -47,6 +48,9 @@ interface Props {
   activeTeamId?: string;
   /** The active folder id (from route), for highlight state. */
   activeFolderId?: string;
+  /** True while the workspace directory is still being fetched. Shows a
+   *  shimmer placeholder tree until the real team items arrive. */
+  loading?: boolean;
   /** Called when the user clicks "新建团队" in the footer. */
   onCreateTeam?: () => void;
 }
@@ -138,28 +142,56 @@ function TeamNode({ team, activeTeamId, activeFolderId }: TeamNodeProps) {
   );
 }
 
-export function TeamTreeSection({ workspaceItems, activeTeamId, activeFolderId, onCreateTeam }: Props) {
+/** Shimmer placeholder mirroring a team row's layout (chevron gap + folder
+ *  icon + name bar) while the directory is still loading. */
+function SkeletonRow() {
+  return (
+    <div className={styles.skeletonRow} aria-hidden>
+      <span className={styles.skeletonChevron} />
+      <Skeleton width={16} height={16} radius={4} />
+      <Skeleton width="55%" height={13} radius={6} />
+    </div>
+  );
+}
+
+export function TeamTreeSection({
+  workspaceItems,
+  activeTeamId,
+  activeFolderId,
+  onCreateTeam,
+  loading,
+}: Props) {
   const t = useT();
   // Only show team workspaces in the tree.
   const teamItems = workspaceItems.filter(
-    (item) => item.workspaceType === 'team'&&!item.isDefaultTeam
+    (item) => item.workspaceType === 'team' && !item.isDefaultTeam
   );
   const items = [...teamItems];
+  const showSkeleton = loading && items.length === 0;
 
-  if (items.length === 0) return null;
+  // No teams and not loading: the section has nothing to offer.
+  if (items.length === 0 && !showSkeleton) return null;
 
   return (
     <div className={styles.container} data-testid="team-tree-section">
-      <div className={styles.tree}>
-        {items.map((team) => (
-          <TeamNode
-            key={team.workspaceId}
-            team={team}
-            activeTeamId={activeTeamId}
-            activeFolderId={activeFolderId}
-          />
-        ))}
-      </div>
+      {showSkeleton ? (
+        <div className={styles.tree} role="status" aria-live="polite">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
+      ) : (
+        <div className={styles.tree}>
+          {items.map((team) => (
+            <TeamNode
+              key={team.workspaceId}
+              team={team}
+              activeTeamId={activeTeamId}
+              activeFolderId={activeFolderId}
+            />
+          ))}
+        </div>
+      )}
       <div className={styles.footer}>
         <button
           type="button"

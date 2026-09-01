@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeContentDisposition } from '../src/routes/hik_routes/uedro.js';
+import { normalizeContentDisposition } from '../src/routes/hik/_routes/uedro.js';
 
 // 「稿件.xlsx」的 GBK 字节序列：B8 E5 BC FE（稿件）+ 2E 78 6C 73 78（.xlsx）。
 // Node 的 HTTP 头解析器把头值按 latin1 解码，于是这串字节被错误展成 latin1

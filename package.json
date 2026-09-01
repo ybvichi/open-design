@@ -10,6 +10,7 @@
     "od": "./apps/daemon/bin/od.mjs"
   },
   "scripts": {
+    "dev:web": "cd hidesign-web&&npm run dev",
     "postinstall": "node ./scripts/postinstall.mjs",
     "bootstrap": "node ./scripts/postinstall.mjs",
     "tools-dev": "pnpm exec tools-dev",

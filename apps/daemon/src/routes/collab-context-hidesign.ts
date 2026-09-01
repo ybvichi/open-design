@@ -90,10 +90,6 @@ function buildMockData(dataDir?: string) {
   const username = user?.username ?? '';
   const displayName = user?.displayName ?? '';
 
-  // const seed = username || 'mock-personal-workspace';
-  // const personalWorkspaceId = generateDeterministicId(`${seed}-workspace-id`);
-  // const personalMemberId = generateDeterministicId(`${seed}-member-id`);
-  // const personalWorkspaceName = (displayName + '的地盘') || "ybvichi's workspace";
 
   const TEAM_WORKSPACE_ID = getDefaultTeamId();
   const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
@@ -105,15 +101,6 @@ function buildMockData(dataDir?: string) {
 
   const directory = {
     items: [
-      // {
-      //   workspaceId: personalWorkspaceId,
-      //   workspaceName: personalWorkspaceName,
-      //   workspaceType: 'personal' as const,
-      //   workspaceMemberId: personalMemberId,
-      //   role: 'owner' as const,
-      //   memberStatus: 'active' as const,
-      //   lifecycleState: 'active' as const,
-      // },
       {
         workspaceId: TEAM_WORKSPACE_ID,
         workspaceName: MOCK_TEAM_WORKSPACE_NAME,

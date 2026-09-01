@@ -1206,6 +1206,7 @@ export interface ArtifactHeaderClickProps {
     // indistinguishable in the funnel.
     | 'download_dropdown'
     | 'share_dropdown'
+    | 'review_dropdown'
     | 'settings';
   artifact_id?: string;
   artifact_kind?: TrackingArtifactKind;

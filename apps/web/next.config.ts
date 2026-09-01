@@ -194,10 +194,18 @@ const nextConfig: NextConfig = {
           // CORS gymnastics. SSE on /api/chat works through this rewrite
           // because Next.js's dev server streams responses unbuffered.
           return [
-            { source: '/api/:path*', destination: `${DAEMON_ORIGIN}/api/:path*` },
-            { source: '/artifacts/:path*', destination: `${DAEMON_ORIGIN}/artifacts/:path*` },
-            { source: '/frames/:path*', destination: `${DAEMON_ORIGIN}/frames/:path*` },
-          ];
+           { source: '/api/:path*', destination: `${DAEMON_ORIGIN}/api/:path*` },
+           { source: '/artifacts/:path*', destination: `${DAEMON_ORIGIN}/artifacts/:path*` },
+           { source: '/frames/:path*', destination: `${DAEMON_ORIGIN}/frames/:path*` },
+           // 羽点稿件预览页（/uedro/ux?id=… 等）走 daemon 根路径反向代理：daemon
+           // 注入本地 uedro 会话 cookie，浏览器侧始终同源，原站 SPA 的根相对资源
+          // 与 fetch 自然落回代理。详见 apps/daemon/src/routes/hik/_routes/uedro.ts。
+           { source: '/uedro/:path*', destination: `${DAEMON_ORIGIN}/uedro/:path*` },
+           { source: '/portal/:path*', destination: `${DAEMON_ORIGIN}/portal/:path*` },
+          // Hidesign-Web (HDW) API 代理：/api/hdw/webapi/v1/* → daemon → 上游
+          // (开发环境 localhost:7002，生产环境 pixso.hikvision.com.cn)。
+           { source: '/api/hdw/:path*', destination: `${DAEMON_ORIGIN}/api/hdw/:path*` },
+         ];
         },
         devIndicators: {
           position: 'bottom-right',

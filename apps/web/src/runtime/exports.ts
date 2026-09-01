@@ -68,7 +68,7 @@ function filenameFromContentDisposition(resp: Response): string | null {
   return plain && plain[1] ? plain[1] : null;
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   triggerHrefDownload(url, filename);
   // Revoke later — Safari sometimes hasn't finished reading the blob yet

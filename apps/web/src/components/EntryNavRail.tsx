@@ -52,6 +52,7 @@ import { SignOutConfirmDialog } from './SignOutConfirmDialog';
 import { notifyAmrLoginStatusChanged } from './amrLoginPolling';
 import { getStoredUserInfo } from '../auth/auth';
 import { Icon } from './Icon';
+import { Skeleton } from './Loading';
 import { GITHUB_STARS_FALLBACK_LABEL, formatStars, useGithubStars } from './useGithubStars';
 import { PlanWordmark, planBadgeTierForWorkspace } from './PlanWordmark';
 import { RemixIcon } from './RemixIcon';
@@ -1545,9 +1546,16 @@ export function EntryNavRail({
                         </button>
                       );
                     })}
-                    {workspaceDirectoryLoading && visibleWorkspaceItems.length === 0 ? (
-                      <div className="entry-nav-rail__menu-item is-muted" role="status">
-                        {t('common.loading')}
+                   {workspaceDirectoryLoading && visibleWorkspaceItems.length === 0 ? (
+                      <div className="entry-nav-rail__menu-skeleton" role="status" aria-live="polite">
+                        <div className="entry-nav-rail__menu-skeleton-row" aria-hidden>
+                          <Skeleton width={19} height={19} radius="50%" />
+                          <Skeleton width="55%" height={13} radius={6} />
+                        </div>
+                        <div className="entry-nav-rail__menu-skeleton-row" aria-hidden>
+                          <Skeleton width={19} height={19} radius="50%" />
+                          <Skeleton width="40%" height={13} radius={6} />
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1713,7 +1721,7 @@ export function EntryNavRail({
                 <Icon name="grid" size={16} />
               </NavButton>
             ) : null}
-            <NavButton
+            {/*<NavButton
               active={view === 'design-systems'}
               ariaLabel={t('entry.navDesignSystems')}
               label={t('entry.navDesignSystems')}
@@ -1730,7 +1738,7 @@ export function EntryNavRail({
               testId="entry-nav-plugins"
             >
               <Icon name="puzzle" size={16} />
-            </NavButton>
+            </NavButton>*/}
             {/* Product decision (2026-07-20): 成员 and 数据大盘 leave the rail
                 entirely — both surfaces live in B's console and the rail should
                 not advertise them. Workspace 设置 stays, and still links OUT to
@@ -1825,12 +1833,13 @@ export function EntryNavRail({
           </>
         )}
        <PersonalFuncSection />
-       <TeamTreeSection
-         workspaceItems={visibleWorkspaceItems}
-         activeTeamId={activeTeamId}
-         activeFolderId={activeFolderId}
-          onCreateTeam={() => setNewTeamOpen(true)}
-       />
+      <TeamTreeSection
+        workspaceItems={visibleWorkspaceItems}
+        activeTeamId={activeTeamId}
+        activeFolderId={activeFolderId}
+        loading={workspaceDirectoryLoading}
+         onCreateTeam={() => setNewTeamOpen(true)}
+      />
      </div>
       {/* The footer always has the social row to show now, so it no longer
           collapses to nothing. `footerUpdaterSlot` is only ever set in the
@@ -1879,6 +1888,9 @@ export function EntryNavRail({
       <NewTeamModal
         open={newTeamOpen}
         onClose={() => setNewTeamOpen(false)}
+        onCreated={() => {
+          // TODO: refresh workspace directory / team list after creation.
+        }}
       />
      {/* Top-right floating cluster: campaign badge (slot) + credits pill +
           the account module, portaled to document.body so all ride the

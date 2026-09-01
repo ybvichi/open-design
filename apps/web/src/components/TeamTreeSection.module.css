@@ -15,6 +15,21 @@
   gap: 4px;
 }
 
+/* Shimmer placeholder rows shown while the workspace directory loads. */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 5px 0 0;
+}
+
+/* Reserves the expand-button column so skeleton rows align with real ones. */
+.skeletonChevron {
+  width: 24px;
+  flex-shrink: 0;
+}
+
 .teamNode {
 }
 

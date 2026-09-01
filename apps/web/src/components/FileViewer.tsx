@@ -233,8 +233,10 @@ import { projectIsSharedWithWorkspace } from '../collab/project-shared-status';
 import { HandoffButton } from './HandoffButton';
 import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
-import {
-  PreviewDrawOverlay,
+ import { ReviewAddModal } from './ReviewAddModal';
+ import { exportProjectAsAxureZip } from '../runtime/axure-export';
+ import {
+   PreviewDrawOverlay,
   ANNOTATION_EVENT,
   type AnnotationEventDetail,
   type DrawToolbarElement,
@@ -7742,6 +7744,7 @@ function HtmlViewer({
       | 'present_dropdown'
       | 'download_dropdown'
       | 'share_dropdown'
+      | 'review_dropdown'
       | 'settings',
   ) => {
     if (!workspaceActive) return;
@@ -7886,6 +7889,10 @@ function HtmlViewer({
   // preselect the tab and open this one popover.
   const [deployMenuOpen, setDeployMenuOpen] = useState(false);
   const [unifiedActionTab, setUnifiedActionTab] = useState<'share' | 'export'>('share');
+// 评审下拉与历史评审 Modal。下拉与「分享」「导出」共用 chrome-actions；
+const [reviewMenuOpen, setReviewMenuOpen] = useState(false);
+// 发起评审 Modal：弹出 ReviewAddModal。
+const [reviewAddModalOpen, setReviewAddModalOpen] = useState(false);
   const [shareAccess, setShareAccess] = useState<'private' | 'workspace'>('private');
   const [shareAccessMenuOpen, setShareAccessMenuOpen] = useState(false);
   const [shareAccessConfirm, setShareAccessConfirm] = useState<'private' | 'workspace' | null>(null);
@@ -9401,8 +9408,9 @@ function HtmlViewer({
   const [speakerNotesStatus, setSpeakerNotesStatus] = useState<'saved' | 'error' | null>(null);
   const speakerNotesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const boardPreviewScaleOptions = localCommentSideDockActive ? { canvasPadding: 0 } : undefined;
-  const shareRef = useRef<HTMLDivElement | null>(null);
-  const [chromeActionsHost, setChromeActionsHost] = useState<HTMLElement | null>(
+ const shareRef = useRef<HTMLDivElement | null>(null);
+  const reviewMenuRef = useRef<HTMLDivElement | null>(null);
+ const [chromeActionsHost, setChromeActionsHost] = useState<HTMLElement | null>(
     () => (typeof document === 'undefined' ? null : resolveChromeActionsHost()),
   );
   useLayoutEffect(() => {
@@ -13717,15 +13725,18 @@ function HtmlViewer({
   }, [agentToolsOpen, workspaceActive]);
 
   useEffect(() => {
-    if (!workspaceActive || !deployMenuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!shareRef.current) return;
-      if (shareRef.current.contains(e.target as Node)) return;
-      setDeployMenuOpen(false);
-    };
+   if (!workspaceActive || (!deployMenuOpen && !reviewMenuOpen)) return;
+   const onDocClick = (e: MouseEvent) => {
+     if (!shareRef.current) return;
+     if (shareRef.current.contains(e.target as Node)) return;
+      if (reviewMenuRef.current?.contains(e.target as Node)) return;
+     setDeployMenuOpen(false);
+     setReviewMenuOpen(false);
+   };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setDeployMenuOpen(false);
+      setReviewMenuOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
@@ -13733,7 +13744,7 @@ function HtmlViewer({
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [deployMenuOpen, workspaceActive]);
+  }, [deployMenuOpen, reviewMenuOpen, workspaceActive]);
 
   useEffect(() => {
     if (!workspaceActive || !inTabPresent) return;
@@ -14751,17 +14762,37 @@ function HtmlViewer({
     }), context);
   }
 
-  function triggerHtmlExport(context?: HtmlVersionExportContext) {
-    fireShareExport('html', () => exportProjectAsHtml({
-      projectId,
-      filePath: file.name,
-      fallbackTitle: context?.title ?? exportTitle,
-      workspaceContext,
-      ...(context?.versionId ? { versionId: context.versionId } : {}),
-    }), context);
+ function triggerHtmlExport(context?: HtmlVersionExportContext) {
+   fireShareExport('html', () => exportProjectAsHtml({
+     projectId,
+     filePath: file.name,
+     fallbackTitle: context?.title ?? exportTitle,
+     workspaceContext,
+     ...(context?.versionId ? { versionId: context.versionId } : {}),
+   }), context);
+ }
+
+  // 导出 Axure RP 风格交互稿压缩包：拉取工程全部文件，生成站点地图导航。
+  function triggerAxureExport() {
+    setDeployMenuOpen(false);
+    setExportToast({ message: '正在生成 Axure 交互稿...', tone: 'loading' });
+    exportProjectAsAxureZip({ projectId, title: exportTitle, projectName })
+      .then((result) => {
+        if (result.ok) {
+          setExportToast({ message: `已导出 ${result.pageCount} 个文件`, tone: 'success' });
+        } else {
+          setExportToast({ message: result.error, tone: 'error' });
+        }
+      })
+      .catch((err: unknown) => {
+        setExportToast({
+          message: err instanceof Error && err.message ? err.message : '导出 Axure 交互稿失败',
+          tone: 'error',
+        });
+      });
   }
 
-  useEffect(() => {
+ useEffect(() => {
     const nudgeKey = `${projectId}\n${file.name}`;
     if (!canShare || exportReadyNudgeSeenRef.current.has(nudgeKey)) return;
     exportReadyNudgeSeenRef.current.add(nudgeKey);
@@ -14849,6 +14880,23 @@ function HtmlViewer({
   };
   const openShareMenu = () => openUnifiedActionMenu('share', 'share_dropdown');
   const openDownloadMenu = () => openUnifiedActionMenu('export', 'download_dropdown');
+  const openReviewMenu = () => {
+    fireArtifactHeaderClick('review_dropdown');
+    setExportReadyNudge(false);
+    markExportReadyNudgeSeen(projectId, file.name);
+    setDeployMenuOpen(false);
+    setReviewMenuOpen((v) => !v);
+ };
+// 打开历史评审页面：走 daemon 反向代理（/uedro → uedro.hikvision.com.cn），新窗口打开羽点首页。
+async function openReviewListModal() {
+  setReviewMenuOpen(false);
+  window.open('http://127.0.0.1:9529/uedro/home', '_blank', 'noopener');
+}
+// 打开发起评审 Modal。表单数据由独立组件 ReviewAddModal 自行拉取并提交。
+  function openReviewAddModal() {
+    setReviewMenuOpen(false);
+    setReviewAddModalOpen(true);
+  }
   const captureExportImageSnapshot = useCallback(async (
     options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
   ) => {
@@ -16437,6 +16485,46 @@ function HtmlViewer({
                   the handoff split button next door must count as "outside" so
                   opening it closes this popover (and vice versa via the
                   handoff button's own dismiss listener). */}
+             <div className="share-menu chrome-share-menu">
+                <div ref={reviewMenuRef} className="share-menu-inner">
+               <button
+                 type="button"
+                 className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
+                 aria-haspopup="menu"
+                 aria-expanded={reviewMenuOpen}
+                 disabled={exportToast ? true : undefined}
+                 onClick={openReviewMenu}
+               >
+                 <span>评审</span>
+               </button>
+               {reviewMenuOpen ? (
+                 <div className="share-menu-popover" role="menu">
+                   <button
+                     type="button"
+                     className="share-menu-item"
+                     role="menuitem"
+                     onClick={() => {
+                       openReviewAddModal();
+                     }}
+                   >
+                     <span className="share-menu-icon"><RemixIcon name="chat-new-line" size={15} /></span>
+                     <span className="share-menu-text"><span>发起评审</span></span>
+                   </button>
+                   <button
+                     type="button"
+                     className="share-menu-item"
+                     role="menuitem"
+                     onClick={() => {
+                       void openReviewListModal();
+                     }}
+                   >
+                     <span className="share-menu-icon"><RemixIcon name="history-line" size={15} /></span>
+                     <span className="share-menu-text"><span>历史评审</span></span>
+                   </button>
+                 </div>
+               ) : null}
+              </div>
+             </div>
               <div className="share-menu chrome-share-menu chrome-share-menu--unified" ref={shareRef}>
                 {/* Share and Export are separate header intents again (the
                     0.18.0 unified tabs buried Export one level deep and export
@@ -16877,18 +16965,32 @@ function HtmlViewer({
                       }));
                     }}
                   >
-                    <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
-                    <span>{t('fileViewer.exportZip')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="share-menu-item"
-                    role="menuitem"
-                    disabled={viewerOnly}
-                    title={viewerOnly ? viewerOnlyDisabledTitle : undefined}
-                    onClick={() => {
-                      setDeployMenuOpen(false);
-                      fireShareExport('html', () => exportProjectAsHtml({
+                   <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
+                   <span>{t('fileViewer.exportZip')}</span>
+                 </button>
+                 <button
+                   type="button"
+                   className="share-menu-item"
+                   role="menuitem"
+                   disabled={viewerOnly}
+                   title={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+                   onClick={() => {
+                     setDeployMenuOpen(false);
+                     void triggerAxureExport();
+                   }}
+                 >
+                   <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
+                   <span>导出 Axure 压缩包</span>
+                 </button>
+                 <button
+                   type="button"
+                   className="share-menu-item"
+                   role="menuitem"
+                   disabled={viewerOnly}
+                   title={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+                   onClick={() => {
+                     setDeployMenuOpen(false);
+                     fireShareExport('html', () => exportProjectAsHtml({
                         projectId,
                         filePath: file.name,
                         fallbackTitle: exportTitle,
@@ -18188,8 +18290,9 @@ function HtmlViewer({
           onDismiss={() => setShareGuideToast(null)}
         />,
         document.body,
-      ) : null}
-    </div>
+     ) : null}
+     <ReviewAddModal open={reviewAddModalOpen} onClose={() => setReviewAddModalOpen(false)} projectId={projectId} />
+   </div>
   );
 }
 

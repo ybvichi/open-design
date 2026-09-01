@@ -56,6 +56,8 @@ const residualSkippedDirectories = new Set([
   "dist",
   "node_modules",
   "out",
+  "hidesign-web",
+  "ybvichi.github.io"
 ]);
 
 const residualAllowedExactPaths = new Set([
@@ -81,8 +83,14 @@ const residualAllowedExactPaths = new Set([
   "apps/daemon/bin/od.mjs",
   "apps/packaged/esbuild.config.mjs",
   // Browser service workers must be served as JavaScript files.
-  "apps/web/public/od-notifications-sw.js",
-  // Vendored dom-to-pptx browser bundle used by the packaged desktop renderer
+ "apps/web/public/od-notifications-sw.js",
+  // Vendored Axure RP HTML prototype runtime (jQuery, axure player scripts,
+  // plugins, CSS, images). Shipped as browser-loadable static assets under
+  // apps/web/public/axure-prototype/; fetched at export time by
+  // axure-export.ts to assemble a standard Axure RP ZIP. Not project-owned
+  // code — must not be retypecast to TypeScript.
+  "apps/web/public/axure-prototype/",
+ // Vendored dom-to-pptx browser bundle used by the packaged desktop renderer
   // for editable PPTX export. It is loaded into the off-screen Chromium page as
   // an upstream browser asset, not compiled as project-owned TypeScript.
   "apps/desktop/vendor/dom-to-pptx/dom-to-pptx.bundle.js",

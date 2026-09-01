@@ -147,6 +147,8 @@ import { CommunityView } from './CommunityView';
 import { SquareView } from './SquareView';
 import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
 import { TeamSpaceView } from './TeamSpaceView';
+import { PersonalAllView } from './PersonalAllView';
+import { SharedWithMeView } from './SharedWithMeView';
 import {
   notifyTeamProjectsChanged,
   notifyWorkspaceBillingRefresh,
@@ -2011,14 +2013,10 @@ export function EntryShell({
             <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
           ) : null}
           {view === 'personal-all' ? (
-            <div className="entry-section">
-              <h1 className="entry-section__title">{t('personalFunc.all')}</h1>
-            </div>
+            <PersonalAllView />
           ) : null}
           {view === 'shared-with-me' ? (
-            <div className="entry-section">
-              <h1 className="entry-section__title">{t('personalFunc.shared')}</h1>
-            </div>
+            <SharedWithMeView />
           ) : null}
         </div>
         </main>

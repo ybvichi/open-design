@@ -76,10 +76,21 @@ function getTeamMemberId(teamId, username) {
   return generateDeterministicId(`${teamId}_${username}`);
 }
 
+/**
+ * Create a new folder ID.
+ * When `seed` is provided, generates a deterministic ID from it so the same
+ * seed always yields the same folder ID. When omitted, falls back to a random
+ * value + timestamp as the seed.
+ */
+function createFolderId(seed) {
+  return generateDeterministicId(seed ?? generateShortId() + Date.now().toString(36));
+}
+
 module.exports = {
   DEFAULT_SHORT_ID_LENGTH,
   generateShortId,
   generateDeterministicId,
   createTeamId,
   getTeamMemberId,
+  createFolderId,
 };

@@ -2521,6 +2521,50 @@ export async function fetchProjectFileText(
   }
 }
 
+export async function fetchProjectFileBase64(
+  projectId: string,
+  name: string,
+  options?: { cache?: RequestCache; cacheBustKey?: string | number },
+): Promise<string | null> {
+  const url = projectFileUrl(projectId, name);
+  const cacheBustKey = options?.cacheBustKey;
+  const requestUrl =
+    cacheBustKey == null
+      ? url
+      : `${url}${url.includes('?') ? '&' : '?'}cacheBust=${encodeURIComponent(String(cacheBustKey))}`;
+  const init: RequestInit = {};
+  if (options?.cache) init.cache = options.cache;
+
+  try {
+    const resp = await fetch(requestUrl, init);
+    if (!resp.ok) {
+      console.warn('[fetchProjectFileBase64] failed:', {
+        name,
+        projectId,
+        status: resp.status,
+        statusText: resp.statusText,
+        url: requestUrl,
+      });
+      return null;
+    }
+    const blob = await resp.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob as base64'));
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn('[fetchProjectFileBase64] failed:', {
+      error: err,
+      name,
+      projectId,
+      url: requestUrl,
+    });
+    return null;
+  }
+}
+
 export async function fetchProjectFileTextPreview(
   projectId: string,
   name: string,

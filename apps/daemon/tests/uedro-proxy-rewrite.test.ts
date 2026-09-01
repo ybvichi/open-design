@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { rewriteProxyText } from '../src/routes/hik_routes/uedro.js';
+import { rewriteProxyText } from '../src/routes/hik/_routes/uedro.js';
 
 // 羽点稿件预览页经 daemon 根路径反向代理后，响应体里的绝对域名必须改写成根相对，
 // 否则浏览器会绕过代理直连原站（跨源 + 无 cookie → 401）。这里覆盖几种现场形态。

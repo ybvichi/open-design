@@ -42,6 +42,7 @@ class TeamController extends Controller {
       workspace_name: workspaceName,
       owner_username: ownerUsername,
       owner_displayname: ownerDisplayname,
+      owner_email: ownerEmail,
       members = [],
     } = ctx.request.body;
 
@@ -61,6 +62,7 @@ class TeamController extends Controller {
           workspace_name: workspaceName,
           owner_username: ownerUsername,
           owner_displayname: ownerDisplayname || null,
+          owner_email: ownerEmail || null,
           created_at: now,
           updated_at: now,
         });
@@ -71,7 +73,7 @@ class TeamController extends Controller {
           workspace_member_id: getTeamMemberId(workspaceId, ownerUsername),
           username: ownerUsername,
           displayname: ownerDisplayname || null,
-          email: null,
+          email: ownerEmail || null,
           role: 'owner',
           created_at: now,
           updated_at: now,

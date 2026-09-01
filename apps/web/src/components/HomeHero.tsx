@@ -2029,7 +2029,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             ) : null}
           </div>
           <div className="home-hero__foot-right">
-            <ComposerModePicker
+            {/* <ComposerModePicker
               mode={sessionMode}
               onModeChange={(next) => {
                 if (next !== sessionMode) {
@@ -2043,7 +2043,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 }
                 onSessionModeChange?.(next);
               }}
-            />
+            /> */}
             {executionSwitcher ? (
               <div className="home-hero__execution-switcher">
                 {executionSwitcher}

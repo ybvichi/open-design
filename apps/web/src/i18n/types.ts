@@ -92,6 +92,8 @@ export interface Dict {
   'workspaceInvite.errorNoSession': string;
   'workspaceInvite.errorNoWorkspace': string;
   'workspaceInvite.errorUnreachable': string;
+  // PersonPicker
+  'personPicker.placeholder': string;
   // Common
   'common.cancel': string;
   'chat.selectFromLibrary': string;
@@ -1175,10 +1177,25 @@ export interface Dict {
   'newTeam.emailDuplicate': string;
   'newTeam.removeMember': string;
   'newTeam.ownerHint': string;
- 'newTeam.cancel': string;
- 'newTeam.create': string;
- 'personalFunc.all': string;
- 'personalFunc.shared': string;
+  'newTeam.cancel': string;
+  'newTeam.create': string;
+  'newTeam.creating': string;
+  'newTeam.createError': string;
+'personalFunc.all': string;
+'personalFunc.shared': string;
+  // Personal scope views ("个人所有" / "分享给我的") — header subtitle,
+  //  type tabs, and the empty-state note shown while no data is wired yet.
+  'personalScope.subtitlePersonal': string;
+  'personalScope.subtitleShared': string;
+  'personalScope.tabAll': string;
+  'personalScope.tabProjects': string;
+  'personalScope.tabFolders': string;
+  'personalScope.tabResources': string;
+  'personalScope.tabSkill': string;
+  'personalScope.tabMcp': string;
+  'personalScope.tabExperts': string;
+  'personalScope.emptyNotePersonal': string;
+  'personalScope.emptyNoteShared': string;
   'teamSpace.defaultTitle': string;
   'teamSpace.subtitle': string;
   'teamSpace.tabProjects': string;

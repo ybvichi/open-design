@@ -8522,6 +8522,22 @@ button.entry-nav-rail__menu-credits-row:active:not(:disabled) {
 }
 
 
+/* Shimmer placeholder rows for the workspace switcher menu while the
+   directory is still loading. Mirrors a menu item: avatar circle + name. */
+.entry-nav-rail__menu-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+.entry-nav-rail__menu-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 9px;
+}
+
 /* The invite rows scroll within a capped region so adding many members can't
    grow the dialog past the viewport; the header labels and submit stay put. */
 .entry-invite__rows {

@@ -36,7 +36,7 @@ vi.mock('electron', () => ({
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { net, protocol } from 'electron';
-import { handleOdRequest, registerOdProtocol } from '../src/protocol.js';
+import { createLoopbackBypassFetch, handleOdRequest, isLoopbackHost, registerOdProtocol } from '../src/protocol.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -344,7 +344,9 @@ describe('od:// protocol transient retry', () => {
     let calls = 0;
     const fetchImpl: typeof fetch = async () => {
       calls += 1;
-      throw transientSocketError();
+      // A real transport error — not the harmless setTypeOfService
+      // shape — must never be retried for a non-idempotent method.
+      throw new Error('socket hang up');
     };
 
     const response = await handleOdRequest(
@@ -356,6 +358,78 @@ describe('od:// protocol transient retry', () => {
 
     expect(response.status).toBe(502);
     expect(calls).toBe(1);
+  });
+
+  // The #895 login regression on the non-idempotent path: a harmless
+  // `setTypeOfService EINVAL` throws during socket setup, before any
+  // request bytes are written, so retrying POST /api/auth/login is
+  // side-effect-free. Without this, a single transient EINVAL on a
+  // login POST surfaces as OD_PROTOCOL_PROXY_FAILED on VPN/macOS
+  // clients while GET flows absorbed it via the idempotent retry.
+  it('retries a non-idempotent POST whose first attempt throws a harmless EINVAL and returns the eventual success', async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      if (calls === 1) throw transientSocketError();
+      return new Response('ok', { status: 200 });
+    };
+
+    const response = await handleOdRequest(
+      new Request('od://app/api/auth/login', { method: 'POST' }),
+      'http://127.0.0.1:17579/',
+      fetchImpl,
+      noDelay,
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toBe(2);
+  });
+
+  it('retries a non-idempotent POST up to the budget on harmless EINVAL before returning 502', async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      throw transientSocketError();
+    };
+
+    const response = await handleOdRequest(
+      new Request('od://app/api/auth/login', { method: 'POST' }),
+      'http://127.0.0.1:17579/',
+      fetchImpl,
+      noDelay,
+    );
+
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as { error: string; code?: string };
+    expect(body.error).toBe('OD_PROTOCOL_PROXY_FAILED');
+    expect(body.code).toBe('EINVAL');
+    expect(calls).toBe(3);
+  });
+
+  it('re-sends the buffered body when retrying a POST on harmless EINVAL', async () => {
+    const sentBodies: string[] = [];
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (input) => {
+      calls += 1;
+      if (calls === 1) throw transientSocketError();
+      const req = input as Request;
+      sentBodies.push(await req.clone().text());
+      return new Response('ok', { status: 200 });
+    };
+
+    const response = await handleOdRequest(
+      new Request('od://app/api/auth/login', {
+        method: 'POST',
+        body: '{"user":"a","pass":"b"}',
+      }),
+      'http://127.0.0.1:17579/',
+      fetchImpl,
+      noDelay,
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toBe(2);
+    expect(sentBodies).toEqual(['{"user":"a","pass":"b"}']);
   });
 
   it('does not retry when the upstream resolves with an HTTP 5xx Response', async () => {
@@ -392,6 +466,51 @@ describe('od:// protocol transient retry', () => {
     });
 
     expect(waits).toEqual([150, 300]);
+  });
+});
+
+// The packaged `od://` proxy only ever targets the local web sidecar
+// (127.0.0.1:9529). Clients with a system / env HTTP proxy that lacks a
+// loopback bypass route the renderer-to-sidecar hop through an external
+// proxy that cannot reach 127.0.0.1:9529 — the request throws and
+// surfaces as OD_PROTOCOL_PROXY_FAILED on login. The default fetchImpl
+// routes loopback targets through a direct undici Agent (no proxy) so
+// the hop can never be intercepted, regardless of HTTP_PROXY /
+// NODE_USE_ENV_PROXY / Electron session proxy settings.
+describe('od:// protocol loopback proxy bypass', () => {
+  it('identifies loopback hosts', () => {
+    expect(isLoopbackHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackHost('localhost')).toBe(true);
+    expect(isLoopbackHost('::1')).toBe(true);
+    expect(isLoopbackHost('[::1]')).toBe(true);
+    expect(isLoopbackHost('0.0.0.0')).toBe(true);
+    expect(isLoopbackHost('192.168.1.5')).toBe(false);
+    expect(isLoopbackHost('example.com')).toBe(false);
+  });
+
+  it('passes a dispatcher for loopback targets and none for external hosts', async () => {
+    const seen: { url: string; dispatcher: unknown }[] = [];
+    const baseFetch = async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const req = input as Request;
+      seen.push({
+        url: req.url,
+        dispatcher: (init as { dispatcher?: unknown } | undefined)?.dispatcher,
+      });
+      return new Response('ok', { status: 200 });
+    };
+    const odFetch = createLoopbackBypassFetch(baseFetch);
+
+    await odFetch(new Request('http://127.0.0.1:9529/api/auth/login'));
+    await odFetch(new Request('http://example.com/api/x'));
+
+    // Loopback hop is issued with a direct undici dispatcher so no
+    // client proxy can intercept it.
+    expect(seen[0]!.dispatcher).toBeTruthy();
+    // External hosts keep plain fetch semantics (no dispatcher override).
+    expect(seen[1]!.dispatcher).toBeUndefined();
   });
 });
 

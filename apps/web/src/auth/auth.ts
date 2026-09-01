@@ -175,12 +175,8 @@ export async function login(username: string, password: string, remember: boolea
   } catch {
     return { ok: false, error: 'unavailable' };
   }
-  let { displayName, departmentDetail, work_post } = payload?.userInfo;
-  syncUsernameToStorage(sessionUsername, {
-    displayName,
-    departmentDetail,
-    work_post
-  });
+  // 保留完整的 userInfo（含 email 等字段），供 NewTeamModal 等组件使用。
+  syncUsernameToStorage(sessionUsername, payload?.userInfo ?? {});
   return { ok: true, username: sessionUsername, userInfo: payload?.userInfo };
 }
 
