@@ -28,6 +28,7 @@ module.exports = app => {
   router.del('/hdw/webapi/v1/folder/:folder_id', controller.api.folder.del);
   router.post('/hdw/webapi/v1/folder/rename', controller.api.folder.rename);
   router.get('/hdw/webapi/v1/folder/list', controller.api.folder.list);
+  router.get('/hdw/webapi/v1/folder/detail', controller.api.folder.detail);
   // api:folder/project // 文件夹-项目关联管理
   router.post('/hdw/webapi/v1/folder/project/add', controller.api.folder.addProject);
   router.post('/hdw/webapi/v1/folder/project/remove', controller.api.folder.removeProject);

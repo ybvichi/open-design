@@ -53,6 +53,8 @@ interface Props {
   workspaceContext: WorkspaceCollabContext | null;
   /** Team ID from the route — takes priority over workspaceContext.workspaceId. */
   teamId?: string;
+  /** Team name resolved from the route's teamId via the workspace directory. */
+  teamName?: string;
   canAssignRoles?: boolean;
   onSubmit?: () => void;
 }
@@ -92,6 +94,7 @@ export function InviteDialog({
   onClose,
   workspaceContext,
   teamId,
+  teamName,
   canAssignRoles = true,
   onSubmit,
 }: Props) {
@@ -264,7 +267,7 @@ export function InviteDialog({
         <div className="entry-invite__form">
           <h2 className="entry-invite__title">{t('workspaceInvite.title')}</h2>
           <p className="entry-invite__teamsize">
-            受邀成员将获得「{workspaceContext?.teamName || workspaceContext?.workspaceName || ''}」下项目与 Skills 的访问权限。
+            受邀成员将获得「{teamName || workspaceContext?.teamName || workspaceContext?.workspaceName || ''}」下项目与 Skills 的访问权限。
           </p>
 
           <label className="entry-invite__label">{t('workspaceInvite.personLabel')}</label>

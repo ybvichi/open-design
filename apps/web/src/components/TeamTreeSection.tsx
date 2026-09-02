@@ -206,15 +206,17 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
             />
           </div>
         ) : (
-          <button
-            type="button"
-            className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}
-            onClick={handleTeamClick}
-            onDoubleClick={canRename ? startEdit : undefined}
-            title={team.workspaceName}
-          >
-            <Icon name="folder" size={16} className={styles.teamIcon} />
-            <span className={styles.teamName}>{team.workspaceName}</span>
+          <>
+            <button
+              type="button"
+              className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}
+              onClick={handleTeamClick}
+              onDoubleClick={canRename ? startEdit : undefined}
+              title={team.workspaceName}
+            >
+              <Icon name="folder" size={16} className={styles.teamIcon} />
+              <span className={styles.teamName}>{team.workspaceName}</span>
+            </button>
             <span className={styles.actions}>
               {canDelete ? (
                 <button
@@ -230,7 +232,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
                 <Icon name="more-horizontal" size={14} className={styles.actionIcon} />
               )}
             </span>
-          </button>
+          </>
         )}
       </div>
       {expanded && folders.length > 0 ? (

@@ -1723,7 +1723,7 @@ export function EntryNavRail({
                 <Icon name="grid" size={16} />
               </NavButton>
             ) : null}
-            {/*<NavButton
+            <NavButton
               active={view === 'design-systems'}
               ariaLabel={t('entry.navDesignSystems')}
               label={t('entry.navDesignSystems')}
@@ -1740,7 +1740,7 @@ export function EntryNavRail({
               testId="entry-nav-plugins"
             >
               <Icon name="puzzle" size={16} />
-            </NavButton>*/}
+            </NavButton>
             {/* Product decision (2026-07-20): 成员 and 数据大盘 leave the rail
                 entirely — both surfaces live in B's console and the rail should
                 not advertise them. Workspace 设置 stays, and still links OUT to
@@ -1849,6 +1849,9 @@ export function EntryNavRail({
                 : item,
             ),
           );
+          window.dispatchEvent(
+            new CustomEvent('hdw:team-renamed', { detail: { teamId, newName } }),
+          );
         }}
         onDeleteTeam={(teamId) => {
           setWorkspaceItems((prev) =>
@@ -1894,6 +1897,7 @@ export function EntryNavRail({
         onClose={() => setInviteOpen(false)}
         workspaceContext={context}
         teamId={activeTeamId}
+        teamName={identityWorkspaceItems.find((item) => item.workspaceId === activeTeamId)?.workspaceName}
         canAssignRoles={canInviteMembers}
      />
       <NewTeamModal

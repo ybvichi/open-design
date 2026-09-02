@@ -1,7 +1,6 @@
 'use strict';
 
 const { createKnex } = require('../../utils/knex.js');
-const { createFolderId } = require('../../utils/ids.js');
 
 const Controller = require('egg').Controller;
 
@@ -65,27 +64,25 @@ class FolderController extends Controller {
       }
       // 若指定了父文件夹,校验其存在且属于同一团队
       if (folderPid) {
-        const parent = await k('workspace_folders').where({ folder_id: folderPid, workspace_id: workspaceId }).first();
+        const parent = await k('folders').where({ folder_id: folderPid, workspace_id: workspaceId }).first();
         if (!parent) {
           ctx.body = { code: -1, msg: 'FAIL', error: '父文件夹不存在或不属于该团队' };
           return;
         }
       }
 
-      const folderId = createFolderId();
       const now = new Date();
-      await k('workspace_folders').insert({
-        folder_id: folderId,
+      const [inserted] = await k('folders').insert({
         folder_pid: folderPid,
         workspace_id: workspaceId,
         folder_name: folderName,
         created_at: now,
-      });
+      }, ['folder_id', 'folder_pid', 'workspace_id', 'folder_name']);
 
       ctx.body = {
         code: 0,
         msg: 'SUCCESS',
-        data: { folder_id: folderId, folder_pid: folderPid, workspace_id: workspaceId, folder_name: folderName },
+        data: inserted,
       };
     } catch (err) {
       ctx.logger.error('Folder add error:', err);
@@ -107,7 +104,7 @@ class FolderController extends Controller {
 
     try {
       const k = this.getKnex();
-      const folder = await k('workspace_folders').where({ folder_id: folderId }).first();
+      const folder = await k('folders').where({ folder_id: folderId }).first();
       if (!folder) {
         ctx.body = { code: -1, msg: 'FAIL', error: '文件夹不存在' };
         return;
@@ -121,7 +118,7 @@ class FolderController extends Controller {
         }
       }
 
-      await k('workspace_folders').where({ folder_id: folderId }).del();
+      await k('folders').where({ folder_id: folderId }).del();
       ctx.body = { code: 0, msg: 'SUCCESS', data: { deleted: true } };
     } catch (err) {
       ctx.logger.error('Folder delete error:', err);
@@ -142,7 +139,7 @@ class FolderController extends Controller {
 
     try {
       const k = this.getKnex();
-      const folder = await k('workspace_folders').where({ folder_id: folderId }).first();
+      const folder = await k('folders').where({ folder_id: folderId }).first();
       if (!folder) {
         ctx.body = { code: -1, msg: 'FAIL', error: '文件夹不存在' };
         return;
@@ -155,7 +152,7 @@ class FolderController extends Controller {
         }
       }
 
-      await k('workspace_folders').where({ folder_id: folderId }).update({ folder_name: folderName });
+      await k('folders').where({ folder_id: folderId }).update({ folder_name: folderName });
       ctx.body = { code: 0, msg: 'SUCCESS', data: { renamed: true } };
     } catch (err) {
       ctx.logger.error('Folder rename error:', err);
@@ -176,14 +173,61 @@ class FolderController extends Controller {
 
     try {
       const k = this.getKnex();
-      const folders = await k('workspace_folders')
+      const query = k('folders')
         .where({ workspace_id: workspaceId })
-        .select('folder_id', 'folder_pid', 'workspace_id', 'folder_name', 'created_at')
+        .select(
+          'folder_id', 'folder_pid', 'workspace_id', 'folder_name', 'created_at',
+          k.raw('(SELECT COUNT(*) FROM folders sub WHERE sub.folder_pid = folders.folder_id) AS subfolder_count'),
+          k.raw('(SELECT COUNT(*) FROM folder_projects fp WHERE fp.folder_id = folders.folder_id) AS project_count'),
+          k.raw("(SELECT json_agg(sub.folder_name) FROM (SELECT folder_name FROM folders AS inner_f WHERE inner_f.folder_pid = folders.folder_id ORDER BY inner_f.created_at ASC LIMIT 4) sub) AS subfolder_preview"),
+        )
         .orderBy('created_at', 'asc');
+
+      // folder_pid 为空值（null/undefined/空字符串）时查根级文件夹，
+      // 否则查指定父文件夹下的子文件夹
+      const { folder_pid: folderPid } = ctx.query;
+      if (!folderPid) {
+        query.whereNull('folder_pid');
+      } else {
+        query.where({ folder_pid: folderPid });
+      }
+
+      const folders = await query;
 
       ctx.body = { code: 0, msg: 'SUCCESS', data: { folders } };
     } catch (err) {
       ctx.logger.error('Folder list error:', err);
+      ctx.body = { code: -1, msg: 'FAIL', error: err.message };
+    }
+  }
+
+
+  // 查询单个文件夹详情(含 folder_pid, 用于面包屑路径)
+  // params: folder_id
+  async detail() {
+    const { ctx } = this;
+    const { folder_id: folderId } = ctx.query;
+
+    if (!folderId) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id' };
+      return;
+    }
+
+    try {
+      const k = this.getKnex();
+      const folder = await k('folders')
+        .where({ folder_id: folderId })
+        .select('folder_id', 'folder_pid', 'workspace_id', 'folder_name', 'created_at')
+        .first();
+
+      if (!folder) {
+        ctx.body = { code: -1, msg: 'FAIL', error: '文件夹不存在' };
+        return;
+      }
+
+      ctx.body = { code: 0, msg: 'SUCCESS', data: folder };
+    } catch (err) {
+      ctx.logger.error('Folder detail error:', err);
       ctx.body = { code: -1, msg: 'FAIL', error: err.message };
     }
   }
@@ -207,7 +251,7 @@ class FolderController extends Controller {
     try {
       const k = this.getKnex();
       // 校验文件夹存在且属于该团队
-      const folder = await k('workspace_folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
+      const folder = await k('folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
       if (!folder) {
         ctx.body = { code: -1, msg: 'FAIL', error: '文件夹不存在或不属于该团队' };
         return;
@@ -319,7 +363,7 @@ class FolderController extends Controller {
     try {
       const k = this.getKnex();
       // 校验目标文件夹存在且属于该团队
-      const folder = await k('workspace_folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
+      const folder = await k('folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
       if (!folder) {
         ctx.body = { code: -1, msg: 'FAIL', error: '目标文件夹不存在或不属于该团队' };
         return;

@@ -413,16 +413,8 @@ export function RecentProjectsStrip({
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [kindFilter, setKindFilter] = useState<ProjectKindFilter>('all');
-  const [sort, setSort] = useState<ProjectSort>('updatedDesc');
-  // recvqbipG9QDTt: this component mounts once per host view (Home, Drafts,
-  // All projects) and stays alive across EntryShell tab switches — Home's
-  // instance in particular is only ever hidden via `content-visibility`, not
-  // unmounted (see EntryShell's `inactiveViewProps`) — so a filter picked
-  // here keeps silently narrowing the grid on every later visit with no cue
-  // that anything is filtered. Surfacing `hasActiveFilter` drives the visible
-  // "clear filters" chip below instead of switching tabs quietly resetting
-  // it, per the reporter's own preferred fix.
-  const hasActiveFilter = ownerFilter !== 'all' || kindFilter !== 'all';
+ const [sort, setSort] = useState<ProjectSort>('updatedDesc');
+  const [searchQuery, setSearchQuery] = useState('');
   const [openHeaderMenu, setOpenHeaderMenu] = useState<'owner' | 'kind' | 'sort' | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -533,24 +525,27 @@ export function RecentProjectsStrip({
           ownerFilter === 'all' ||
           (ownerFilter === 'mine' && creator.ownedBySelf) ||
           (ownerFilter === 'others' && !creator.ownedBySelf);
-        const kindMatches = kindFilter === 'all' || projectCardCategory(project) === kindFilter;
-        return ownerMatches && kindMatches;
-      })
-      .slice(0, resolvedLimit),
-    [
-      kindFilter,
-      ownerFilter,
-      projectOwnerMemberIds,
-      resolveMember,
-      resolvedLimit,
-      selfMemberId,
-      showOwnerFilter,
-      sortedProjects,
-      t,
-      workspaceContext?.avatarUrl,
-      workspaceContext?.displayName,
-    ],
-  );
+       const kindMatches = kindFilter === 'all' || projectCardCategory(project) === kindFilter;
+       const trimmedSearch = searchQuery.trim().toLowerCase();
+       const searchMatches = !trimmedSearch || (typeof project.name === 'string' && project.name.toLowerCase().includes(trimmedSearch));
+       return ownerMatches && kindMatches && searchMatches;
+     })
+     .slice(0, resolvedLimit),
+   [
+     kindFilter,
+     ownerFilter,
+     projectOwnerMemberIds,
+     resolveMember,
+     resolvedLimit,
+     selfMemberId,
+     showOwnerFilter,
+     searchQuery,
+     sortedProjects,
+     t,
+     workspaceContext?.avatarUrl,
+     workspaceContext?.displayName,
+   ],
+ );
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameTitleId = useId();
@@ -1403,11 +1398,31 @@ export function RecentProjectsStrip({
               >
                 <Icon name="share" size={15} /> {t('recentProjects.inviteTeammates')}
               </button>
-            ) : null}
-            {canManageCollection ? (
-              <button
-                type="button"
-                className={`recent-projects__select-toggle${selectionMode ? ' is-active' : ''}`}
+           ) : null}
+           <div className="recent-projects__search">
+             <Icon name="search" size={14} />
+             <input
+               type="text"
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               placeholder={t('recentProjects.searchPlaceholder')}
+               aria-label={t('recentProjects.searchPlaceholder')}
+             />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="recent-projects__search-clear"
+                  aria-label={t('recentProjects.clearFilters')}
+                  onClick={() => setSearchQuery('')}
+                >
+                  <Icon name="close" size={12} />
+                </button>
+              ) : null}
+           </div>
+           {canManageCollection ? (
+             <button
+               type="button"
+               className={`recent-projects__select-toggle${selectionMode ? ' is-active' : ''}`}
                 aria-pressed={selectionMode}
                 onClick={() => {
                   trackCollection('multi_select_toggle', {
@@ -1490,32 +1505,6 @@ export function RecentProjectsStrip({
                 </div>
               ) : null}
             </div>
-            {hasActiveFilter ? (
-              // Only rendered once a filter narrows the grid, so it never
-              // competes for attention with the plain owner/kind/sort chips
-              // above — see recvqbipG9QDTt.
-              <button
-                type="button"
-                className="recent-projects__filter-clear"
-                data-testid="recent-projects-clear-filters"
-                onClick={() => {
-                  trackCollection('filter', {
-                    filter_type: 'owner',
-                    filter_value: 'all',
-                  });
-                  trackCollection('filter', {
-                    filter_type: 'project_type',
-                    filter_value: 'all',
-                  });
-                  setOwnerFilter('all');
-                  setKindFilter('all');
-                  setOpenHeaderMenu(null);
-                }}
-              >
-                <Icon name="close" size={12} />
-                {t('recentProjects.clearFilters')}
-              </button>
-            ) : null}
             <div className="recent-projects__filter-wrap">
               <button
                 type="button"
@@ -1659,9 +1648,14 @@ export function RecentProjectsStrip({
       <div
         ref={rowRef}
         className={`recent-projects__row${fullPageGrid ? ` recent-projects__row--${view}` : ''}${menuOpenId ? ' recent-projects__row--menu-open' : ''}${selectionMode ? ' is-selecting' : ''}`}
-        role="list"
-      >
-        {visibleProjects.map(({ project, creator }) => {
+       role="list"
+     >
+       {visibleProjects.length === 0 && fullPageGrid ? (
+         <div className="recent-projects__empty">
+           {t('recentProjects.noResults')}
+         </div>
+       ) : null}
+       {visibleProjects.map(({ project, creator }) => {
           const cover = projectCover(
             project,
             coverByProject[project.id] ?? null,
@@ -2824,3 +2818,4 @@ function imageSampleRank(kind: unknown): number {
 function isRasterOrSvgImage(path: string): boolean {
   return /\.(svg|png|jpe?g|webp|gif)$/iu.test(path);
 }
+

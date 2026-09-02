@@ -147,6 +147,7 @@ import { CommunityView } from './CommunityView';
 import { SquareView } from './SquareView';
 import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
 import { TeamSpaceView } from './TeamSpaceView';
+import { FolderView } from './TeamSpaceView';
 import { PersonalAllView } from './PersonalAllView';
 import { SharedWithMeView } from './SharedWithMeView';
 import {
@@ -2010,7 +2011,7 @@ export function EntryShell({
             <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} />
           ) : null}
           {view === 'team-folder' ? (
-            <TeamSlotPlaceholder icon="folder-filled" title={t('entry.navTeamSection')} detail={route.kind === 'home' ? route.folderId : undefined} />
+            <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} />
           ) : null}
           {view === 'personal-all' ? (
             <PersonalAllView />

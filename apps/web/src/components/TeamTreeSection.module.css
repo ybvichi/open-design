@@ -167,16 +167,22 @@
 
 /* Action icon area — hidden by default, visible on row hover. */
 .actions {
-  display: flex;
+  display: none;
   align-items: center;
   flex-shrink: 0;
   opacity: 0;
   pointer-events: none;
+  padding-right:5px;
+  gap: 5px;
   transition: opacity 120ms var(--ease-out);
+}
+.actions button {
+   background: transparent !important;
 }
 
 .teamRow:hover .actions,
 .folderRow:hover .actions {
+  display: flex;
   opacity: 1;
   pointer-events: auto;
 }

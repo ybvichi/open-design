@@ -2702,8 +2702,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
     }
     return listWorkspaceProjects(db, ctx.workspaceId)
-      .filter((row: any) => workspaceProjectRowBelongsToCurrentWorkspace(row, ctx))
-      .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
+              .filter((row: any) => workspaceProjectRowBelongsToCurrentWorkspace(row, ctx))
+              .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
   }
 
   function workspaceProjectCreatedByCurrentMember(project: any, ctx: WorkspaceProjectContext): boolean {
@@ -3119,6 +3119,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const rows = listWorkspaceProjects(db, ctx.workspaceId)
         .filter((row: any) => workspaceProjectRowBelongsToCurrentWorkspace(row, ctx))
         .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
+      const search = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
       const queryCanIncludeTeam =
         view !== 'drafts' &&
         visibility !== 'personal' &&
@@ -3160,6 +3161,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           if ((visibility === 'personal' || visibility === 'team') && project.visibility !== visibility) return false;
           if (owner === 'mine' && !createdByCurrentMember) return false;
           if (owner === 'others' && createdByCurrentMember) return false;
+          if (search && typeof project.name === 'string' && !project.name.toLowerCase().includes(search)) return false;
           return true;
         });
       const groupCountProperties = workspaceProjectGroupCountProperties({
