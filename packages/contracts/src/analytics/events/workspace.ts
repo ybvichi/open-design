@@ -8,7 +8,7 @@
  */
 
 export type TrackingWorkspaceType = 'personal' | 'team';
-export type TrackingWorkspaceRole = 'owner' | 'admin' | 'member';
+export type TrackingWorkspaceRole = 'owner' | 'admin' | 'member' | 'guest';
 export type TrackingWorkspaceScope = 'official' | 'personal' | 'team' | 'unknown';
 export type TrackingWorkspacePage =
   | 'home'

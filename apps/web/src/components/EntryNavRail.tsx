@@ -59,6 +59,7 @@ import { RemixIcon } from './RemixIcon';
 import { InviteDialog } from './InviteDialog';
 import { MessageCenter } from './MessageCenter';
 import { NewTeamModal } from './NewTeamModal';
+import { Toast } from './Toast';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
 import { useI18n } from '../i18n';
 import { useDismissOnOutsideInteraction } from '../hooks/useDismissOnOutsideInteraction';
@@ -80,7 +81,7 @@ import { amrPlansUrlForProfile } from '../runtime/amr-guidance';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
 import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
-import type { EntryHomeView } from '../router';
+import { navigate, type EntryHomeView } from '../router';
 import { TeamTreeSection } from './TeamTreeSection';
 import { PersonalFuncSection } from './PersonalFuncSection';
 import type {
@@ -1241,7 +1242,8 @@ export function EntryNavRail({
  const [internalInviteOpen, setInternalInviteOpen] = useState(false);
   const inviteOpen = inviteOpenProp ?? internalInviteOpen;
   const setInviteOpen = onInviteOpenChange ?? setInternalInviteOpen;
-  const [newTeamOpen, setNewTeamOpen] = useState(false);
+ const [newTeamOpen, setNewTeamOpen] = useState(false);
+ const [teamCreatedToast, setTeamCreatedToast] = useState(false);
  const inviteTarget = resolveWorkspaceInviteTarget(context);
   // The invite dialog's seat-gate upgrade entry uses the same public Pricing
   // destination as the credits chip's twin decision in EntryTopRightCluster.
@@ -1833,13 +1835,30 @@ export function EntryNavRail({
           </>
         )}
        <PersonalFuncSection />
-      <TeamTreeSection
-        workspaceItems={visibleWorkspaceItems}
-        activeTeamId={activeTeamId}
-        activeFolderId={activeFolderId}
-        loading={workspaceDirectoryLoading}
-         onCreateTeam={() => setNewTeamOpen(true)}
-      />
+     <TeamTreeSection
+       workspaceItems={visibleWorkspaceItems}
+       activeTeamId={activeTeamId}
+       activeFolderId={activeFolderId}
+       loading={workspaceDirectoryLoading}
+        onCreateTeam={() => setNewTeamOpen(true)}
+        onRenameTeam={(teamId, newName) => {
+          setWorkspaceItems((prev) =>
+            prev.map((item) =>
+              item.workspaceId === teamId
+                ? { ...item, workspaceName: newName }
+                : item,
+            ),
+          );
+        }}
+        onDeleteTeam={(teamId) => {
+          setWorkspaceItems((prev) =>
+            prev.filter((item) => item.workspaceId !== teamId),
+          );
+          if (activeTeamId === teamId) {
+            navigate({ kind: 'home', view: 'home' }, { replace: true });
+          }
+        }}
+     />
      </div>
       {/* The footer always has the social row to show now, so it no longer
           collapses to nothing. `footerUpdaterSlot` is only ever set in the
@@ -1874,24 +1893,37 @@ export function EntryNavRail({
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         workspaceContext={context}
+        teamId={activeTeamId}
         canAssignRoles={canInviteMembers}
-        availableSeats={workspaceInviteAvailableSeats(context)}
-        entryFrom="workspace_switcher"
-        onUpgrade={
-          upgradeUrl
-            ? () => {
-                window.open(upgradeUrl, '_blank', 'noopener,noreferrer');
-              }
-            : undefined
-        }
      />
       <NewTeamModal
         open={newTeamOpen}
         onClose={() => setNewTeamOpen(false)}
-        onCreated={() => {
-          // TODO: refresh workspace directory / team list after creation.
+        onCreated={(result) => {
+          setWorkspaceItems((prev) => [
+            ...prev,
+            {
+              workspaceId: result.workspace_id,
+              workspaceName: result.workspace_name,
+              workspaceType: 'team',
+              workspaceMemberId: result.workspace_member_id,
+              role: 'owner',
+              memberStatus: 'active',
+              lifecycleState: 'active',
+            } satisfies WorkspaceDirectoryItem,
+          ]);
+          setNewTeamOpen(false);
+          navigate({ kind: 'home', view: 'team-space', teamId: result.workspace_id });
+          setTeamCreatedToast(true);
         }}
       />
+      {teamCreatedToast ? (
+        <Toast
+          message={t('newTeam.createSuccess')}
+          tone="success"
+          onDismiss={() => setTeamCreatedToast(false)}
+        />
+      ) : null}
      {/* Top-right floating cluster: campaign badge (slot) + credits pill +
           the account module, portaled to document.body so all ride the
           workbench top-right corner in one flex row. Extracted so the project

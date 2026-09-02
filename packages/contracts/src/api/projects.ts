@@ -594,7 +594,7 @@ export interface ProjectWorkspaceScopeResponse {
 
 // Local D-lane placeholder until the B-owned CurrentWorkspaceContext is
 // imported into open-design. The route adapter keeps this replaceable.
-export type WorkspaceProjectRole = 'owner' | 'admin' | 'member';
+export type WorkspaceProjectRole = 'owner' | 'admin' | 'member' | 'guest';
 
 // C owns project sync orchestration. D exposes this on its read model and emits
 // intent metadata when visibility changes, but it does not upload or mirror

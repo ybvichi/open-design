@@ -55,7 +55,7 @@ const DEFAULT_DIRECTORY_FAILURE_BACKOFF_MIN_MS = 15_000;
 const DEFAULT_DIRECTORY_FAILURE_BACKOFF_MAX_MS = 120_000;
 
 const WORKSPACE_TYPES = new Set<WorkspaceType>(['personal', 'team']);
-const ROLES = new Set<CollabMemberRole>(['owner', 'admin', 'member']);
+const ROLES = new Set<CollabMemberRole>(['owner', 'admin', 'member', 'guest']);
 const MEMBER_STATUSES = new Set<WorkspaceMemberStatus>(['active', 'removed']);
 const LIFECYCLE_STATES = new Set<WorkspaceLifecycleState>([
   'active',

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
-import { getDefaultTeamId, getTeamMemberId, getTestTeamId } from '../ids.js';
-import { getSsoUser } from '../sso-user.js';
+import { getDefaultTeamId, getTeamMemberId } from '../ids.js';
+import { fetchHdwTeams } from '../http/hdw.js';
 
 /**
  * Mock mirror of workspace collab-context routes.
@@ -85,19 +85,14 @@ function makeBilling(workspaceId: string, workspaceMemberId: string) {
  * carries the signed-in user's displayName and IDs derived from their username.
  * Team workspace data stays fixed.
  */
-function buildMockData(dataDir?: string) {
-  const user = getSsoUser(dataDir);
-  const username = user?.username ?? '';
-  const displayName = user?.displayName ?? '';
+async function buildMockData(dataDir?: string) {
 
 
   const TEAM_WORKSPACE_ID = getDefaultTeamId();
   const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
   const MOCK_TEAM_WORKSPACE_NAME = '一人团队';
 
-  const TEAM_WORKSPACE_ID2 = getTestTeamId();
-  const TEAM_WORKSPACE_MEMBER_ID2 = getTeamMemberId(TEAM_WORKSPACE_ID2);
-  const MOCK_TEAM_WORKSPACE_NAME2 = '测试团队';
+  const hdwTeams = await fetchHdwTeams(dataDir);
 
   const directory = {
     items: [
@@ -112,15 +107,15 @@ function buildMockData(dataDir?: string) {
         memberStatus: 'active' as const,
         lifecycleState: 'active' as const,
       },
-      {
-        workspaceId: TEAM_WORKSPACE_ID2,
-        workspaceName: MOCK_TEAM_WORKSPACE_NAME2,
-        workspaceType: 'team',
-        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID2,
-        role: 'owner',
-        memberStatus: 'active',
-        lifecycleState: 'active',
-      }
+      ...hdwTeams.map(t => ({
+        workspaceId: t.workspace_id,
+        workspaceName: t.workspace_name,
+        workspaceType: 'team' as const,
+        workspaceMemberId: t.workspace_member_id,
+        role: t.role,
+        memberStatus: 'active' as const,
+        lifecycleState: 'active' as const,
+      })),
     ],
     activeWorkspaceId: TEAM_WORKSPACE_ID,
   };
@@ -162,12 +157,17 @@ function buildMockData(dataDir?: string) {
         //workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
       },
     },
-    [TEAM_WORKSPACE_ID2]: {
+  };
+
+  for (const t of hdwTeams) {
+    const wsId = t.workspace_id;
+    const wsMemberId = t.workspace_member_id;
+    contexts[wsId] = {
       context: {
-        workspaceId: TEAM_WORKSPACE_ID2,
+        workspaceId: wsId,
         workspaceType: 'team',
-        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID2,
-        role: 'owner',
+        workspaceMemberId: wsMemberId,
+        role: t.role,
         memberStatus: 'active',
         lifecycleState: 'active',
         billingState: 'active',
@@ -175,17 +175,22 @@ function buildMockData(dataDir?: string) {
         providerMode: 'platform_credits',
         seatSummary: { seatLimit: 10, usedSeats: 1, availableSeats: 9, isSeatFull: false },
         permissions: ALL_PERMISSIONS,
-        workspaceName: MOCK_TEAM_WORKSPACE_NAME2,
-        teamId: TEAM_WORKSPACE_ID,
-        teamName: MOCK_TEAM_WORKSPACE_NAME2,
-        //workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
+        workspaceName: t.workspace_name,
+        teamId: wsId,
+        teamName: t.workspace_name,
       },
-    },
-  };
+    };
+  }
 
   const billing: Record<string, ReturnType<typeof makeBilling>> = {
     [TEAM_WORKSPACE_ID]: makeBilling(TEAM_WORKSPACE_ID, TEAM_WORKSPACE_MEMBER_ID),
   };
+
+  for (const t of hdwTeams) {
+    const wsId = t.workspace_id;
+    const wsMemberId = t.workspace_member_id;
+    billing[wsId] = makeBilling(wsId, wsMemberId);
+  }
 
   return { directory, contexts, billing };
 }
@@ -207,23 +212,23 @@ export function registerCollabContextHideSignRoutes(
   app: Express,
   deps: RegisterCollabContextHideSignRoutesDeps = {},
 ): void {
-  app.get('/api/workspace/directory', (req: Request, res: Response) => {
+  app.get('/api/workspace/directory', async (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/directory', req);
-    const { directory } = buildMockData(deps.dataDir);
+    const { directory } = await buildMockData(deps.dataDir);
     res.json(directory);
   });
 
-  app.get('/api/workspace/context', (req: Request, res: Response) => {
+  app.get('/api/workspace/context', async (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/context', req);
-    const { contexts } = buildMockData(deps.dataDir);
+    const { contexts } = await buildMockData(deps.dataDir);
     const wsId = req.header('x-od-workspace-id') ?? '';
     const ctx = contexts[wsId];
     res.json(ctx);
   });
 
-  app.get('/api/workspace/billing', (req: Request, res: Response) => {
+  app.get('/api/workspace/billing', async (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/billing', req);
-    const { billing } = buildMockData(deps.dataDir);
+    const { billing } = await buildMockData(deps.dataDir);
     const wsId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
     const entry = billing[wsId];
     res.json(entry);
@@ -245,9 +250,9 @@ export function registerCollabContextHideSignRoutes(
     res.json({ ok: true, released: true });
   });
 
-  app.put('/api/workspace/active', (req: Request, res: Response) => {
+  app.put('/api/workspace/active', async (req: Request, res: Response) => {
     logRequest('PUT', '/api/workspace/active', req);
-    const { contexts } = buildMockData(deps.dataDir);
+    const { contexts } = await buildMockData(deps.dataDir);
     const body = req.body as { workspaceId?: unknown; workspaceMemberId?: unknown } | null;
     const wsId = typeof body?.workspaceId === 'string' ? body.workspaceId : '';
     const entry = contexts[wsId];

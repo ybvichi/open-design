@@ -40,6 +40,8 @@ function roleLabel(member: CollabPresenceMember, t: ReturnType<typeof useT>): st
       return t('collabPresence.roleOwner');
     case 'admin':
       return t('collabPresence.roleAdmin');
+    case 'guest':
+      return t('collabPresence.roleGuest');
     default:
       return t('collabPresence.roleMember');
   }

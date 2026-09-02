@@ -15,7 +15,7 @@ import type {
 // the sync trigger. Single source of truth for the daemon routes, the web
 // CollabClient, and the `od collab` CLI so no surface re-declares these shapes.
 
-export type CollabMemberRole = 'owner' | 'admin' | 'member';
+export type CollabMemberRole = 'owner' | 'admin' | 'member' | 'guest';
 
 /** Public single-file snapshot returned by the daemon publish routes. */
 export interface PublicProjectFilePublication {

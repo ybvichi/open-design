@@ -1,355 +1,252 @@
 // Reusable "invite teammates" dialog for the team workspace.
 //
-// Opened from the team dropdown in the left rail. Ported VERBATIM (markup +
-// classes) from the design demo (origin/demo/workspace-team-features) — the
-// Canva-style two-column layout: form on the left, decorative avatar-cluster art
-// on the right. The ONLY difference from the demo is the submit: instead of the
-// demo's no-backend `onSubmit` stub, "确认并邀请" POSTs the collected
-// { email, role } rows to the real daemon endpoint (`POST /api/workspace/invite`),
-// which creates each invite on B with the signed-in vela session. On success the
-// dialog shows a brief success state and closes; on failure it surfaces an inline
-// error and stays open. The UI never blocks on the backend being present.
+// Each row pairs a single-select PersonPicker with its own role dropdown
+// (admin/member). When a person is picked we check for cross-row duplicates
+// ("已添加") and call the HDW checkMember endpoint to see if they're already
+// on the team ("已是团队成员"). On "确认并邀请" all valid rows are POSTed
+// to the HDW invite API.
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { createPortal } from 'react-dom';
-import {
-  normalizeWorkspaceInviteCreateErrorCode,
-  type WorkspaceCollabContext,
-  type WorkspaceInviteRole,
-} from '@open-design/contracts';
-import { Button } from '@open-design/components';
+import { useEffect, useRef, useState } from 'react';
+import type { WorkspaceCollabContext } from '@open-design/contracts';
+import { getStoredUsername } from '../auth/auth';
+import { getTeamMemberId } from '../utils/deterministicId';
 import { Icon } from './Icon';
+import { PersonPicker, type Person } from './PersonPicker';
 import { useI18n } from '../i18n';
-import { workspaceInviteErrorMessageKey } from '../collab/invite-error-copy';
-import { workspaceProjectHeaders } from '../collab/workspace-identity';
-import { useAnalytics } from '../analytics/provider';
-import {
-  trackWorkspaceInviteClick,
-  trackWorkspaceInviteResult,
-  trackWorkspaceSurfaceView,
-} from '../analytics/events';
-import {
-  countBucket,
-  stableAnalyticsErrorCode,
-  workspaceAnalyticsDimensions,
-} from '../analytics/workspace';
 
-const ROLE_OPTIONS = ['admin', 'member'] as const;
-
-// Vertical gap between the role trigger and its menu (was the CSS
-// `top: calc(100% + var(--spacing-6))` before the menu moved to a portal).
-const ROLE_MENU_GAP = 6;
+const ROLE_OPTIONS = ['admin', 'member', 'guest'] as const;
 
 function roleLabel(role: string, t: ReturnType<typeof useI18n>['t']) {
-  return role === 'admin' ? t('invite.role.admin') : t('invite.role.member');
+  if (role === 'admin') return t('invite.role.admin');
+  if (role === 'guest') return t('invite.role.guest');
+  return t('invite.role.member');
 }
 
-export interface InviteRow {
-  email: string;
+const DEFAULT_ROLE = 'member';
+
+/** Extract the username (email prefix before @) from a person's email. */
+function emailToUsername(email?: string): string {
+  return email?.split('@')[0]?.trim() || '';
+}
+
+interface InviteRow {
+  id: string;
+  person: Person | null;
   role: string;
+  status: 'idle' | 'checking' | 'ok' | 'duplicate' | 'existing';
+  statusMsg: string | null;
+}
+
+function makeRow(): InviteRow {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    person: null,
+    role: DEFAULT_ROLE,
+    status: 'idle',
+    statusMsg: null,
+  };
 }
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Identity the host already resolved for this invite mutation. */
   workspaceContext: WorkspaceCollabContext | null;
-  /** Shows "你的团队有 1人" for single-seat plans (vs the team default). */
-  freePlan?: boolean;
-  /**
-   * Seats the workspace can still fill. The daemon already computes this
-   * (`seatSummary.availableSeats`); until this dialog consumed it, a workspace
-   * with zero seats let the user type addresses, press 确认并邀请, and get a
-   * per-row failure back from B — the plan limit surfaced as a send error
-   * rather than as the reason they cannot invite yet (#115).
-   *
-   * `undefined` means "seat state unknown" and stays permissive, so a context
-   * that has not loaded yet never blocks a workspace that does have seats.
-   */
-  availableSeats?: number;
-  /** Opens B's plan-change flow. Rendered only when seats run out. */
-  onUpgrade?: () => void;
-  /** Called with the entered rows when "确认并邀请" is pressed. The host
-   *  decides whether to send invites directly or route through upgrade. */
-  onSubmit?: (rows: InviteRow[]) => void;
-  /** Owner / Admin can choose roles; Member invites with the default role. */
+  /** Team ID from the route — takes priority over workspaceContext.workspaceId. */
+  teamId?: string;
   canAssignRoles?: boolean;
-  /** The entry point that opened the dialog, used for the invite funnel. */
-  entryFrom?: 'workspace_switcher' | 'all_projects';
+  onSubmit?: () => void;
 }
 
-// Default invited role, aligned to the PRD matrix (admin/member are assignable;
-// owner is the workspace creator only and never assignable).
-const DEFAULT_ROLE = 'member';
+const PERMISSION_TABS = [
+  { id: 'admin', label: '管理员', desc: '可以邀请成员、管理成员角色、移除成员；拥有成员的所有权限。' },
+  { id: 'member', label: '成员', desc: '可以查看团队项目、发表评论、使用团队 Skills、邀请成员；不能管理成员或修改团队权限。' },
+  { id: 'guest', label: '访客', desc: '可以查看团队项目、发表评论；不能邀请成员、管理成员或修改团队权限。' },
+] as const;
 
-// Map the dialog role value to the canonical assignable role B expects
-// (never 'owner'). Legacy Chinese labels are accepted for existing state.
-function toCanonicalRole(role: string): WorkspaceInviteRole {
-  return role === 'admin' || role === '管理员' ? 'admin' : 'member';
+function PermissionSummary() {
+  const [active, setActive] = useState(0);
+  const tab = PERMISSION_TABS[active];
+  return (
+    <div className="entry-invite__perm-summary">
+      <div className="entry-invite__perm-tabs" role="tablist">
+        {PERMISSION_TABS.map((p, i) => (
+          <button
+            key={p.id}
+            type="button"
+            role="tab"
+            aria-selected={i === active}
+            className={i === active ? 'entry-invite__perm-tab is-active' : 'entry-invite__perm-tab'}
+            onClick={() => setActive(i)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="entry-invite__perm-desc">{tab?.desc}</p>
+    </div>
+  );
 }
 
 export function InviteDialog({
   open,
   onClose,
   workspaceContext,
-  freePlan = false,
-  availableSeats,
-  onUpgrade,
-  onSubmit,
+  teamId,
   canAssignRoles = true,
-  entryFrom = 'workspace_switcher',
+  onSubmit,
 }: Props) {
   const { t } = useI18n();
-  const analytics = useAnalytics();
-  const analyticsPage = entryFrom === 'all_projects' ? 'all_projects' : 'home';
-  const workspaceDimensions = workspaceAnalyticsDimensions(workspaceContext);
-  const [rows, setRows] = useState<InviteRow[]>([{ email: '', role: DEFAULT_ROLE }]);
-  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [rows, setRows] = useState<InviteRow[]>(() => [makeRow()]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openRoleIndex, setOpenRoleIndex] = useState<number | null>(null);
-  const rowsRef = useRef<HTMLDivElement | null>(null);
-  const roleTriggerRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const roleMenuRef = useRef<HTMLDivElement | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [operatorMemberId, setOperatorMemberId] = useState<string | null>(null);
   const autoCloseTimerRef = useRef<number | null>(null);
-  const [roleMenuPos, setRoleMenuPos] = useState<CSSProperties | null>(null);
-  const roleListboxId = useId();
+  const toastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!open || canAssignRoles) return;
-    setRows((prev) => prev.map((row) => ({ ...row, role: DEFAULT_ROLE })));
-  }, [canAssignRoles, open]);
-
-  // The rows list is a scroll container (`overflow-y: auto`), which clips any
-  // in-flow descendant to its box — a dropdown rendered inside it can never
-  // extend past the row. The role menu therefore lives in a portal on <body>,
-  // anchored to its trigger's viewport rect; re-anchor on resize and on any
-  // scroll (capture phase covers the rows container itself). Same pattern as
-  // ComposerModePicker.
-  useLayoutEffect(() => {
-    if (openRoleIndex === null) {
-      setRoleMenuPos(null);
-      return;
-    }
-    const update = () => {
-      const rect = roleTriggerRefs.current[openRoleIndex]?.getBoundingClientRect();
-      if (!rect) return;
-      setRoleMenuPos({ left: rect.left, top: rect.bottom + ROLE_MENU_GAP, width: rect.width });
-    };
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [openRoleIndex]);
-
-  useEffect(() => {
-    if (openRoleIndex === null) return;
-    function onDown(e: MouseEvent) {
-      const target = e.target as Node;
-      // The menu is portaled outside the rows container, so it must count as
-      // "inside" here — otherwise this dismisser unmounts an option on
-      // mousedown before its click can land.
-      if (rowsRef.current?.contains(target)) return;
-      if (roleMenuRef.current?.contains(target)) return;
-      setOpenRoleIndex(null);
-    }
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [openRoleIndex]);
-
-  useEffect(() => {
-    if (!open) setOpenRoleIndex(null);
+    if (!open) return;
+    setRows([makeRow()]);
+    setSubmitting(false);
+    setSuccess(false);
+    setError(null);
+    setToast(null);
   }, [open]);
+
+  // Derive the current user's member ID for this team deterministically
+  // from teamId + username, matching the daemon's getTeamMemberId.
+  // No HTTP request needed — same algorithm, same result.
+  useEffect(() => {
+    const resolvedTeamId = teamId || workspaceContext?.workspaceId;
+    if (!open || !resolvedTeamId) { setOperatorMemberId(null); return; }
+    let cancelled = false;
+    void (async () => {
+      const username = getStoredUsername();
+      if (!username) { if (!cancelled) setOperatorMemberId(null); return; }
+      const id = await getTeamMemberId(resolvedTeamId, username);
+      if (!cancelled) setOperatorMemberId(id);
+    })();
+    return () => { cancelled = true; };
+  }, [open, teamId, workspaceContext?.workspaceId]);
 
   useEffect(() => () => {
     if (autoCloseTimerRef.current === null) return;
     window.clearTimeout(autoCloseTimerRef.current);
     autoCloseTimerRef.current = null;
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
   }, [open]);
-
-  // Reset the submit lifecycle each time the dialog opens so a prior error /
-  // success never lingers on the next invite.
-  useEffect(() => {
-    if (!open) return;
-    setSubmitting(false);
-    setSuccess(false);
-    setError(null);
-    trackWorkspaceSurfaceView(analytics.track, {
-      page_name: analyticsPage,
-      area: 'workspace_invite_dialog',
-      entry_from: entryFrom,
-      ...workspaceDimensions,
-    });
-  }, [open, analytics.track, analyticsPage, entryFrom, workspaceDimensions.workspace_key]);
 
   if (!open) return null;
 
-  function updateRow(index: number, patch: Partial<InviteRow>) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  }
-  function addRow() {
-    trackWorkspaceInviteClick(analytics.track, {
-      page_name: analyticsPage,
-      area: 'workspace_invite_dialog',
-      element: 'add_recipient_row',
-      entry_from: entryFrom,
-      ...workspaceDimensions,
-    });
-    setRows((prev) => [...prev, { email: '', role: DEFAULT_ROLE }]);
-  }
-  function removeRow(index: number) {
-    trackWorkspaceInviteClick(analytics.track, {
-      page_name: analyticsPage,
-      area: 'workspace_invite_dialog',
-      element: 'remove_recipient_row',
-      entry_from: entryFrom,
-      ...workspaceDimensions,
-    });
-    setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  function showToast(message: string) {
+    setToast(message);
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 2500);
   }
 
   function closeDialog() {
-    trackWorkspaceInviteClick(analytics.track, {
-      page_name: analyticsPage,
-      area: 'workspace_invite_dialog',
-      element: 'close',
-      entry_from: entryFrom,
-      ...workspaceDimensions,
-    });
     onClose();
   }
 
-  // Demo-grade email shape check (something@something.tld) — keeps obvious
-  // non-emails from enabling submit; both the button state and the rows
-  // passed to onSubmit use the same predicate.
-  const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-  const hasValidEmail = rows.some((r) => isEmail(r.email));
-
-  function inviteErrorMessage(code: string | undefined): string {
-    return t(workspaceInviteErrorMessageKey(code));
+  function addRow() {
+    setRows((prev) => [...prev, makeRow()]);
   }
 
-  // Seats are the gate B enforces anyway; checking here turns a post-send row
-  // failure into an up-front reason the user can act on. Unknown (undefined)
-  // stays permissive — see the prop docs.
-  const seatsExhausted = availableSeats !== undefined && availableSeats <= 0;
+  function removeRow(id: string) {
+    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
+  }
 
-  async function handleConfirm() {
-    const valid = rows.filter((r) => isEmail(r.email));
-    if (valid.length === 0 || submitting || success || seatsExhausted) return;
-    if (!workspaceContext) {
-      setError(t('workspaceInvite.submitFailed'));
+  function updateRow(id: string, patch: Partial<InviteRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  async function handlePersonChange(id: string, people: Person[]) {
+    const person = people[0] ?? null;
+    if (!person) {
+      updateRow(id, { person: null, status: 'idle', statusMsg: null });
       return;
     }
-    const requestContext = workspaceContext;
-    const startedAt = performance.now();
-    const requestId = analytics.newRequestId();
-    trackWorkspaceInviteClick(analytics.track, {
-      page_name: analyticsPage,
-      area: 'workspace_invite_dialog',
-      element: 'submit',
-      entry_from: entryFrom,
-      invite_count_bucket: countBucket(valid.length),
-      ...workspaceDimensions,
-    }, { requestId });
+    const dup = rows.some((r) => r.id !== id && r.person?.id === person.id);
+    if (dup) {
+      showToast(t('workspaceInvite.duplicateMember'));
+      updateRow(id, { person: null, status: 'idle', statusMsg: null });
+      return;
+    }
+    const resolvedTeamId = teamId || workspaceContext?.workspaceId;
+    updateRow(id, { person, status: 'checking', statusMsg: null });
+    try {
+      const res = await fetch(
+        `/api/hdw/webapi/v1/team/${resolvedTeamId}/member/check?username=${encodeURIComponent(emailToUsername(person.email))}`,
+        { cache: 'no-store' },
+      );
+      const body = await res.json().catch(() => null);
+      if (body?.code === 0 && body?.data?.is_member) {
+        showToast(t('workspaceInvite.errorAlreadyMember'));
+        updateRow(id, { person: null, status: 'idle', statusMsg: null });
+      } else {
+        updateRow(id, { status: 'ok', statusMsg: null });
+      }
+    } catch {
+      updateRow(id, { status: 'ok', statusMsg: null });
+    }
+  }
+
+  async function handleConfirm() {
+    const validRows = rows.filter((r) => r.person && r.status === 'ok');
+    if (validRows.length === 0 || submitting || success) return;
+    const resolvedTeamId = teamId || workspaceContext?.workspaceId;
+    if (!resolvedTeamId || !operatorMemberId) {
+      setError(t('workspaceInvite.errorNoWorkspace'));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/workspace/invite', {
+      const res = await fetch('/api/hdw/webapi/v1/team/invite', {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...workspaceProjectHeaders(requestContext),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invites: valid.map((r) => ({ email: r.email.trim(), role: toCanonicalRole(r.role) })),
+          workspace_id: resolvedTeamId,
+          operator_member_id: operatorMemberId,
+          members: validRows.map((r) => ({
+            username: emailToUsername(r.person!.email),
+            displayname: r.person!.name,
+            email: r.person!.email || null,
+            role: canAssignRoles ? r.role : DEFAULT_ROLE,
+          })),
         }),
       });
-      if (!res.ok) {
-        trackWorkspaceInviteResult(analytics.track, {
-          page_name: analyticsPage,
-          area: 'workspace_invite_dialog',
-          entry_from: entryFrom,
-          result: 'failed',
-          requested_count: valid.length,
-          succeeded_count: 0,
-          failed_count: valid.length,
-          duration_ms: Math.round(performance.now() - startedAt),
-          error_code: stableAnalyticsErrorCode(res.status),
-          ...workspaceDimensions,
-        }, { requestId });
-        throw new Error('request_failed');
-      }
-      const body = (await res.json().catch(() => null)) as
-        | { results?: Array<{ ok?: boolean; error?: string }> }
-        | null;
-      const results = body?.results ?? [];
-      // Any failed row means the invite batch needs user attention; keep the
-      // dialog open with a reason-specific message instead of a misleading
-      // success state or a blanket "retry later".
-      const failed = results.find((r) => r.ok === false);
-      if (failed) {
-        const failedCount = results.filter((r) => r.ok === false).length;
-        const succeededCount = Math.max(valid.length - failedCount, 0);
-        trackWorkspaceInviteResult(analytics.track, {
-          page_name: analyticsPage,
-          area: 'workspace_invite_dialog',
-          entry_from: entryFrom,
-          result: succeededCount > 0 ? 'partial_success' : 'failed',
-          requested_count: valid.length,
-          succeeded_count: succeededCount,
-          failed_count: failedCount,
-          duration_ms: Math.round(performance.now() - startedAt),
-          error_code: normalizeWorkspaceInviteCreateErrorCode(failed.error) ?? 'invite_rejected',
-          ...workspaceDimensions,
-        }, { requestId });
-        setError(inviteErrorMessage(failed.error));
+      const body = await res.json().catch(() => null);
+      if (!res.ok || body?.code !== 0) {
+        showToast(body?.error || body?.msg || t('workspaceInvite.submitFailed'));
         setSubmitting(false);
         return;
       }
-      trackWorkspaceInviteResult(analytics.track, {
-        page_name: analyticsPage,
-        area: 'workspace_invite_dialog',
-        entry_from: entryFrom,
-        result: 'success',
-        requested_count: valid.length,
-        succeeded_count: valid.length,
-        failed_count: 0,
-        duration_ms: Math.round(performance.now() - startedAt),
-        ...workspaceDimensions,
-      }, { requestId });
+      showToast(t('workspaceInvite.sent'));
+      window.dispatchEvent(new CustomEvent('hdw:members-updated', { detail: { teamId: resolvedTeamId } }));
       setSuccess(true);
-      onSubmit?.(valid);
+      onSubmit?.();
       autoCloseTimerRef.current = window.setTimeout(() => {
         autoCloseTimerRef.current = null;
         onClose();
-        setRows([{ email: '', role: DEFAULT_ROLE }]);
+        setRows([makeRow()]);
         setSuccess(false);
         setSubmitting(false);
       }, 1000);
     } catch (caught) {
-      if (caught instanceof TypeError) {
-        trackWorkspaceInviteResult(analytics.track, {
-          page_name: analyticsPage,
-          area: 'workspace_invite_dialog',
-          entry_from: entryFrom,
-          result: 'failed',
-          requested_count: valid.length,
-          succeeded_count: 0,
-          failed_count: valid.length,
-          duration_ms: Math.round(performance.now() - startedAt),
-          error_code: 'network_error',
-          ...workspaceDimensions,
-        }, { requestId });
-      }
-      setError(t('workspaceInvite.submitFailed'));
+      showToast(t('workspaceInvite.submitFailed'));
       setSubmitting(false);
     }
   }
+
+  const validCount = rows.filter((r) => r.person && r.status === 'ok').length;
 
   return (
     <div className="entry-invite" role="dialog" aria-modal="true" aria-label={t('workspaceInvite.dialogAria')}>
@@ -367,147 +264,59 @@ export function InviteDialog({
         <div className="entry-invite__form">
           <h2 className="entry-invite__title">{t('workspaceInvite.title')}</h2>
           <p className="entry-invite__teamsize">
-            {seatsExhausted
-              ? t('workspaceInvite.seatsExhaustedBody')
-              : freePlan
-                ? t('workspaceInvite.freePlanBody')
-                : t('workspaceInvite.teamPlanBody')}
+            受邀成员将获得「{workspaceContext?.teamName || workspaceContext?.workspaceName || ''}」下项目与 Skills 的访问权限。
           </p>
-          {seatsExhausted && onUpgrade ? (
-            <Button variant="primary-ghost" onClick={() => {
-              trackWorkspaceInviteClick(analytics.track, {
-                page_name: analyticsPage,
-                area: 'workspace_invite_dialog',
-                element: 'upgrade',
-                entry_from: entryFrom,
-                ...workspaceDimensions,
-              });
-              onUpgrade();
-            }}>
-              {t('workspaceInvite.seatsExhaustedAction')}
-            </Button>
-          ) : null}
 
-          <div className="entry-invite__field-labels">
-            <span className="entry-invite__label">{t('workspaceInvite.emailLabel')}</span>
-            <span className="entry-invite__label entry-invite__label--role">
-              {canAssignRoles ? t('workspaceInvite.roleLabel') : t('workspaceInvite.defaultRoleLabel')}
-            </span>
-          </div>
-          <div className="entry-invite__rows" ref={rowsRef}>
-            {rows.map((row, i) => (
-              <div className="entry-invite__fields" key={i}>
-                <input
-                  className="entry-invite__input"
-                  type="email"
-                  placeholder={t('workspaceInvite.emailPlaceholder')}
-                  value={row.email}
-                  onChange={(e) => updateRow(i, { email: e.target.value })}
-                />
-                <div className="entry-invite__role-picker">
-                  <button
-                    type="button"
-                    ref={(el) => {
-                      roleTriggerRefs.current[i] = el;
-                    }}
-                    className="entry-invite__role"
-                    onClick={() => {
-                      if (!canAssignRoles) return;
-                      trackWorkspaceInviteClick(analytics.track, {
-                        page_name: analyticsPage,
-                        area: 'workspace_invite_dialog',
-                        element: 'role_select',
-                        entry_from: entryFrom,
-                        ...workspaceDimensions,
-                      });
-                      setOpenRoleIndex((current) => (current === i ? null : i));
-                    }}
-                    disabled={!canAssignRoles}
-                    aria-label={canAssignRoles ? t('workspaceInvite.roleLabel') : t('workspaceInvite.defaultRoleLabel')}
-                    aria-haspopup="listbox"
-                    aria-expanded={openRoleIndex === i}
-                    aria-controls={`${roleListboxId}-${i}`}
-                  >
-                    <span>{roleLabel(canAssignRoles ? row.role : DEFAULT_ROLE, t)}</span>
-                    <Icon name="chevron-down" size={16} />
-                  </button>
-                  {openRoleIndex === i && roleMenuPos && typeof document !== 'undefined'
-                    ? createPortal(
-                        <div
-                          ref={roleMenuRef}
-                          className="entry-invite__role-menu"
-                          id={`${roleListboxId}-${i}`}
-                          role="listbox"
-                          style={roleMenuPos}
-                        >
-                          {ROLE_OPTIONS.map((role) => (
-                            <button
-                              type="button"
-                              key={role}
-                              className={`entry-invite__role-option${(canAssignRoles ? row.role : DEFAULT_ROLE) === role ? ' is-selected' : ''}`}
-                              role="option"
-                              aria-selected={(canAssignRoles ? row.role : DEFAULT_ROLE) === role}
-                              onClick={() => {
-                                updateRow(i, { role });
-                                setOpenRoleIndex(null);
-                              }}
-                            >
-                              <span>{roleLabel(role, t)}</span>
-                              {(canAssignRoles ? row.role : DEFAULT_ROLE) === role ? <Icon name="check" size={16} /> : null}
-                            </button>
-                          ))}
-                        </div>,
-                        document.body,
-                      )
-                    : null}
+          <label className="entry-invite__label">{t('workspaceInvite.personLabel')}</label>
+          {toast ? (
+            <div className="entry-invite__toast" role="alert">
+              {toast}
+            </div>
+          ) : null}
+          <div className="entry-invite__rows">
+            {rows.map((row) => (
+              <div key={row.id} className="entry-invite__row">
+                <div className="entry-invite__row-picker">
+                  <PersonPicker
+                    selected={row.person ? [row.person] : []}
+                    onChange={(people) => handlePersonChange(row.id, people)}
+                  />
                 </div>
+                <select
+                  className="entry-invite__row-role"
+                  value={canAssignRoles ? row.role : DEFAULT_ROLE}
+                  onChange={(e) => updateRow(row.id, { role: e.target.value })}
+                  disabled={!canAssignRoles}
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>{roleLabel(role, t)}</option>
+                  ))}
+                </select>
                 {rows.length > 1 ? (
                   <button
                     type="button"
                     className="entry-invite__row-remove"
-                    onClick={() => removeRow(i)}
+                    onClick={() => removeRow(row.id)}
                     aria-label={t('workspaceInvite.removeRow')}
                   >
-                    <Icon name="close" size={15} />
+                    <Icon name="close" size={14} />
                   </button>
                 ) : null}
               </div>
             ))}
           </div>
           <button type="button" className="entry-invite__add-row" onClick={addRow}>
-            <Icon name="plus" size={14} /> {t('workspaceInvite.addMember')}
+            <Icon name="plus" size={14} />
+            <span>{t('workspaceInvite.addMember')}</span>
           </button>
 
-          <button
-            type="button"
-            className="entry-invite__collapse"
-            onClick={() => setVisibilityOpen((v) => !v)}
-            aria-expanded={visibilityOpen}
-          >
-            {t('workspaceInvite.visibilityQuestion')}
-            <Icon
-              name="chevron-down"
-              size={16}
-              style={visibilityOpen ? { transform: 'rotate(180deg)' } : undefined}
-            />
-          </button>
-          {visibilityOpen ? (
-            <p className="entry-invite__collapse-body">
-              {t('workspaceInvite.visibilityAnswer')}
-            </p>
-          ) : null}
-
-          {error ? (
-            <p className="entry-invite__collapse-body" role="alert">
-              {error}
-            </p>
-          ) : null}
+          <PermissionSummary />
 
           <button
             type="button"
             className="entry-invite__submit"
             onClick={handleConfirm}
-            disabled={!hasValidEmail || submitting || success || seatsExhausted}
+            disabled={validCount === 0 || submitting || success}
           >
             {success
               ? t('workspaceInvite.sent')

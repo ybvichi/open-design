@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './PersonPicker.module.css';
 import { useT } from '../i18n';
 
@@ -11,6 +12,12 @@ export interface Person {
   email?: string;
   userDeptPath?: string;
   [k: string]: any;
+}
+
+function truncateDeptPath(path: string): string {
+  const parts = path.split('\\').map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 3) return parts.join('/');
+  return '.../' + parts.slice(-3).join('/');
 }
 
 /**
@@ -29,11 +36,13 @@ export function PersonPicker({
   onChange,
   placeholder,
   multiple = false,
+  onDuplicate,
 }: {
   selected: Person[];
   onChange: (p: Person[]) => void;
   placeholder?: string;
   multiple?: boolean;
+  onDuplicate?: () => void;
 }) {
   const t = useT();
   const [query, setQuery] = useState('');
@@ -43,8 +52,11 @@ export function PersonPicker({
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const aliveRef = useRef(true);
   const reqIdRef = useRef(0);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const placeholderText = placeholder ?? t('personPicker.placeholder');
 
@@ -86,10 +98,41 @@ export function PersonPicker({
     };
   }, [debounced]);
 
+  // Position the portal dropdown below the input.
+  useEffect(() => {
+    if (!open || !inputRef.current) {
+      setDropdownPos(null);
+      return;
+    }
+    const rect = inputRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+  }, [open]);
+
+  // Reposition on scroll/resize.
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      if (!inputRef.current) return;
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+    };
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      if (
+        !wrapRef.current?.contains(e.target as Node) &&
+        !dropdownRef.current?.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -98,7 +141,7 @@ export function PersonPicker({
   function add(p: Person) {
     if (multiple) {
       if (selected.some((x) => x.id === p.id)) {
-        // 已存在则不动，仅收起下拉。
+        onDuplicate?.();
       } else {
         onChange([...selected, p]);
       }
@@ -122,71 +165,102 @@ export function PersonPicker({
 
   return (
     <div className={styles.acWrap} ref={wrapRef}>
-      <input
-        className={styles.acInput}
-        placeholder={placeholderText}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => results.length && setOpen(true)}
-        onKeyDown={(e) => {
-          if (!open || !results.length) return;
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setActiveIdx((i) => Math.min(i + 1, results.length - 1));
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setActiveIdx((i) => Math.max(i - 1, 0));
-          } else if (e.key === 'Enter') {
-            e.preventDefault();
-            const p = results[activeIdx];
-            if (p) add(p);
-          } else if (e.key === 'Escape') {
-            setOpen(false);
-          }
-        }}
-      />
-      {loading ? <span className={styles.acSpinner} /> : null}
-      {open && debounced ? (
-        <div className={styles.acDropdown}>
-          {!results.length ? (
-            <div className={styles.acEmpty}>无匹配人员</div>
+      {!multiple && selected.length > 0 ? (
+        <div className={styles.acInputTag}>
+          <span className={styles.tagName}>{selected[0]!.name}</span>
+          <button
+            type="button"
+            className={styles.tagRemove}
+            onClick={() => remove(0)}
+            aria-label={`移除 ${selected[0]!.name}`}
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <>
+          <input
+            ref={inputRef}
+            className={styles.acInput}
+            placeholder={placeholderText}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => results.length && setOpen(true)}
+            onKeyDown={(e) => {
+              if (!open || !results.length) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveIdx((i) => Math.min(i + 1, results.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const p = results[activeIdx];
+                if (p) add(p);
+              } else if (e.key === 'Escape') {
+                setOpen(false);
+              }
+            }}
+          />
+          {loading ? <span className={styles.acSpinner} /> : null}
+          {open && debounced && dropdownPos
+            ? createPortal(
+                <div
+                  ref={dropdownRef}
+                  className={styles.acDropdown}
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPos.top,
+                    left: dropdownPos.left,
+                    width: dropdownPos.width,
+                  }}
+                >
+                  {!results.length ? (
+                    <div className={styles.acEmpty}>无匹配人员</div>
+                  ) : (
+                    results.map((p, i) => (
+                      <button
+                        key={p.id ?? i}
+                        type="button"
+                        className={`${styles.acItem} ${i === activeIdx ? styles.acItemActive : ''}`}
+                        onMouseEnter={() => setActiveIdx(i)}
+                        onClick={() => add(p)}
+                      >
+                        <span className={styles.acItemName}>{p.name}</span>
+                        {p.userDeptPath ? (
+                          <span className={styles.acItemSub}>{truncateDeptPath(p.userDeptPath)}</span>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>,
+                document.body,
+              )
+            : null}
+        </>
+      )}
+      {multiple ? (
+        <div className={styles.selectedBox}>
+          {!selected.length ? (
+            <span className={styles.selectedEmpty}>{emptyHint}</span>
           ) : (
-            results.map((p, i) => (
+            selected.map((p, i) => (
+            <span key={p.id ?? i} className={styles.tag}>
+              <span className={styles.tagName}>{p.name}</span>
               <button
-                key={p.id ?? i}
                 type="button"
-                className={`${styles.acItem} ${i === activeIdx ? styles.acItemActive : ''}`}
-                onMouseEnter={() => setActiveIdx(i)}
-                onClick={() => add(p)}
+                className={styles.tagRemove}
+                onClick={() => remove(i)}
+                aria-label={`移除 ${p.name}`}
               >
-                <span className={styles.acItemName}>{p.name}</span>
-                {p.userDeptPath ? (
-                  <span className={styles.acItemSub}>{p.userDeptPath}</span>
-                ) : null}
+                ✕
               </button>
+            </span>
             ))
           )}
         </div>
       ) : null}
-      <div className={styles.selectedBox}>
-        {!selected.length ? (
-          <span className={styles.selectedEmpty}>{emptyHint}</span>
-        ) : (
-          selected.map((p, i) => (
-          <span key={p.id ?? i} className={styles.tag}>
-            <span className={styles.tagName}>{p.name}</span>
-            <button
-              type="button"
-              className={styles.tagRemove}
-              onClick={() => remove(i)}
-              aria-label={`移除 ${p.name}`}
-            >
-              ✕
-            </button>
-          </span>
-          ))
-        )}
-      </div>
     </div>
   );
 }

@@ -6,21 +6,23 @@
 module.exports = app => {
   const { router, controller } = app;
   router.get('/', controller.home.index);
- // api:test // 测试路由
- router.get('/hdw/webapi/v1/test', controller.api.test.index);
+  // api:test // 测试路由
+  router.get('/hdw/webapi/v1/test', controller.api.test.index);
   // api:team // 团队管理
   router.post('/hdw/webapi/v1/team/add', controller.api.team.add);
   router.del('/hdw/webapi/v1/team/:workspace_id', controller.api.team.del);
   router.post('/hdw/webapi/v1/team/rename', controller.api.team.rename);
- router.post('/hdw/webapi/v1/team/invite', controller.api.team.invite);
+  router.post('/hdw/webapi/v1/team/invite', controller.api.team.invite);
   router.get('/hdw/webapi/v1/team/my', controller.api.team.myTeams);
   router.get('/hdw/webapi/v1/team/:workspace_id', controller.api.team.detail);
-  router.get('/hdw/webapi/v1/team/:workspace_id/members', controller.api.team.members);
-  // api:team/member // 成员管理
+ router.get('/hdw/webapi/v1/team/:workspace_id/members', controller.api.team.members);
+ router.get('/hdw/webapi/v1/team/:workspace_id/member/check', controller.api.team.checkMember);
+  router.get('/hdw/webapi/v1/team/:workspace_id/member/:workspace_member_id', controller.api.team.memberDetail);
+ // api:team/member // 成员管理
   router.post('/hdw/webapi/v1/team/member/remove', controller.api.team.removeMember);
   router.post('/hdw/webapi/v1/team/member/role', controller.api.team.updateRole);
   router.post('/hdw/webapi/v1/team/quit', controller.api.team.quit);
- router.post('/hdw/webapi/v1/team/transfer', controller.api.team.transfer);
+  router.post('/hdw/webapi/v1/team/transfer', controller.api.team.transfer);
   // api:folder // 文件夹管理
   router.post('/hdw/webapi/v1/folder/add', controller.api.folder.add);
   router.del('/hdw/webapi/v1/folder/:folder_id', controller.api.folder.del);
@@ -31,7 +33,7 @@ module.exports = app => {
   router.post('/hdw/webapi/v1/folder/project/remove', controller.api.folder.removeProject);
   router.get('/hdw/webapi/v1/folder/project/list', controller.api.folder.listProjects);
   router.post('/hdw/webapi/v1/folder/project/move', controller.api.folder.moveProject);
- // // 用户登录
+  // // 用户登录
   // router.post('/webapi/login', controller.api.login.login);
   // // api:export // 导出数据接口
   // router.post('/webapi/v1/export/zip/:dataType', controller.api.export.zip);
@@ -84,7 +86,7 @@ module.exports = app => {
   // router.post('/webapi/v1/dsl/addIcons', controller.api.dsl.addIcons);
   // router.post('/webapi/v1/dsl/addLinkData', controller.api.dsl.addLinkData);
   // router.get('/webapi/v1/dsl/link/:id', controller.api.dsl.getLinkData);
-    
+
   // router.post('/webapi/v1/dsl/addCoverData', controller.api.dsl.addCoverData);
   // router.get('/webapi/v1/dsl/cover/:id', controller.api.dsl.getCoverData);
   // router.get('/webapi/v1/dsl/deleteCoverDataForTask', controller.api.dsl.deleteCoverDataForTask);

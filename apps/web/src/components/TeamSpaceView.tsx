@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
+import { navigate } from '../router';
+import { getStoredUsername } from '../auth/auth';
+import { getTeamMemberId } from '../utils/deterministicId';
 import { Icon, type IconName } from './Icon';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
@@ -22,24 +25,19 @@ const TABS: TabDef[] = [
 ];
 
 type MemberRole = 'owner' | 'admin' | 'member' | 'guest';
-type MemberStatus = 'online' | 'offline';
 
 interface TeamMember {
+  workspaceMemberId: string;
   name: string;
   email: string;
   role: MemberRole;
-  status: MemberStatus;
-  lastActiveMinutes: number;
+  joinedAt: string;
 }
 
-// Mock data — replace with real workspace members API when available.
-const MOCK_MEMBERS: TeamMember[] = [
-  { name: '张伟', email: 'zhangwei@example.com', role: 'owner', status: 'online', lastActiveMinutes: 0 },
-  { name: '李娜', email: 'lina@example.com', role: 'admin', status: 'online', lastActiveMinutes: 3 },
-  { name: '王芳', email: 'wangfang@example.com', role: 'member', status: 'offline', lastActiveMinutes: 25 },
-  { name: '刘洋', email: 'liuyang@example.com', role: 'member', status: 'online', lastActiveMinutes: 120 },
-  { name: '陈静', email: 'chenjing@example.com', role: 'guest', status: 'offline', lastActiveMinutes: 4320 },
-];
+interface OperatorInfo {
+  memberId: string;
+  role: MemberRole;
+}
 
 const ROLE_KEY: Record<MemberRole, keyof Dict> = {
   owner: 'teamSpace.roleOwner',
@@ -48,11 +46,10 @@ const ROLE_KEY: Record<MemberRole, keyof Dict> = {
   guest: 'teamSpace.roleGuest',
 };
 
-function formatLastActive(t: (key: keyof Dict, vars?: Record<string, string | number>) => string, minutes: number): string {
-  if (minutes === 0) return t('teamSpace.justNow');
-  if (minutes < 60) return t('teamSpace.minutesAgo', { n: minutes });
-  const days = Math.round(minutes / 1440);
-  return t('teamSpace.daysAgo', { n: days });
+function formatJoinedDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString();
 }
 
 interface Props {
@@ -65,6 +62,7 @@ export function TeamSpaceView({ teamId, onInvite }: Props) {
   const [activeTab, setActiveTab] = useState<TeamTab>('projects');
   const [teamName, setTeamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(teamId));
+  const [operator, setOperator] = useState<OperatorInfo | null>(null);
 
   // Resolve the team name from the workspace directory by id. The directory
   // is the same source the left rail tree uses, so the title always matches
@@ -81,10 +79,47 @@ export function TeamSpaceView({ teamId, onInvite }: Props) {
         if (cancelled) return;
         const match = body.items?.find((item) => item.workspaceId === teamId);
         setTeamName(match?.workspaceName ?? null);
+        if (!match) {
+          navigate({ kind: 'home', view: 'home' }, { replace: true });
+          return;
+        }
       } catch {
         // Leave the fallback title in place.
       } finally {
         if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  // Fetch the current user's operator info (member ID + role) via the
+  // dedicated single-member endpoint instead of filtering the full member
+  // list. The member ID is derived locally so no extra request is needed.
+  useEffect(() => {
+    if (!teamId) { setOperator(null); return; }
+    let cancelled = false;
+    void (async () => {
+      const username = getStoredUsername();
+      if (!username) { if (!cancelled) setOperator(null); return; }
+      try {
+        const memberId = await getTeamMemberId(teamId, username);
+        const res = await fetch(
+          `/api/hdw/webapi/v1/team/${teamId}/member/${memberId}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) { if (!cancelled) setOperator(null); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        if (body?.code === 0 && body?.data) {
+          setOperator({
+            memberId: body.data.workspace_member_id,
+            role: body.data.role as MemberRole,
+          });
+        } else {
+          setOperator(null);
+        }
+      } catch {
+        if (!cancelled) setOperator(null);
       }
     })();
     return () => { cancelled = true; };
@@ -136,9 +171,9 @@ export function TeamSpaceView({ teamId, onInvite }: Props) {
         {activeTab === 'projects' ? (
           <PlaceholderPanel icon="folder" label={t('teamSpace.tabProjects')} note={t('teamSpace.projectsNote')} />
         ) : null}
-        {activeTab === 'members' ? (
-          <MembersTable onInvite={onInvite} />
-        ) : null}
+       {activeTab === 'members' ? (
+          <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
+       ) : null}
         {activeTab === 'resources' ? (
           <PlaceholderPanel icon="layers-filled" label={t('teamSpace.tabResources')} note={t('teamSpace.resourcesNote')} />
         ) : null}
@@ -161,8 +196,164 @@ function PlaceholderPanel({ icon, label, note }: { icon: IconName; label: string
     </div>
   );
 }
-function MembersTable({ onInvite }: { onInvite?: () => void }) {
+function MembersTable({ teamId, onInvite, operator }: { teamId?: string; onInvite?: () => void; operator: OperatorInfo | null }) {
   const t = useT();
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
+
+  const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
+
+  const operatorMemberId = operator?.memberId ?? null;
+  const operatorRole = operator?.role ?? null;
+
+  useEffect(() => {
+    if (!teamId) { setMembers([]); return; }
+    setLoading(true);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/hdw/webapi/v1/team/${teamId}/members`, { cache: 'no-store' });
+        if (!res.ok) { if (!cancelled) setMembers([]); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        const list: any[] = body?.data?.members ?? [];
+        setMembers(list.map((m) => ({
+          workspaceMemberId: m.workspace_member_id || '',
+          name: m.displayname || m.username || '',
+          email: m.email || '',
+          role: m.role as MemberRole,
+          joinedAt: m.created_at || '',
+        })));
+      } catch {
+        if (!cancelled) setMembers([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  // Refresh member list when an invite completes for this team.
+  useEffect(() => {
+    function onMembersUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.teamId !== teamId) return;
+      setLoading(true);
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch(`/api/hdw/webapi/v1/team/${teamId}/members`, { cache: 'no-store' });
+          if (!res.ok) { if (!cancelled) return; }
+         const body = await res.json();
+         if (cancelled) return;
+         const list: any[] = body?.data?.members ?? [];
+          setMembers(list.map((m) => ({
+            workspaceMemberId: m.workspace_member_id || '',
+            name: m.displayname || m.username || '',
+            email: m.email || '',
+            role: m.role as MemberRole,
+            joinedAt: m.created_at || '',
+          })));
+        } catch {
+          // keep existing list on refresh error
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+    window.addEventListener('hdw:members-updated', onMembersUpdated);
+    return () => window.removeEventListener('hdw:members-updated', onMembersUpdated);
+  }, [teamId]);
+
+  // Permission logic mirrors HDW updateRole: owner/admin can change roles,
+  // but owner role is never editable (needs transfer), and admin can only
+  // change member-level roles (not other admins).
+  function canChangeRole(member: TeamMember): boolean {
+    if (member.role === 'owner') return false;
+    if (!operatorRole || !operatorMemberId) return false;
+    if (operatorRole === 'owner') return member.role === 'admin' || member.role === 'member' || member.role === 'guest';
+    if (operatorRole === 'admin') return member.role === 'member' || member.role === 'guest';
+    return false;
+  }
+
+  function canRemoveMember(member: TeamMember): boolean {
+    if (!operatorRole || !operatorMemberId) return false;
+    if (member.role === 'owner') return false;
+    if (member.workspaceMemberId === operatorMemberId) return false;
+    if (operatorRole === 'owner') return member.role === 'admin' || member.role === 'member' || member.role === 'guest';
+    if (operatorRole === 'admin') return member.role === 'member' || member.role === 'guest';
+    return false;
+  }
+
+  function requestRemove(member: TeamMember) {
+    setRemoveTarget(member);
+  }
+
+  async function confirmRemove() {
+    const member = removeTarget;
+    if (!member || !operatorMemberId) return;
+    setRemoveTarget(null);
+    if (!operatorMemberId) return;
+    // Optimistic removal.
+    setMembers((prev) => prev.filter((m) => m.workspaceMemberId !== member.workspaceMemberId));
+    setRoleError(null);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/team/member/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace_member_id: member.workspaceMemberId,
+          operator_member_id: operatorMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || body?.code !== 0) {
+        // Re-add on failure.
+        setMembers((prev) => [...prev, member].sort((a, b) => a.name.localeCompare(b.name)));
+        setRoleError(body?.error || body?.msg || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setMembers((prev) => [...prev, member].sort((a, b) => a.name.localeCompare(b.name)));
+      setRoleError(err?.message || String(err));
+    }
+  }
+
+  async function handleRoleChange(member: TeamMember, newRole: MemberRole) {
+    if (!operatorMemberId || newRole === member.role) return;
+    const prevRole = member.role;
+    // Optimistic update.
+    setMembers((prev) => prev.map((m) =>
+      m.workspaceMemberId === member.workspaceMemberId ? { ...m, role: newRole } : m,
+    ));
+    setRoleError(null);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/team/member/role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace_member_id: member.workspaceMemberId,
+          role: newRole,
+          operator_member_id: operatorMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || body?.code !== 0) {
+        // Revert on failure.
+        setMembers((prev) => prev.map((m) =>
+          m.workspaceMemberId === member.workspaceMemberId ? { ...m, role: prevRole } : m,
+        ));
+        setRoleError(body?.error || body?.msg || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setMembers((prev) => prev.map((m) =>
+        m.workspaceMemberId === member.workspaceMemberId ? { ...m, role: prevRole } : m,
+      ));
+      setRoleError(err?.message || String(err));
+    }
+  }
+
   return (
     <div className={styles.membersWrap}>
       <div className={styles.membersToolbar}>
@@ -177,17 +368,23 @@ function MembersTable({ onInvite }: { onInvite?: () => void }) {
           <thead>
             <tr>
               <th>{t('teamSpace.colMember')}</th>
-              <th>{t('teamSpace.colLastActive')}</th>
+              <th>{t('teamSpace.colJoined')}</th>
               <th>{t('teamSpace.colRole')}</th>
-              <th>{t('teamSpace.colStatus')}</th>
+              {(operatorRole === 'owner' || operatorRole === 'admin') ? <th>{t('teamSpace.colActions')}</th> : null}
             </tr>
           </thead>
           <tbody>
-            {MOCK_MEMBERS.map((m) => {
+            {loading ? (
+              <tr><td colSpan={4}>{t('teamSpace.loading')}</td></tr>
+            ) : members.length === 0 ? (
+              <tr><td colSpan={4}>{t('teamSpace.noMembers')}</td></tr>
+            ) : members.map((m) => {
               const initial = m.name.charAt(0).toUpperCase();
               const roleClass = styles[`role_${m.role}`] ?? '';
+              const changeable = canChangeRole(m);
+              const removable = canRemoveMember(m);
               return (
-                <tr key={m.email}>
+                <tr key={m.workspaceMemberId}>
                   <td>
                     <div className={styles.memberCell}>
                       <span
@@ -202,28 +399,61 @@ function MembersTable({ onInvite }: { onInvite?: () => void }) {
                     </div>
                   </td>
                   <td className={styles.lastActiveCell}>
-                    {formatLastActive(t, m.lastActiveMinutes)}
+                    {formatJoinedDate(m.joinedAt)}
                   </td>
                   <td>
-                    <span className={`${styles.roleTag} ${roleClass}`.trim()}>
-                      {t(ROLE_KEY[m.role])}
-                    </span>
+                    {changeable ? (
+                      <select
+                        className={`${styles.roleSelect} ${roleClass}`.trim()}
+                        value={m.role}
+                        onChange={(e) => handleRoleChange(m, e.target.value as MemberRole)}
+                      >
+                        <option value="admin">{t('teamSpace.roleAdmin')}</option>
+                        <option value="member">{t('teamSpace.roleMember')}</option>
+                        <option value="guest">{t('teamSpace.roleGuest')}</option>
+                      </select>
+                    ) : (
+                      <span className={`${styles.roleTag} ${roleClass}`.trim()}>
+                        {t(ROLE_KEY[m.role])}
+                      </span>
+                    )}
                   </td>
-                  <td>
-                    <span className={styles.statusWrap}>
-                      <span
-                        className={`${styles.statusDot} ${m.status === 'online' ? styles.statusOnline : styles.statusOffline}`.trim()}
-                        aria-hidden
-                      />
-                      {m.status === 'online' ? t('teamSpace.statusOnline') : t('teamSpace.statusOffline')}
-                    </span>
-                  </td>
+                  {(operatorRole === 'owner' || operatorRole === 'admin') ? (
+                    <td className={styles.actionsCell}>
+                     {removable ? (
+                       <button
+                         type="button"
+                         className={styles.removeBtn}
+                         onClick={() => requestRemove(m)}
+                       >
+                         {t('teamSpace.removeMember')}
+                       </button>
+                     ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {roleError ? <p className={styles.roleError}>{roleError}</p> : null}
       </div>
+      {removeTarget ? (
+        <div className={styles.confirmOverlay} onClick={() => setRemoveTarget(null)}>
+          <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.confirmTitle}>{t('teamSpace.removeConfirmTitle')}</h3>
+            <p className={styles.confirmMsg}>{t('teamSpace.removeConfirmMsg')}</p>
+            <div className={styles.confirmActions}>
+              <button type="button" className={styles.confirmCancel} onClick={() => setRemoveTarget(null)}>
+                {t('teamSpace.removeCancelBtn')}
+              </button>
+              <button type="button" className={styles.confirmOk} onClick={confirmRemove}>
+                {t('teamSpace.removeConfirmBtn')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

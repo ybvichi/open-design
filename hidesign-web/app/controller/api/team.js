@@ -6,16 +6,16 @@ const { createTeamId, getTeamMemberId } = require('../../utils/ids.js');
 const Controller = require('egg').Controller;
 
 // 允许的角色取值,owner 保留给创建者
-const ALLOWED_ROLES = ['admin', 'member'];
+const ALLOWED_ROLES = ['admin', 'member', 'guest'];
 const DEFAULT_ROLE = 'member';
 
 class TeamController extends Controller {
- getKnex() {
-   if (!this._knex) {
-     this._knex = createKnex(this.app.config.db);
-   }
-   return this._knex;
- }
+  getKnex() {
+    if (!this._knex) {
+      this._knex = createKnex(this.app.config.db);
+    }
+    return this._knex;
+  }
 
   // 权限校验:操作者必须在指定团队中且角色符合要求
   async _checkOperator(memberId, workspaceId, allowedRoles) {
@@ -62,7 +62,6 @@ class TeamController extends Controller {
           workspace_name: workspaceName,
           owner_username: ownerUsername,
           owner_displayname: ownerDisplayname || null,
-          owner_email: ownerEmail || null,
           created_at: now,
           updated_at: now,
         });
@@ -104,7 +103,12 @@ class TeamController extends Controller {
       ctx.body = {
         code: 0,
         msg: 'SUCCESS',
-        data: { workspace_id: workspaceId, member_count: result },
+        data: {
+          workspace_id: workspaceId,
+          workspace_name: workspaceName,
+          workspace_member_id: getTeamMemberId(workspaceId, ownerUsername),
+          member_count: result,
+        },
       };
     } catch (err) {
       ctx.logger.error('Team add error:', err);
@@ -272,10 +276,11 @@ class TeamController extends Controller {
           'w.owner_username',
           'w.owner_displayname',
           'w.created_at',
+          'm.workspace_member_id',
           'm.role',
-          'm.created_at as joined_at',
+          'm.created_at as joined_at'
         )
-        .orderBy('w.created_at', 'desc');
+        .orderBy('w.created_at', 'asc');
 
       ctx.body = {
         code: 0,
@@ -327,8 +332,76 @@ class TeamController extends Controller {
     }
   }
 
-  // 查询单个团队详情(不含成员)
-  async detail() {
+  // 检查用户是否已是团队成员
+  async checkMember() {
+    const { ctx } = this;
+    const { workspace_id: workspaceId } = ctx.params;
+    const { username } = ctx.query;
+
+    if (!workspaceId || !username) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 workspace_id 或 username' };
+      return;
+    }
+
+    try {
+      const k = this.getKnex();
+      const member = await k('workspace_members')
+        .where({ workspace_id: workspaceId, username })
+        .first();
+     ctx.body = {
+       code: 0,
+       msg: 'SUCCESS',
+       data: {
+         is_member: Boolean(member),
+         role: member ? member.role : null,
+       },
+     };
+   } catch (err) {
+     ctx.logger.error('Team checkMember error:', err);
+     ctx.body = { code: -1, msg: 'FAIL', error: err.message };
+   }
+ }
+
+  // 根据 workspace_member_id 查询单个成员信息
+  async memberDetail() {
+    const { ctx } = this;
+    const { workspace_id: workspaceId, workspace_member_id: memberId } = ctx.params;
+
+    if (!workspaceId || !memberId) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 workspace_id 或 workspace_member_id' };
+      return;
+    }
+
+    try {
+      const k = this.getKnex();
+      const member = await k('workspace_members')
+        .where({ workspace_member_id: memberId, workspace_id: workspaceId })
+        .first();
+      if (!member) {
+        ctx.body = { code: -1, msg: 'FAIL', error: '成员不存在' };
+        return;
+      }
+      ctx.body = {
+        code: 0,
+        msg: 'SUCCESS',
+        data: {
+          workspace_member_id: member.workspace_member_id,
+          workspace_id: member.workspace_id,
+          username: member.username,
+          displayname: member.displayname,
+          email: member.email,
+          role: member.role,
+          created_at: member.created_at,
+        },
+      };
+    } catch (err) {
+      ctx.logger.error('Team memberDetail error:', err);
+      ctx.body = { code: -1, msg: 'FAIL', error: err.message };
+    }
+  }
+
+ // 查询单个团队详情(不含成员)
+ async detail() {
     const { ctx } = this;
     const { workspace_id: workspaceId } = ctx.params;
 
@@ -364,7 +437,7 @@ class TeamController extends Controller {
     try {
       const k = this.getKnex();
       // 支持单个 ID 或 ID 数组
-      const ids = Array.isArray(memberIds) ? memberIds : [ memberIds ];
+      const ids = Array.isArray(memberIds) ? memberIds : [memberIds];
       if (ids.length === 0) {
         ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 workspace_member_id' };
         return;
@@ -396,7 +469,7 @@ class TeamController extends Controller {
         ctx.body = { code: -1, msg: 'FAIL', error: '团队所有者不可移除,请先转让团队' };
         return;
       }
-      // admin 只能移除 member 级别成员,不能移除其他 admin
+      // admin 只能移除 member/guest 级别成员,不能移除其他 admin
       if (check.member.role === 'admin') {
         const admins = members.filter(m => m.role === 'admin');
         if (admins.length > 0) {
@@ -449,7 +522,7 @@ class TeamController extends Controller {
         ctx.body = { code: -1, msg: 'FAIL', error: check.error };
         return;
       }
-      // admin 只能修改 member 级别成员的角色,不能改其他 admin
+      // admin 只能修改 member/guest 级别成员的角色,不能改其他 admin
       if (check.member.role === 'admin' && member.role === 'admin') {
         ctx.body = { code: -1, msg: 'FAIL', error: '管理员不可修改其他管理员的角色,仅所有者可以' };
         return;

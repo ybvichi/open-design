@@ -19,6 +19,18 @@
 .acInput:focus {
   border-color: var(--border-strong, var(--border));
 }
+.acInputTag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 34px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-sizing: border-box;
+}
 .acInput::placeholder {
   color: var(--text-muted);
 }
@@ -40,11 +52,7 @@
   }
 }
 .acDropdown {
-  position: absolute;
-  top: 38px;
-  left: 0;
-  right: 0;
-  z-index: 30;
+  z-index: 9999;
   max-height: 260px;
   overflow-y: auto;
   border: 1px solid var(--border);

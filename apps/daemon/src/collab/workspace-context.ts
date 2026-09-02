@@ -141,7 +141,7 @@ export function withLastKnownWorkspaceContext(
 }
 
 const WORKSPACE_TYPES: ReadonlySet<WorkspaceType> = new Set(['personal', 'team']);
-const ROLES: ReadonlySet<CollabMemberRole> = new Set(['owner', 'admin', 'member']);
+const ROLES: ReadonlySet<CollabMemberRole> = new Set(['owner', 'admin', 'member', 'guest']);
 const MEMBER_STATUSES: ReadonlySet<WorkspaceMemberStatus> = new Set(['active', 'removed']);
 const LIFECYCLE_STATES: ReadonlySet<WorkspaceLifecycleState> = new Set([
   'active',

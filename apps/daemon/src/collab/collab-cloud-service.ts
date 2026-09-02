@@ -14,6 +14,7 @@ import type {
   PreviewComment,
   WorkspaceCollabContext,
 } from '@open-design/contracts';
+import type { CollabMemberRole } from '@open-design/contracts';
 import type { CollabCloudClient } from '../integrations/collab-cloud.js';
 import type { WorkspaceContextProvider } from './workspace-context.js';
 import type {
@@ -243,7 +244,7 @@ export function createCollabCloudService(deps: CollabCloudServiceDeps): CollabCl
   function explicitTeamIdentity(context: WorkspaceCollabContext): {
     teamId: string;
     memberId: string;
-    role: 'owner' | 'admin' | 'member';
+    role: CollabMemberRole;
     displayName: string;
   } | null {
     if (

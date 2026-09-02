@@ -13,7 +13,7 @@
 // canSendTo) that only make sense for a project; this module owns the part
 // that generalizes cleanly: reading the caller's workspace identity off
 // headers, and deciding whether a caller may mutate a bound resource row.
-import type { WorkspaceCollabContext } from '@open-design/contracts';
+import type { CollabMemberRole, WorkspaceCollabContext } from '@open-design/contracts';
 import type { Response } from 'express';
 
 export type WorkspaceResourceContext = {
@@ -29,7 +29,7 @@ export type WorkspaceResourceContext = {
   workspaceTypeAsserted: 'personal' | 'team' | null;
   appUserId: string;
   workspaceMemberId: string;
-  role: 'owner' | 'admin' | 'member';
+  role: CollabMemberRole;
   memberStatus: 'active' | 'removed';
   lifecycleState: 'active' | 'billing_past_due' | 'locked' | 'deleting' | 'deleted';
   canShareProjects: boolean;
@@ -405,7 +405,7 @@ export function workspaceResourceContext(req: any, workspaceId: string): Workspa
       workspaceTypeHeader === 'team' || workspaceTypeHeader === 'personal' ? workspaceTypeHeader : null,
     appUserId: headerValue(req, 'x-od-app-user-id') ?? 'local-user',
     workspaceMemberId,
-    role: role === 'owner' || role === 'admin' ? role : 'member',
+    role: role === 'owner' || role === 'admin' || role === 'guest' ? role : 'member',
     memberStatus: headerValue(req, 'x-od-workspace-member-status') === 'removed' ? 'removed' : 'active',
     lifecycleState: lifecycleState === 'billing_past_due' || lifecycleState === 'locked' || lifecycleState === 'deleting' || lifecycleState === 'deleted'
       ? lifecycleState

@@ -16,7 +16,7 @@
 .titleBlock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .title {
@@ -336,6 +336,156 @@
 .role_guest {
   background: rgba(245, 158, 11, 0.14);
   color: #b45309;
+}
+
+.roleSelect {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid var(--border-subtle, #e2e2e2);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  width: auto;
+  min-width: 72px;
+  max-width: 120px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+.roleSelect:focus-visible {
+  border-color: var(--border-focus, #6366f1);
+  outline: none;
+}
+
+.roleError {
+  margin: 8px 0 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+  border-radius: 6px;
+}
+
+.actionsCell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.removeBtn {
+  padding: 4px 12px;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.removeBtn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.5);
+}
+
+.removeBtn:active {
+  background: rgba(220, 38, 38, 0.14);
+}
+
+/* --- Remove confirmation dialog --- */
+
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  animation: confirmFadeIn 120ms var(--ease-out);
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirmDialog {
+  width: 100%;
+  max-width: 380px;
+  margin: 0 16px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.confirmTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.confirmMsg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirmCancel {
+  padding: 7px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.confirmCancel:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.confirmOk {
+  padding: 7px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.confirmOk:hover {
+  background: #c81e1e;
+}
+
+.confirmOk:active {
+  background: #b01a1a;
 }
 
 .statusWrap {

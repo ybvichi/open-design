@@ -20,8 +20,7 @@ export function PersonalFuncSection() {
   const activeView = route.kind === 'home' ? route.view : null;
 
   return (
-    <div data-testid="personal-func-section">
-      <div className="entry-nav-rail__section-divider" />
+    <div data-testid="personal-func-section" className="entry-nav-rail__team-section">
       {ITEMS.map((item) => {
         const isActive = activeView === item.id;
         return (

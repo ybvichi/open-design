@@ -190,6 +190,136 @@
   color: var(--text);
 }
 
+/* --- Inline rename input --- */
+.editInput {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--border-focus, #6366f1);
+  border-radius: 4px;
+  background: var(--bg-elevated, #fff);
+ color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+}
+
+/* --- Delete button in actions area --- */
+.deleteBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  border-radius: 4px;
+  transition: color 120ms, background 120ms;
+}
+
+.deleteBtn:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* --- Delete confirmation dialog --- */
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  animation: treeConfirmFade 120ms var(--ease-out);
+}
+
+@keyframes treeConfirmFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirmDialog {
+  width: 100%;
+  max-width: 380px;
+  margin: 0 16px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-elevated, #fff);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.confirmTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.confirmMsg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirmCancel {
+  padding: 7px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.confirmCancel:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.confirmOk {
+  padding: 7px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.confirmOk:hover:not(:disabled) {
+  background: #c81e1e;
+}
+
+.confirmOk:active:not(:disabled) {
+  background: #b01a1a;
+}
+
+.confirmOk:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .footer {
   padding: 8px 10px;
   border-top: 1px solid var(--border-soft);

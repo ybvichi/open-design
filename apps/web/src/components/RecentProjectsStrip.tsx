@@ -34,14 +34,11 @@ import type { SharedProjectPredicate } from '../collab/all-projects-list';
 import { useTeamMembers } from '../collab/useTeamMembers';
 import {
   notifyTeamProjectsChanged,
-  useWorkspaceBilling,
   useWorkspaceContext,
 } from '../collab/useWorkspaceContext';
 import {
   canAccessWorkspaceInviteFlow,
   resolveWorkspaceInviteTarget,
-  workspaceInviteAvailableSeats,
-  workspaceUpgradeUrl,
 } from './EntryNavRail';
 import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
 import {
@@ -374,7 +371,6 @@ export function RecentProjectsStrip({
   const workspaceContextLoadingRef = useRef(workspaceContextLoading);
   workspaceContextLoadingRef.current = workspaceContextLoading;
   const workspaceIdentity = workspaceIdentityCacheKey(workspaceContext);
-  const workspaceBilling = useWorkspaceBilling();
   const workspaceDimensions = workspaceAnalyticsDimensions(workspaceContext);
   function trackCollection(
     element: ProjectCollectionClickProps['element'],
@@ -404,9 +400,6 @@ export function RecentProjectsStrip({
     (workspaceContextHasTeamIdentity(workspaceContext) &&
       workspaceContext?.permissions.canShareProjects === true);
   const canAccessInviteFlow = canAccessWorkspaceInviteFlow(workspaceContext);
-  // The invite dialog's seat-gate upgrade CTA shares the public Pricing
-  // destination owned by `workspaceUpgradeUrl` in EntryNavRail.tsx.
-  const inviteUpgradeUrl = workspaceUpgradeUrl(workspaceContext, workspaceBilling);
   const inviteTarget = resolveWorkspaceInviteTarget(workspaceContext);
   const canManageCollection =
     canManageProjectCollection ??
@@ -2224,15 +2217,6 @@ export function RecentProjectsStrip({
         workspaceContext={workspaceContext}
         canAssignRoles={
           canAssignInviteRoles ?? workspaceContext?.permissions.canInviteMembers === true
-        }
-        availableSeats={workspaceInviteAvailableSeats(workspaceContext)}
-        entryFrom="all_projects"
-        onUpgrade={
-          inviteUpgradeUrl
-            ? () => {
-                window.open(inviteUpgradeUrl, '_blank', 'noopener,noreferrer');
-              }
-            : undefined
         }
       />
     </section>

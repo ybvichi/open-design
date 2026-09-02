@@ -25,6 +25,8 @@ export interface NewTeamFormValue {
 
 export interface NewTeamCreatedResult {
   workspace_id: string;
+  workspace_name: string;
+  workspace_member_id: string;
   member_count: number;
 }
 

@@ -10,7 +10,8 @@
 // in the daemon or contracts layer, so teams without mock data simply show
 // no folder children (the "如果有的话" case from the placeholder comment).
 
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
 import { navigate } from '../router';
 import { Icon } from './Icon';
@@ -53,20 +54,109 @@ interface Props {
   loading?: boolean;
   /** Called when the user clicks "新建团队" in the footer. */
   onCreateTeam?: () => void;
+  onRenameTeam?: (teamId: string, newName: string) => void;
+  onDeleteTeam?: (teamId: string) => void;
 }
 
 interface TeamNodeProps {
   team: WorkspaceDirectoryItem;
   activeTeamId?: string;
   activeFolderId?: string;
+  onRenameTeam?: (teamId: string, newName: string) => void;
+  onDeleteTeam?: (teamId: string) => void;
 }
 
-function TeamNode({ team, activeTeamId, activeFolderId }: TeamNodeProps) {
+function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTeam }: TeamNodeProps) {
   const t = useT();
   const [expanded, setExpanded] = useState(true);
   const folders = foldersForTeam(team.workspaceName);
   const isActiveTeam = activeTeamId === team.workspaceId;
   const isTeamSelected = isActiveTeam && !activeFolderId;
+  const canRename = team.role === 'admin' || team.role === 'owner';
+  const canDelete = team.role === 'owner';
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(team.workspaceName);
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canRename) return;
+    setEditValue(team.workspaceName);
+    setEditing(true);
+  };
+
+  const commitRename = async () => {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === team.workspaceName) {
+      setEditing(false);
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/team/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace_id: team.workspaceId,
+          workspace_name: trimmed,
+          operator_member_id: team.workspaceMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        onRenameTeam?.(team.workspaceId, trimmed);
+      }
+    } catch {
+      // ignore — leave name unchanged
+    } finally {
+      setRenaming(false);
+      setEditing(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditValue(team.workspaceName);
+    setEditing(false);
+  };
+
+  const handleEditKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void commitRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
+
+  const confirmDeleteTeam = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/hdw/webapi/v1/team/${team.workspaceId}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
+        { method: 'DELETE' },
+      );
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        onDeleteTeam?.(team.workspaceId);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const handleTeamClick = () => {
     navigate({ kind: 'home', view: 'team-space', teamId: team.workspaceId });
@@ -102,18 +192,46 @@ function TeamNode({ team, activeTeamId, activeFolderId }: TeamNodeProps) {
             size={12}
           />
         </button>
-        <button
-          type="button"
-          className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}
-          onClick={handleTeamClick}
-          title={team.workspaceName}
-        >
-          <Icon name="folder" size={16} className={styles.teamIcon} />
-          <span className={styles.teamName}>{team.workspaceName}</span>
-          <span className={styles.actions} aria-hidden="true">
-            <Icon name="more-horizontal" size={14} className={styles.actionIcon} />
-          </span>
-        </button>
+        {editing ? (
+          <div className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}>
+            <Icon name="folder" size={16} className={styles.teamIcon} />
+            <input
+              ref={inputRef}
+              className={styles.editInput}
+              value={editValue}
+              disabled={renaming}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => void commitRename()}
+              onKeyDown={handleEditKeyDown}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}
+            onClick={handleTeamClick}
+            onDoubleClick={canRename ? startEdit : undefined}
+            title={team.workspaceName}
+          >
+            <Icon name="folder" size={16} className={styles.teamIcon} />
+            <span className={styles.teamName}>{team.workspaceName}</span>
+            <span className={styles.actions}>
+              {canDelete ? (
+                <button
+                  type="button"
+                  className={styles.deleteBtn}
+                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+                  aria-label="delete"
+                  tabIndex={-1}
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              ) : (
+                <Icon name="more-horizontal" size={14} className={styles.actionIcon} />
+              )}
+            </span>
+          </button>
+        )}
       </div>
       {expanded && folders.length > 0 ? (
         <div className={styles.folderList} role="group">
@@ -138,6 +256,25 @@ function TeamNode({ team, activeTeamId, activeFolderId }: TeamNodeProps) {
           })}
         </div>
       ) : null}
+      {confirmDelete ? (
+        createPortal(
+          <div className={styles.confirmOverlay} onClick={() => setConfirmDelete(false)}>
+            <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
+              <h3 className={styles.confirmTitle}>{t('teamSpace.deleteConfirmTitle')}</h3>
+              <p className={styles.confirmMsg}>{t('teamSpace.deleteConfirmMsg')}</p>
+              <div className={styles.confirmActions}>
+                <button type="button" className={styles.confirmCancel} onClick={() => setConfirmDelete(false)}>
+                  {t('teamSpace.removeCancelBtn')}
+                </button>
+                <button type="button" className={styles.confirmOk} onClick={confirmDeleteTeam} disabled={deleting}>
+                  {t('teamSpace.removeConfirmBtn')}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      ) : null}
     </div>
   );
 }
@@ -159,6 +296,8 @@ export function TeamTreeSection({
   activeTeamId,
   activeFolderId,
   onCreateTeam,
+  onRenameTeam,
+  onDeleteTeam,
   loading,
 }: Props) {
   const t = useT();
@@ -169,9 +308,6 @@ export function TeamTreeSection({
   const items = [...teamItems];
   const showSkeleton = loading && items.length === 0;
 
-  // No teams and not loading: the section has nothing to offer.
-  if (items.length === 0 && !showSkeleton) return null;
-
   return (
     <div className={styles.container} data-testid="team-tree-section">
       {showSkeleton ? (
@@ -181,16 +317,20 @@ export function TeamTreeSection({
           <SkeletonRow />
         </div>
       ) : (
-        <div className={styles.tree}>
-          {items.map((team) => (
-            <TeamNode
-              key={team.workspaceId}
-              team={team}
-              activeTeamId={activeTeamId}
-              activeFolderId={activeFolderId}
-            />
-          ))}
-        </div>
+        items.length > 0 ? (
+          <div className={styles.tree}>
+            {items.map((team) => (
+              <TeamNode
+                key={team.workspaceId}
+                team={team}
+                activeTeamId={activeTeamId}
+                activeFolderId={activeFolderId}
+                onRenameTeam={onRenameTeam}
+                onDeleteTeam={onDeleteTeam}
+              />
+            ))}
+          </div>
+        ) : null
       )}
       <div className={styles.footer}>
         <button

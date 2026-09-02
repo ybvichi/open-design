@@ -40,8 +40,10 @@ export interface Dict {
   'invite.landing.expires': string;
   'invite.role.admin': string;
   'invite.role.member': string;
+  'invite.role.guest': string;
   'invite.role.admin.desc': string;
   'invite.role.member.desc': string;
+  'invite.role.guest.desc': string;
   'invite.accept.cta': string;
   'invite.accountMismatch.title': string;
   'invite.accountMismatch.body': string;
@@ -72,17 +74,16 @@ export interface Dict {
   'workspaceInvite.dialogAria': string;
   'workspaceInvite.title': string;
   'workspaceInvite.freePlanBody': string;
-  'workspaceInvite.teamPlanBody': string;
   'workspaceInvite.seatsExhaustedBody': string;
   'workspaceInvite.seatsExhaustedAction': string;
   'workspaceInvite.emailLabel': string;
+  'workspaceInvite.personLabel': string;
+  'workspaceInvite.duplicateMember': string;
   'workspaceInvite.roleLabel': string;
   'workspaceInvite.defaultRoleLabel': string;
   'workspaceInvite.emailPlaceholder': string;
   'workspaceInvite.removeRow': string;
   'workspaceInvite.addMember': string;
-  'workspaceInvite.visibilityQuestion': string;
-  'workspaceInvite.visibilityAnswer': string;
   'workspaceInvite.sent': string;
   'workspaceInvite.sending': string;
   'workspaceInvite.confirm': string;
@@ -1143,6 +1144,7 @@ export interface Dict {
   'collabPresence.roleOwner': string;
   'collabPresence.roleAdmin': string;
   'collabPresence.roleMember': string;
+  'collabPresence.roleGuest': string;
   'collabPresence.viewingFileSelf': string;
   'collabPresence.viewingFileOther': string;
   'collabPresence.viewingProjectSelf': string;
@@ -1181,7 +1183,8 @@ export interface Dict {
   'newTeam.create': string;
   'newTeam.creating': string;
   'newTeam.createError': string;
-'personalFunc.all': string;
+  'newTeam.createSuccess': string;
+  'personalFunc.all': string;
 'personalFunc.shared': string;
   // Personal scope views ("个人所有" / "分享给我的") — header subtitle,
   //  type tabs, and the empty-state note shown while no data is wired yet.
@@ -1212,6 +1215,17 @@ export interface Dict {
   'teamSpace.colLastActive': string;
   'teamSpace.colRole': string;
   'teamSpace.colStatus': string;
+  'teamSpace.colJoined': string;
+  'teamSpace.colActions': string;
+'teamSpace.removeMember': string;
+'teamSpace.removeConfirmTitle': string;
+'teamSpace.removeConfirmMsg': string;
+'teamSpace.removeConfirmBtn': string;
+'teamSpace.removeCancelBtn': string;
+'teamSpace.deleteConfirmMsg': string;
+'teamSpace.deleteConfirmTitle': string;
+'teamSpace.loading': string;
+  'teamSpace.noMembers': string;
   'teamSpace.roleOwner': string;
   'teamSpace.roleAdmin': string;
   'teamSpace.roleMember': string;

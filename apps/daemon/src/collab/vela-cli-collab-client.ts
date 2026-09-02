@@ -218,7 +218,7 @@ function toPresenceMember(input: PresenceWire): CollabPresenceMember {
 }
 
 function isRole(value: unknown): value is CollabMemberRole {
-  return value === 'owner' || value === 'admin' || value === 'member';
+  return value === 'owner' || value === 'admin' || value === 'member' || value === 'guest';
 }
 
 /**
