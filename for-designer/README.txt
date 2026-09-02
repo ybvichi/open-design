@@ -37,3 +37,22 @@ Windows：
 
 【遇到问题】
 把安装窗口的截图发给管理员。
+
+【静默更新发布（维护者）】
+每小时采集任务运行时，会先从以下固定清单检查脚本更新：
+  https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/public/webresources/download/for-designer/stable/latest/metadata.json
+
+检查和下载失败不会影响本次采集。更新成功后，本次进程继续使用已加载的
+旧脚本完成采集，新脚本从下一次定时任务开始生效。Hi Design 客户端启动
+不会触发采集脚本更新。
+
+发布新版本时：
+  1. 将仓库内 version.json 改为新版本，例如 1.0.2。
+  2. 在仓库根目录运行：python3 for-designer/build_release.py
+     脚本会自动生成 ZIP、计算 64 位 SHA-256，并生成 metadata.json。
+  3. 人工上传生成的 versions/v1.0.2/for-designer-1.0.2.zip。
+  4. 确认 ZIP 可匿名下载后，最后上传生成的 latest/metadata.json。
+
+默认产物位于仓库 .tmp/for-designer-release/，metadata.json 里的 sha256
+已由打包脚本按最终 ZIP 内容写好，不需要人工填写。
+必须先上传 ZIP、最后更新 metadata.json，避免客户端读到尚未就绪的版本。

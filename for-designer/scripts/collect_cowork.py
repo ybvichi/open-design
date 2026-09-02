@@ -893,6 +893,23 @@ def report(url, payload):
         return False
 
 def main():
+    if not DRY:
+        try:
+            from update_collector import check_for_updates
+            update_result = check_for_updates()
+            if update_result.get("status") == "updated":
+                print(
+                    "  ✅ 采集脚本已更新: {} -> {}（下次定时采集生效）".format(
+                        update_result.get("previous_version") or "unknown",
+                        update_result.get("version"),
+                    )
+                )
+        except Exception as update_error:
+            print(
+                "  ⚠️ 采集脚本更新跳过: {}: {}".format(
+                    type(update_error).__name__, str(update_error)[:160]
+                )
+            )
     url, user, group, machine = get_config()
     baselines = load_baselines()
     retry_queue = load_retry_queue()
