@@ -129,7 +129,7 @@ export function LoginGate({ children }: LoginGateProps) {
       }
       return;
     }
-    const HEARTBEAT_INTERVAL = 2000;//5 * 60 * 1000; // 5 分钟
+    const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 分钟
     heartbeatRef.current = setInterval(() => {
       checkAuthStatus().then((result: any) => {
         if (!result.ok) {
