@@ -39,9 +39,10 @@ export type EntryHomeView =
  | 'team-folder'
  // Full-page personal Settings surface. `/settings` renders the same
  // SettingsDialog component in its `page` presentation instead of the modal.
- | 'personal-all'
- | 'shared-with-me'
- | 'settings';
+| 'personal-all'
+| 'shared-with-me'
+| 'personal-folder'
+| 'settings';
 
 export type Route =
   | {
@@ -153,10 +154,13 @@ export function parseRoute(pathname: string): Route {
  if (parts[0] === 'personal-all' && !parts[1]) {
    return { kind: 'home', view: 'personal-all' };
  }
- if (parts[0] === 'shared-with-me' && !parts[1]) {
-   return { kind: 'home', view: 'shared-with-me' };
- }
- if (parts[0] === 'collab-demo') {
+if (parts[0] === 'shared-with-me' && !parts[1]) {
+  return { kind: 'home', view: 'shared-with-me' };
+}
+if (parts[0] === 'personal' && parts[1] === 'folder' && parts[2]) {
+  return { kind: 'home', view: 'personal-folder', folderId: decodeURIComponent(parts[2]) };
+}
+if (parts[0] === 'collab-demo') {
     return { kind: 'collab-demo', projectId: parts[1] ? decodeURIComponent(parts[1]) : null };
   }
   if (parts[0] === 'community') {
@@ -232,9 +236,12 @@ export function buildPath(route: Route): string {
         : '/';
     }
     if (route.view === 'settings') return '/settings';
-    if (route.view === 'personal-all') return '/personal-all';
-    if (route.view === 'shared-with-me') return '/shared-with-me';
-    return '/';
+   if (route.view === 'personal-all') return '/personal-all';
+   if (route.view === 'shared-with-me') return '/shared-with-me';
+   if (route.view === 'personal-folder') {
+     return route.folderId ? `/personal/folder/${encodeURIComponent(route.folderId)}` : '/personal-all';
+   }
+   return '/';
   }
   if (route.kind === 'marketplace') return '/marketplace';
   if (route.kind === 'marketplace-detail') return `/marketplace/${encodeURIComponent(route.pluginId)}`;

@@ -841,6 +841,7 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerStrategyRolloutRoutes } from './routes/strategy-rollout.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { registerBrowserSessionRoutes } from './routes/browser-sessions.js';
+import { registerFolderRoutes } from './routes/folders.js';
 import { createTerminalService } from './terminals.js';
 import { createBrowserSessionService } from './browser-sessions.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
@@ -7723,10 +7724,15 @@ export async function startServer({
     getResolvedPort: () => resolvedPort,
     getDaemonShuttingDown: () => daemonShuttingDown,
     sandboxRuntime: SANDBOX_RUNTIME,
-    env: process.env,
+   env: process.env,
+ });
+
+  registerFolderRoutes(app, {
+    db,
+    http: { requireLocalDaemonRequest, sendApiError },
   });
 
-  const openDesignPublicMetadata = createOpenDesignPublicMetadataService();
+ const openDesignPublicMetadata = createOpenDesignPublicMetadataService();
   registerOpenDesignPublicMetadataRoutes(app, {
     http: httpDeps,
     openDesignPublicMetadata,

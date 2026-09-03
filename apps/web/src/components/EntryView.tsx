@@ -53,11 +53,12 @@ type EntryCreateProjectInput = Omit<CreateInput, 'metadata'> & {
   appliedPluginSnapshotId?: string;
   pluginInputs?: Record<string, unknown>;
   automaticStrategyTaskProfile?: import('@open-design/contracts').ProjectScenarioTaskProfile;
-  conversationMode?: ChatSessionMode;
-  autoSendFirstMessage?: boolean;
-  requestId?: string;
-  pendingFiles?: File[];
-  userWorkingDirToken?: string;
+ conversationMode?: ChatSessionMode;
+ autoSendFirstMessage?: boolean;
+ requestId?: string;
+ pendingFiles?: File[];
+ userWorkingDirToken?: string;
+  folderId?: string;
 };
 
 interface Props {

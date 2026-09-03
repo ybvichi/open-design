@@ -858,6 +858,7 @@ export const zhTW: Dict = {
   "teamSpace.newProjectGroup": "New project group",
   "teamSpace.projectGroupsTitle": "Project groups",
   "teamSpace.noProjectGroups": "No project groups yet",
+  "teamSpace.noProjectsInFolder": "No projects in this folder yet",
   "teamSpace.projectGroupCount": "{n} projects",
   "teamSpace.newGroupNameLabel": "Group name",
   "teamSpace.newGroupNamePlaceholder": "Enter group name",

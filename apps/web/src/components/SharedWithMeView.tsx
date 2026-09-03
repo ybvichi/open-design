@@ -7,7 +7,7 @@ import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import styles from './TeamSpaceView.module.css';
 
-type ScopeTab = 'all' | 'projects' | 'folders' | 'skill' | 'mcp';
+type ScopeTab = 'projects' | 'skill' | 'mcp';
 
 interface TabDef {
   id: ScopeTab;
@@ -16,16 +16,14 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: 'all', icon: 'grid', labelKey: 'personalScope.tabAll' },
   { id: 'projects', icon: 'folder', labelKey: 'personalScope.tabProjects' },
-  { id: 'folders', icon: 'folder-filled', labelKey: 'personalScope.tabFolders' },
   { id: 'skill', icon: 'sparkles', labelKey: 'personalScope.tabSkill' },
   { id: 'mcp', icon: 'terminal', labelKey: 'personalScope.tabMcp' },
 ];
 
 export function SharedWithMeView() {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<ScopeTab>('all');
+  const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
 
   const title = t('personalFunc.shared');
   const subtitle = t('personalScope.subtitleShared');

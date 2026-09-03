@@ -147,31 +147,34 @@ export function bindCreatedProjectToWorkspace(
     syncState: 'local_only';
     resourceHubResourceId: null;
     cloudTombstonedAt: null;
-    createdAt: number;
-    updatedAt: number;
-  }) => unknown,
-  context: WorkspaceResourceContext | null,
-  projectId: string,
-  now: number,
+   createdAt: number;
+   updatedAt: number;
+   folderId?: string;
+ }) => unknown,
+ context: WorkspaceResourceContext | null,
+ projectId: string,
+ now: number,
+ folderId?: string,
 ): void {
-  if (!context) return;
-  // This row is local attribution, not publication. It keeps billing and later
-  // run routing associated with the browser's captured Workspace/member while
-  // the project remains `personal` + `local_only`. Creating it must never be
-  // interpreted as sharing the project or as authorization to use any local
-  // plugin/Skill/Design System. The move/share/sync routes own those remote
-  // authorization boundaries.
-  ensureWorkspaceProject({
-    projectId,
-    workspaceId: context.workspaceId,
-    visibility: 'personal',
-    resourceState: 'active',
-    createdByWorkspaceMemberId: context.workspaceMemberId,
-    updatedByWorkspaceMemberId: context.workspaceMemberId,
-    syncState: 'local_only',
-    resourceHubResourceId: null,
-    cloudTombstonedAt: null,
-    createdAt: now,
-    updatedAt: now,
-  });
+ if (!context) return;
+ // This row is local attribution, not publication. It keeps billing and later
+ // run routing associated with the browser's captured Workspace/member while
+ // the project remains `personal` + `local_only`. Creating it must never be
+ // interpreted as sharing the project or as authorization to use any local
+ // plugin/Skill/Design System. The move/share/sync routes own those remote
+ // authorization boundaries.
+ ensureWorkspaceProject({
+   projectId,
+   workspaceId: context.workspaceId,
+   visibility: 'personal',
+   resourceState: 'active',
+   createdByWorkspaceMemberId: context.workspaceMemberId,
+   updatedByWorkspaceMemberId: context.workspaceMemberId,
+   syncState: 'local_only',
+   resourceHubResourceId: null,
+   cloudTombstonedAt: null,
+   createdAt: now,
+   updatedAt: now,
+   ...(folderId ? { folderId } : {}),
+ });
 }

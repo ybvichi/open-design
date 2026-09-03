@@ -591,25 +591,35 @@
 
 .folderList {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+  /* Match recent-projects__row--grid: 5-across at full width, stepping down
+     with container width so cards never get crushed when the window narrows.
+     Uses the same container-query breakpoints as the project card grid. */
+  container: folderList / inline-size;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--spacing-16);
 }
 
-@media (min-width: 560px) {
+@container folderList (max-width: 947px) {
   .folderList {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 840px) {
+@container folderList (max-width: 755px) {
   .folderList {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1120px) {
+@container folderList (max-width: 563px) {
   .folderList {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container folderList (max-width: 371px) {
+  .folderList {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -625,6 +635,7 @@
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
+  position: relative;
   transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
 }
 
@@ -646,11 +657,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: #f3f4f6;
+  background: #fff;
   min-width: 0;
+}
+
+.gridCellIcon {
+  flex: 0 0 auto;
 }
 
 .gridCellEmpty {
@@ -740,6 +756,111 @@
   text-align: center;
   font-size: 14px;
   color: var(--text-muted);
+}
+
+/* --- Projects section (below folder cards) --- */
+
+.projectsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* --- Folder card more-menu (top-right anchor, same pattern as
+     recent-projects__card-menu-anchor) --- */
+
+.folderCardMenuAnchor {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+}
+
+.folderCardMore {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel, var(--bg-elevated, #fff));
+  color: var(--text-muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out),
+    background-color 140ms var(--ease-out);
+}
+
+.folderCard:hover .folderCardMore,
+.folderCardMore[aria-expanded="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.folderCardMore:hover,
+.folderCardMore:focus-visible {
+  border-color: var(--border-strong, var(--border));
+  background: var(--bg-panel, var(--bg-elevated, #fff));
+  color: var(--text-strong);
+}
+
+.folderCardMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  min-width: 144px;
+  padding: 4px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius);
+  background: var(--bg-panel, var(--bg-elevated, #fff));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.folderCardMenu button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-large, 8px);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.folderCardMenu button:hover,
+.folderCardMenu button:focus-visible {
+  background: var(--bg-subtle);
+  color: var(--text-strong);
+}
+
+.folderCardMenu button.danger {
+  color: var(--red, #dc2626);
+}
+
+.folderCardMenu button.danger:hover,
+.folderCardMenu button.danger:focus-visible {
+  background: color-mix(in srgb, var(--red, #dc2626) 12%, transparent);
 }
 
 /* --- Create group dialog form --- */

@@ -264,9 +264,10 @@ type AppCreateProjectInput = Omit<CreateInput, 'metadata'> & {
   amrGatePrecheckWitness?: AmrBalanceGateScope;
   requestId?: string;
   pendingFiles?: File[];
-  userWorkingDirToken?: string;
-  linkedDirs?: string[] | null;
-  onboardingEntry?: OnboardingEntry;
+ userWorkingDirToken?: string;
+ linkedDirs?: string[] | null;
+ onboardingEntry?: OnboardingEntry;
+ folderId?: string;
 };
 
 interface PendingProjectCreation {
@@ -3040,12 +3041,13 @@ function AppInner() {
           ...(input.automaticStrategyTaskProfile
             ? { automaticStrategyTaskProfile: input.automaticStrategyTaskProfile }
             : {}),
-          ...(input.exampleReference
-            ? { exampleReference: input.exampleReference }
-            : {}),
-          workspaceContext: createWorkspaceContext,
-        });
-      } catch (err) {
+         ...(input.exampleReference
+           ? { exampleReference: input.exampleReference }
+           : {}),
+         workspaceContext: createWorkspaceContext,
+         ...(input.folderId ? { folderId: input.folderId } : {}),
+       });
+     } catch (err) {
         const errorCode =
           err instanceof Error && err.message.trim()
             ? err.message
@@ -3100,13 +3102,17 @@ function AppInner() {
         );
         return false;
       }
-      const project = result.appliedPluginSnapshotId
-        ? {
-            ...result.project,
-            appliedPluginSnapshotId: result.appliedPluginSnapshotId,
-          }
-        : result.project;
-      if (optimisticProjectId) {
+     const project = result.appliedPluginSnapshotId
+       ? {
+           ...result.project,
+           appliedPluginSnapshotId: result.appliedPluginSnapshotId,
+         }
+       : result.project;
+     // Clear the folder context tag now that the project has been created
+     // with the folder_id association. This prevents the tag from persisting
+     // on the home page for the next project.
+     try { localStorage.removeItem('od:home-folder-context'); } catch { /* ignore */ }
+     if (optimisticProjectId) {
         rememberLocalProject(project.id);
         flushSync(() => {
           setProjects((curr) => [

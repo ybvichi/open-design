@@ -149,6 +149,7 @@ import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
 import { TeamSpaceView } from './TeamSpaceView';
 import { FolderView } from './TeamSpaceView';
 import { PersonalAllView } from './PersonalAllView';
+import { PersonalFolderView } from './PersonalFolderView';
 import { SharedWithMeView } from './SharedWithMeView';
 import {
   notifyTeamProjectsChanged,
@@ -302,12 +303,13 @@ type EntryCreateProjectInput = Omit<CreateInput, 'metadata'> & {
   conversationMode?: ChatSessionMode;
   autoSendFirstMessage?: boolean;
   /** Exact workspace/member authority checked by the Home AMR preflight. */
-  amrGatePrecheckWitness?: AmrBalanceGateScope;
-  requestId?: string;
-  pendingFiles?: File[];
-  userWorkingDirToken?: string;
-  linkedDirs?: string[] | null;
-  onboardingEntry?: OnboardingEntry;
+ amrGatePrecheckWitness?: AmrBalanceGateScope;
+ requestId?: string;
+ pendingFiles?: File[];
+ userWorkingDirToken?: string;
+ linkedDirs?: string[] | null;
+ onboardingEntry?: OnboardingEntry;
+  folderId?: string;
 };
 
 function defaultPluginIdForMetadata(metadata: ProjectMetadata): string | null {
@@ -1494,10 +1496,18 @@ export function EntryShell({
       // access and are validated by the daemon at create time, so they do
       // not need the desktop main-process trust token that baseDir imports
       // require for write access.
-      autoSendFirstMessage: true,
-      ...(amrGatePrecheckWitness ? { amrGatePrecheckWitness } : {}),
-    };
-    const create = () => Promise.resolve(onCreateProject(createInput));
+     autoSendFirstMessage: true,
+     ...(amrGatePrecheckWitness ? { amrGatePrecheckWitness } : {}),
+      ...(() => {
+        try {
+          const raw = localStorage.getItem('od:home-folder-context');
+          if (!raw) return {};
+          const parsed = JSON.parse(raw) as { folderId?: string };
+          return parsed.folderId ? { folderId: parsed.folderId } : {};
+        } catch { return {}; }
+      })(),
+   };
+   const create = () => Promise.resolve(onCreateProject(createInput));
     try {
       return await create();
     } catch (error) {
@@ -2013,10 +2023,24 @@ export function EntryShell({
           {view === 'team-folder' ? (
             <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} />
           ) : null}
-          {view === 'personal-all' ? (
-            <PersonalAllView />
-          ) : null}
-          {view === 'shared-with-me' ? (
+         {view === 'personal-all' ? (
+           <PersonalAllView
+             designSystems={designSystems}
+             onOpenProject={onOpenProject}
+             onDeleteProject={onDeleteProject}
+             onRenameProject={onRenameProject}
+           />
+         ) : null}
+         {view === 'personal-folder' ? (
+           <PersonalFolderView
+             folderId={route.kind === 'home' ? route.folderId : undefined}
+             designSystems={designSystems}
+             onOpenProject={onOpenProject}
+             onDeleteProject={onDeleteProject}
+             onRenameProject={onRenameProject}
+           />
+         ) : null}
+         {view === 'shared-with-me' ? (
             <SharedWithMeView />
           ) : null}
         </div>

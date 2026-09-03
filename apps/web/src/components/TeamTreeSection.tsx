@@ -6,9 +6,9 @@
 // page (`/team/:teamId/folder/:folderId`). Both destination pages are empty
 // placeholders for now — this component is the navigation entry point.
 //
-// Folder data is mock/hardcoded for now. Real folder APIs do not exist yet
-// in the daemon or contracts layer, so teams without mock data simply show
-// no folder children (the "如果有的话" case from the placeholder comment).
+// Root-level folders are fetched from the HDW folder API
+// (`GET /api/hdw/webapi/v1/folder/list?workspace_id=<teamId>`) and refreshed
+// when a create/delete dispatches the `hdw:folders-updated` event.
 
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -23,23 +23,6 @@ import styles from './TeamTreeSection.module.css';
 export interface TeamFolder {
   id: string;
   name: string;
-}
-
-/**
- * Mock folder data keyed by team/workspace name. Real folder APIs don't
- * exist yet; this lets the tree show folders for "测试团队" immediately.
- * Add entries here as needed during development.
- */
-const MOCK_FOLDERS_BY_TEAM_NAME: Record<string, TeamFolder[]> = {
-  // '测试团队': [
-  //   { id: 'folder-design', name: '设计稿' },
-  //   { id: 'folder-prototype', name: '原型' },
-  // ],
-};
-
-
-function foldersForTeam(teamName: string): TeamFolder[] {
-  return MOCK_FOLDERS_BY_TEAM_NAME[teamName] ?? [];
 }
 
 interface Props {
@@ -68,8 +51,9 @@ interface TeamNodeProps {
 
 function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTeam }: TeamNodeProps) {
   const t = useT();
-  const [expanded, setExpanded] = useState(true);
-  const folders = foldersForTeam(team.workspaceName);
+  const [expanded, setExpanded] = useState(false);
+  const [folders, setFolders] = useState<TeamFolder[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
   const isActiveTeam = activeTeamId === team.workspaceId;
   const isTeamSelected = isActiveTeam && !activeFolderId;
   const canRename = team.role === 'admin' || team.role === 'owner';
@@ -80,6 +64,47 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch root-level folders for this team from the HDW folder API, and
+  // refresh when a create/delete dispatches `hdw:folders-updated` for
+  // this team. Folders are loaded lazily — the request is only sent when
+  // the user expands this team node.
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    const loadFolders = async () => {
+      setFoldersLoading(true);
+      try {
+        const res = await fetch(
+          `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(team.workspaceId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) { if (!cancelled) setFolders([]); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        const list: any[] = body?.data?.folders ?? [];
+        setFolders(list.map((f) => ({
+          id: f.folder_id || f.id || '',
+          name: f.folder_name || f.name || '',
+        })));
+      } catch {
+        if (!cancelled) setFolders([]);
+      } finally {
+        if (!cancelled) setFoldersLoading(false);
+      }
+    };
+    void loadFolders();
+    function onFoldersUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.teamId !== team.workspaceId) return;
+      void loadFolders();
+    }
+    window.addEventListener('hdw:folders-updated', onFoldersUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hdw:folders-updated', onFoldersUpdated);
+    };
+  }, [team.workspaceId, expanded]);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -181,7 +206,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
       <div className={`${styles.teamRow}${isTeamSelected ? ` ${styles.isActiveRow}` : ''}`}>
         <button
           type="button"
-          className={`${styles.expandBtn}${folders.length === 0 ? ` ${styles.expandBtnHidden}` : ''}`}
+          className={styles.expandBtn}
           onClick={handleToggle}
           aria-label={expanded ? t('entry.navCollapse') : t('entry.navExpand')}
           aria-expanded={expanded}
@@ -193,7 +218,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
           />
         </button>
         {editing ? (
-          <div className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}>
+          <div className={styles.teamLabel}>
             <Icon name="folder" size={16} className={styles.teamIcon} />
             <input
               ref={inputRef}
@@ -209,7 +234,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
           <>
             <button
               type="button"
-              className={`${styles.teamLabel}${folders.length === 0 ? ` ${styles.teamLabelNoExpand}` : ''}`}
+              className={styles.teamLabel}
               onClick={handleTeamClick}
               onDoubleClick={canRename ? startEdit : undefined}
               title={team.workspaceName}
@@ -235,7 +260,15 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
           </>
         )}
       </div>
-      {expanded && folders.length > 0 ? (
+      {expanded && foldersLoading ? (
+        <div className={styles.folderList} role="group">
+          <div className={styles.skeletonRow} aria-hidden>
+            <span className={styles.skeletonChevron} />
+            <Skeleton width={13} height={13} radius={4} />
+            <Skeleton width="40%" height={13} radius={6} />
+          </div>
+        </div>
+      ) : expanded && folders.length > 0 ? (
         <div className={styles.folderList} role="group">
           {folders.map((folder) => {
             const isActiveFolder =

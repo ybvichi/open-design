@@ -776,10 +776,11 @@ export async function createProject(
      * OD Next route. A claim, not content: the daemon re-resolves it through
      * the local catalogue. Never accompanies `pluginId`/`appliedPluginSnapshotId`.
      */
-    exampleReference?: CreateProjectExampleReference;
-    workspaceContext?: WorkspaceCollabContext | null;
-  },
-  retryOptions: CreateProjectRetryOptions = {},
+   exampleReference?: CreateProjectExampleReference;
+   workspaceContext?: WorkspaceCollabContext | null;
+   folderId?: string;
+ },
+ retryOptions: CreateProjectRetryOptions = {},
 ): Promise<{ project: Project; conversationId: string; appliedPluginSnapshotId?: string }> {
   const maxRetries = retryOptions.maxRetries ?? 3;
   const sleep = retryOptions.sleep ?? defaultRetrySleep;

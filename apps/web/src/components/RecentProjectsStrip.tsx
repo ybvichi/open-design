@@ -142,7 +142,14 @@ interface Props {
   /** Whether this mounted strip is visible. EntryShell keeps Home mounted while
    * other views are active, so hidden strips must not occupy browser connection
    * slots with background cover probes. */
-  isActive?: boolean;
+ isActive?: boolean;
+ /** When true, only the title/description block is hidden — the controls
+  *  (multi-select, filters, sort, view toggle) remain visible. */
+ hideTitle?: boolean;
+/** External search query. When provided, the strip uses this value instead
+ *  of its internal search state (used with hideHeader to move search to the
+ *  parent view's header). */
+externalSearchQuery?: string;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
@@ -348,8 +355,10 @@ export function RecentProjectsStrip({
   openingProjectId = null,
   collaborationEnabled,
   canAssignInviteRoles,
-  canManageProjectCollection,
-  isActive = true,
+ canManageProjectCollection,
+isActive = true,
+hideTitle = false,
+externalSearchQuery,
 }: Props) {
   const t = useT();
   const analytics = useAnalytics();
@@ -414,7 +423,8 @@ export function RecentProjectsStrip({
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [kindFilter, setKindFilter] = useState<ProjectKindFilter>('all');
  const [sort, setSort] = useState<ProjectSort>('updatedDesc');
-  const [searchQuery, setSearchQuery] = useState('');
+ const [searchQuery, setSearchQuery] = useState('');
+ const effectiveSearchQuery = externalSearchQuery ?? searchQuery;
   const [openHeaderMenu, setOpenHeaderMenu] = useState<'owner' | 'kind' | 'sort' | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -526,7 +536,7 @@ export function RecentProjectsStrip({
           (ownerFilter === 'mine' && creator.ownedBySelf) ||
           (ownerFilter === 'others' && !creator.ownedBySelf);
        const kindMatches = kindFilter === 'all' || projectCardCategory(project) === kindFilter;
-       const trimmedSearch = searchQuery.trim().toLowerCase();
+      const trimmedSearch = effectiveSearchQuery.trim().toLowerCase();
        const searchMatches = !trimmedSearch || (typeof project.name === 'string' && project.name.toLowerCase().includes(trimmedSearch));
        return ownerMatches && kindMatches && searchMatches;
      })
@@ -538,9 +548,9 @@ export function RecentProjectsStrip({
      resolveMember,
      resolvedLimit,
      selfMemberId,
-     showOwnerFilter,
-     searchQuery,
-     sortedProjects,
+    showOwnerFilter,
+    effectiveSearchQuery,
+    sortedProjects,
      t,
      workspaceContext?.avatarUrl,
      workspaceContext?.displayName,
@@ -1373,52 +1383,56 @@ export function RecentProjectsStrip({
   return (
     <section className="recent-projects" data-testid="recent-projects-strip">
       {fullPageGrid ? (
-        <header className="recent-projects__head">
-          <div className="recent-projects__title-block">
-            <h2 className="recent-projects__heading">{heading ?? t('recentProjects.title')}</h2>
-            {description ? (
-              <p className="recent-projects__description">{description}</p>
-            ) : null}
-          </div>
-          <div className="recent-projects__controls">
-            {space === 'team' &&
-            canAccessInviteFlow &&
-            inviteTarget.kind !== 'unavailable' ? (
-              <button
-                type="button"
-                className="recent-projects__invite"
-                onClick={() => {
-                  trackCollection('invite_teammates');
-                  if (inviteTarget.kind === 'vela') {
-                    window.open(inviteTarget.url, '_blank', 'noopener,noreferrer');
-                  } else if (inviteTarget.kind === 'local') {
-                    setInviteOpen(true);
-                  }
-                }}
-              >
-                <Icon name="share" size={15} /> {t('recentProjects.inviteTeammates')}
-              </button>
-           ) : null}
-           <div className="recent-projects__search">
-             <Icon name="search" size={14} />
-             <input
-               type="text"
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               placeholder={t('recentProjects.searchPlaceholder')}
-               aria-label={t('recentProjects.searchPlaceholder')}
-             />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  className="recent-projects__search-clear"
-                  aria-label={t('recentProjects.clearFilters')}
-                  onClick={() => setSearchQuery('')}
-                >
-                  <Icon name="close" size={12} />
-                </button>
+      <header className="recent-projects__head">
+          {hideTitle ? null : (
+            <div className="recent-projects__title-block">
+              <h2 className="recent-projects__heading">{heading ?? t('recentProjects.title')}</h2>
+              {description ? (
+                <p className="recent-projects__description">{description}</p>
               ) : null}
-           </div>
+            </div>
+          )}
+         <div className="recent-projects__controls">
+           {space === 'team' &&
+           canAccessInviteFlow &&
+           inviteTarget.kind !== 'unavailable' ? (
+             <button
+               type="button"
+               className="recent-projects__invite"
+               onClick={() => {
+                 trackCollection('invite_teammates');
+                 if (inviteTarget.kind === 'vela') {
+                   window.open(inviteTarget.url, '_blank', 'noopener,noreferrer');
+                 } else if (inviteTarget.kind === 'local') {
+                   setInviteOpen(true);
+                 }
+               }}
+             >
+               <Icon name="share" size={15} /> {t('recentProjects.inviteTeammates')}
+             </button>
+          ) : null}
+          {externalSearchQuery === undefined ? (
+          <div className="recent-projects__search">
+            <Icon name="search" size={14} />
+            <input
+              type="text"
+              value={effectiveSearchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('recentProjects.searchPlaceholder')}
+              aria-label={t('recentProjects.searchPlaceholder')}
+            />
+             {effectiveSearchQuery ? (
+               <button
+                 type="button"
+                 className="recent-projects__search-clear"
+                 aria-label={t('recentProjects.clearFilters')}
+                 onClick={() => setSearchQuery('')}
+               >
+                 <Icon name="close" size={12} />
+               </button>
+             ) : null}
+          </div>
+          ) : null}
            {canManageCollection ? (
              <button
                type="button"

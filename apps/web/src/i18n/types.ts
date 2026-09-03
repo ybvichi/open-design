@@ -1241,8 +1241,8 @@ export interface Dict {
  'teamSpace.daysAgo': string;
  'teamSpace.newProjectGroup': string;
  'teamSpace.projectGroupsTitle': string;
- 'teamSpace.noProjectGroups': string;
- 'teamSpace.projectGroupCount': string;
+'teamSpace.noProjectGroups': string;
+'teamSpace.projectGroupCount': string;
  'teamSpace.newGroupNameLabel': string;
  'teamSpace.newGroupNamePlaceholder': string;
  'teamSpace.createGroupBtn': string;
@@ -1253,8 +1253,9 @@ export interface Dict {
 'teamSpace.createGroupError': string;
  'teamSpace.folderSubtitle': string;
  'teamSpace.subFoldersTitle': string;
- 'teamSpace.noSubFolders': string;
- 'teamSpace.subFolderCount': string;
+'teamSpace.noSubFolders': string;
+ 'teamSpace.noProjectsInFolder': string;
+'teamSpace.subFolderCount': string;
  'teamSpace.newSubFolder': string;
  'teamSpace.newFolderNameLabel': string;
  'teamSpace.newFolderNamePlaceholder': string;

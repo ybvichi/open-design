@@ -3556,8 +3556,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         context: localProjectWorkspaceAttribution(req),
       };
       learnAssertedWorkspaceType(createWorkspace.context);
-      const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
-        req.body || {};
+     const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
+       req.body || {};
+     const folderId =
+       typeof req.body?.folderId === 'string' && req.body.folderId.trim().length > 0
+         ? req.body.folderId.trim()
+         : undefined;
       if (typeof id !== 'string' || !isSafeId(id)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'invalid project id');
       }
@@ -3982,25 +3986,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                 : null,
             createdAt: now,
             updatedAt: now,
-          });
-          // Project, seed conversation, and workspace membership form one
-          // ownership record. A binding failure must leave none of them behind.
-          insertConversation(db, {
-            id: cid,
-            projectId: id,
-            title: null,
-            sessionMode: initialSessionMode,
-            createdAt: now,
-            updatedAt: now,
-          });
-          bindCreatedProjectToWorkspace(
-            (input) => ensureWorkspaceProject(db, input),
-            createWorkspace.context,
-            id,
-            now,
-          );
-          if (resolveBody && registry) {
-            const resolved = resolvePluginSnapshot({
+         });
+         // Project, seed conversation, and workspace membership form one
+         // ownership record. A binding failure must leave none of them behind.
+         insertConversation(db, {
+           id: cid,
+           projectId: id,
+           title: null,
+           sessionMode: initialSessionMode,
+           createdAt: now,
+         });
+         bindCreatedProjectToWorkspace(
+           (input) => ensureWorkspaceProject(db, input),
+           createWorkspace.context,
+           id,
+           now,
+           folderId,
+         );
+         if (resolveBody && registry) {
+           const resolved = resolvePluginSnapshot({
               db,
               body: resolveBody,
               projectId: id,

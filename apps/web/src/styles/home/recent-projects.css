@@ -653,6 +653,7 @@
 .recent-projects__controls {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: var(--spacing-8);
 }
 .recent-projects__select-toggle {

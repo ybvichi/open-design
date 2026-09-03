@@ -22,7 +22,7 @@ export function PersonalFuncSection() {
   return (
     <div data-testid="personal-func-section" className="entry-nav-rail__team-section">
       {ITEMS.map((item) => {
-        const isActive = activeView === item.id;
+        const isActive = activeView === item.id || (item.id === 'personal-all' && activeView === 'personal-folder');
         return (
           <button
             key={item.id}

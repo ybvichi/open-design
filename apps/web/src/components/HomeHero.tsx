@@ -299,6 +299,55 @@ const EMPTY_MCP_OPTIONS: McpServerConfig[] = [];
 const EMPTY_CONNECTOR_OPTIONS: ConnectorDetail[] = [];
 const EMPTY_WORKSPACE_ITEMS: WorkspaceContextItem[] = [];
 
+const FOLDER_CONTEXT_KEY = 'od:home-folder-context';
+
+function FolderContextTag({ active }: { active: boolean }) {
+  const [ctx, setCtx] = useState<{ folderId: string; folderPath: string } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FOLDER_CONTEXT_KEY);
+      if (raw) setCtx(JSON.parse(raw));
+    } catch { /* ignore */ }
+    function onStorage(e: StorageEvent) {
+      if (e.key === FOLDER_CONTEXT_KEY) {
+        try {
+          setCtx(e.newValue ? JSON.parse(e.newValue) : null);
+        } catch { setCtx(null); }
+      }
+    }
+   window.addEventListener('storage', onStorage);
+   function onFolderContextChanged() {
+     try {
+       const raw = localStorage.getItem(FOLDER_CONTEXT_KEY);
+       setCtx(raw ? JSON.parse(raw) : null);
+     } catch { setCtx(null); }
+   }
+   window.addEventListener('od:folder-context-changed', onFolderContextChanged);
+   return () => {
+     window.removeEventListener('storage', onStorage);
+     window.removeEventListener('od:folder-context-changed', onFolderContextChanged);
+   };
+ }, [active]);
+  if (!ctx) return null;
+  return (
+    <div className="home-hero__folder-tag">
+      <Icon name="folder" size={13} aria-hidden />
+      <span className="home-hero__folder-tag-path">{ctx.folderPath}</span>
+      <button
+        type="button"
+        className="home-hero__folder-tag-close"
+        aria-label="clear"
+        onClick={() => {
+         localStorage.removeItem(FOLDER_CONTEXT_KEY);
+         setCtx(null);
+      }}
+   >
+        <Icon name="close" size={12} aria-hidden />
+      </button>
+   </div>
+ );
+}
+
 export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   {
     workspaceContext = null,
@@ -2077,9 +2126,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               onChange={onDesignSystemChange}
             />
           ) : null} */}
-          {onDesignSystemChange && onPickWorkingDir ? (
-            <span className="home-hero__workdir-divider" aria-hidden />
-          ) : null}
+          
           {onPickWorkingDir ? (
             <WorkingDirPicker
               className="home-hero__working-dir-picker"
@@ -2110,13 +2157,17 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 });
                 onClearWorkingDir?.();
               }}
-            />
+           />
+        ) : null}
+        {onDesignSystemChange && onPickWorkingDir ? (
+            <span className="home-hero__workdir-divider" aria-hidden />
           ) : null}
-        </div>
-      ) : null}
+          <FolderContextTag active={active} />
       </div>
+    ) : null}
+    </div>
 
-      {recommendationSlot}
+     {recommendationSlot}
 
       {/* {activeSubChips.length > 0 && isSubChipParent(activeChipId) ? (
         <SubTypeRow

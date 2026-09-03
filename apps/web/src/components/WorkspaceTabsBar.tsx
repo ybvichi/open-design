@@ -1982,11 +1982,12 @@ function displayTabFor(
    'workspace-settings': t('entry.navWorkspaceSettings'),
   'team-space': t('entry.navTeamSection'),
   'team-folder': t('entry.navTeamSection'),
-  'personal-all': t('personalFunc.all'),
-  'shared-with-me': t('personalFunc.shared'),
-  settings: t('settings.title'),
+ 'personal-all': t('personalFunc.all'),
+ 'shared-with-me': t('personalFunc.shared'),
+ 'personal-folder': t('personalFunc.all'),
+ settings: t('settings.title'),
 };
- const entryIcon: Record<EntryHomeView, IconName> = {
+const entryIcon: Record<EntryHomeView, IconName> = {
     home: 'home',
     onboarding: 'sparkles',
     projects: 'folder',
@@ -2005,9 +2006,10 @@ function displayTabFor(
    'workspace-settings': 'settings',
   'team-space': 'folder',
   'team-folder': 'folder-filled',
-  'personal-all': 'folder-filled',
-  'shared-with-me': 'share',
-  settings: 'settings',
+ 'personal-all': 'folder-filled',
+ 'shared-with-me': 'share',
+ 'personal-folder': 'folder-filled',
+ settings: 'settings',
 };
  return {
     id: tab.id,

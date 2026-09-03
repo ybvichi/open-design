@@ -3437,3 +3437,42 @@
   cursor: default;
   opacity: 0.6;
 }
+
+.home-hero__folder-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  max-width: 360px;
+ padding: 3px 6px 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.home-hero__folder-tag-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-hero__folder-tag-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.home-hero__folder-tag-close:hover {
+  background: var(--border);
+  color: var(--text-strong);
+}

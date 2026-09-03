@@ -1272,28 +1272,36 @@ export function ensureWorkspaceProject(db: SqliteDb, input: DbRow) {
     : typeof boundProjectUpdatedAt === 'number'
       ? boundProjectUpdatedAt
       : now;
-  db.prepare(
-    `INSERT INTO workspace_projects
-       (project_id, workspace_id, visibility, resource_state,
-        created_by_workspace_member_id, updated_by_workspace_member_id,
-        resource_hub_resource_id, cloud_tombstoned_at,
-        sync_state, version, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    input.projectId,
-    input.workspaceId,
-    input.visibility ?? 'personal',
-    input.resourceState ?? 'active',
-    input.createdByWorkspaceMemberId ?? null,
-    input.updatedByWorkspaceMemberId ?? input.createdByWorkspaceMemberId ?? null,
-    input.resourceHubResourceId ?? null,
-    input.cloudTombstonedAt ?? null,
-    input.syncState ?? 'local_only',
-    input.version ?? 1,
-    input.createdAt ?? now,
-    insertedUpdatedAt,
-  );
-  return getWorkspaceProject(db, input.workspaceId, input.projectId);
+ db.prepare(
+   `INSERT INTO workspace_projects
+      (project_id, workspace_id, visibility, resource_state,
+       created_by_workspace_member_id, updated_by_workspace_member_id,
+       resource_hub_resource_id, cloud_tombstoned_at,
+       sync_state, version, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+ ).run(
+   input.projectId,
+   input.workspaceId,
+   input.visibility ?? 'personal',
+   input.resourceState ?? 'active',
+   input.createdByWorkspaceMemberId ?? null,
+   input.updatedByWorkspaceMemberId ?? input.createdByWorkspaceMemberId ?? null,
+   input.resourceHubResourceId ?? null,
+   input.cloudTombstonedAt ?? null,
+   input.syncState ?? 'local_only',
+   input.version ?? 1,
+   input.createdAt ?? now,
+   insertedUpdatedAt,
+ );
+ // Attach the folder association if one was provided. The `folder_id`
+ // column was added via ALTER TABLE migration; it is NULL for workspace
+ // root projects.
+ if (input.folderId) {
+   db.prepare(
+     `UPDATE workspace_projects SET folder_id = ? WHERE project_id = ?`,
+   ).run(input.folderId, input.projectId);
+ }
+ return getWorkspaceProject(db, input.workspaceId, input.projectId);
 }
 
 export function updateWorkspaceProject(db: SqliteDb, workspaceId: string, projectId: string, patch: DbRow) {
@@ -2218,7 +2226,7 @@ export function deleteProject(db: SqliteDb, id: string) {
   db.prepare(`DELETE FROM projects WHERE id = ?`).run(id);
 }
 
-function normalizeProject(row: DbRow) {
+export function normalizeProject(row: DbRow) {
   let metadata;
   if (row.metadataJson) {
     try {

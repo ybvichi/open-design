@@ -8,6 +8,7 @@ import { Icon, type IconName } from './Icon';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { avatarColorFor } from '../utils/avatarColor';
+import { FolderCardMenu } from './FolderCardMenu';
 import styles from './TeamSpaceView.module.css';
 
  type TeamTab = 'projects' | 'members' | 'skill' | 'mcp';
@@ -225,6 +226,7 @@ interface TeamFolderItem {
   createdAt: string;
 }
 
+
 function ProjectsPanel({
   teamId,
   operator,
@@ -377,17 +379,30 @@ function ProjectsPanel({
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder); } }}
               title={folder.folderName}
             >
-              <div className={styles.folderCardGrid}>
-                {Array.from({ length: 4 }, (_, i) => {
-                  const name = folder.subfolderPreview[i];
-                  return (
-                    <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                      {name ? <span className={styles.gridCellName}>{name}</span> : null}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className={styles.folderCardInfo}>
+            {canManage ? (
+              <FolderCardMenu
+                onDelete={() => setRemoveTarget(folder)}
+                deleteLabel={t('teamSpace.deleteGroup')}
+              />
+            ) : null}
+             <div className={styles.folderCardGrid}>
+              {Array.from({ length: 4 }, (_, i) => {
+                const name = folder.subfolderPreview[i];
+                return (
+                  <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
+                    {name ? (
+                      <>
+                        <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                          <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                          <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                        </svg>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
+             </div>
+             <div className={styles.folderCardInfo}>
                <div className={styles.folderCardTitle}>
                   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
                     <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
@@ -405,19 +420,6 @@ function ProjectsPanel({
                       {t('teamSpace.projectGroupCount', { n: folder.projectCount })}
                     </span>
                   </div>
-                  {canManage ? (
-                    <span className={styles.folderActions} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className={styles.removeBtn}
-                        title={t('teamSpace.deleteGroup')}
-                        aria-label={t('teamSpace.deleteGroup')}
-                        onClick={(e) => { e.stopPropagation(); setRemoveTarget(folder); }}
-                      >
-                        <Icon name="trash" size={14} aria-hidden />
-                      </button>
-                    </span>
-                  ) : null}
                 </div>
              </div>
            </article>
@@ -1077,22 +1079,35 @@ function FoldersPanel({
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder); } }}
             title={folder.folderName}
           >
-            <div className={styles.folderCardGrid}>
-              {Array.from({ length: 4 }, (_, i) => {
-                const name = folder.subfolderPreview[i];
-                return (
-                  <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                    {name ? <span className={styles.gridCellName}>{name}</span> : null}
-                  </div>
-                );
-              })}
-            </div>
-            <div className={styles.folderCardInfo}>
+            {canManage ? (
+              <FolderCardMenu
+                onDelete={() => setRemoveTarget(folder)}
+                deleteLabel={t('teamSpace.deleteFolder')}
+              />
+            ) : null}
+           <div className={styles.folderCardGrid}>
+             {Array.from({ length: 4 }, (_, i) => {
+               const name = folder.subfolderPreview[i];
+               return (
+                 <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
+                   {name ? (
+                     <>
+                       <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                         <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                         <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                       </svg>
+                     </>
+                   ) : null}
+                 </div>
+               );
+             })}
+           </div>
+           <div className={styles.folderCardInfo}>
              <div className={styles.folderCardTitle}>
-                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
-                  <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                  <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                </svg>
+               <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
+                 <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                 <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+               </svg>
                <span className={styles.folderName}>{folder.folderName}</span>
              </div>
               <div className={styles.folderCardMeta}>
@@ -1105,19 +1120,6 @@ function FoldersPanel({
                     {t('teamSpace.projectGroupCount', { n: folder.projectCount })}
                   </span>
                 </div>
-                {canManage ? (
-                  <span className={styles.folderActions} onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className={styles.removeBtn}
-                      title={t('teamSpace.deleteFolder')}
-                      aria-label={t('teamSpace.deleteFolder')}
-                      onClick={(e) => { e.stopPropagation(); setRemoveTarget(folder); }}
-                    >
-                      <Icon name="trash" size={14} aria-hidden />
-                    </button>
-                  </span>
-                ) : null}
               </div>
            </div>
          </article>
