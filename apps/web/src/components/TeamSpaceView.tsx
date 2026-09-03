@@ -10,7 +10,7 @@ import type { Dict } from '../i18n/types';
 import { avatarColorFor } from '../utils/avatarColor';
 import styles from './TeamSpaceView.module.css';
 
-type TeamTab = 'projects' | 'members' | 'resources' | 'trash';
+ type TeamTab = 'projects' | 'members' | 'skill' | 'mcp';
 
 interface TabDef {
   id: TeamTab;
@@ -21,8 +21,8 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: 'projects', icon: 'folder', labelKey: 'teamSpace.tabProjects' },
   { id: 'members', icon: 'users', labelKey: 'teamSpace.tabMembers' },
-  { id: 'resources', icon: 'layers-filled', labelKey: 'teamSpace.tabResources' },
-  { id: 'trash', icon: 'trash', labelKey: 'teamSpace.tabTrash' },
+  { id: 'skill', icon: 'puzzle', labelKey: 'teamSpace.tabSkill' },
+  { id: 'mcp', icon: 'integrations-filled', labelKey: 'teamSpace.tabMcp' },
 ];
 
 type MemberRole = 'owner' | 'admin' | 'member' | 'guest';
@@ -186,13 +186,13 @@ export function TeamSpaceView({ teamId, onInvite }: Props) {
           <ProjectsPanel teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} />
        ) : null}
        {activeTab === 'members' ? (
-          <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
+        <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
        ) : null}
-        {activeTab === 'resources' ? (
-          <PlaceholderPanel icon="layers-filled" label={t('teamSpace.tabResources')} note={t('teamSpace.resourcesNote')} />
+        {activeTab === 'skill' ? (
+          <PlaceholderPanel icon="puzzle" label={t('teamSpace.tabSkill')} note={t('teamSpace.skillNote')} />
         ) : null}
-        {activeTab === 'trash' ? (
-          <PlaceholderPanel icon="trash" label={t('teamSpace.tabTrash')} note={t('teamSpace.trashNote')} />
+        {activeTab === 'mcp' ? (
+          <PlaceholderPanel icon="integrations-filled" label={t('teamSpace.tabMcp')} note={t('teamSpace.mcpNote')} />
         ) : null}
       </div>
     </section>
@@ -742,22 +742,13 @@ function MembersTable({ teamId, onInvite, operator }: { teamId?: string; onInvit
 // Folder view — /team/:teamId/folder/:folderId
 // ---------------------------------------------------------------------------
 
-type FolderTab = 'projects' | 'resources' | 'trash';
-
-const FOLDER_TABS: { id: FolderTab; icon: IconName; labelKey: keyof Dict }[] = [
-  { id: 'projects', icon: 'folder', labelKey: 'teamSpace.tabProjects' },
-  { id: 'resources', icon: 'layers-filled', labelKey: 'teamSpace.tabResources' },
-  { id: 'trash', icon: 'trash', labelKey: 'teamSpace.tabTrash' },
-];
-
-interface FolderViewProps {
+ interface FolderViewProps {
   teamId?: string;
   folderId?: string;
 }
 
 export function FolderView({ teamId, folderId }: FolderViewProps) {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<FolderTab>('projects');
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([]);
   const [teamName, setTeamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(folderId));
@@ -868,57 +859,32 @@ export function FolderView({ teamId, folderId }: FolderViewProps) {
           <h1 id="folder-view-title" className={styles.title}>{title}</h1>
           <span className={styles.subtitle}>
             <span className={styles.dot} aria-hidden />
-            {t('teamSpace.folderSubtitle')}
-          </span>
-        </div>
-        {activeTab === 'projects' ? (
-          <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.inviteBtn}
-              onClick={() => setShowCreateFolder(true)}
-            >
-              <Icon name="plus" size={15} aria-hidden />
-              <span>{t('teamSpace.newSubFolder')}</span>
-            </button>
-          </div>
-        ) : null}
-      </header>
+           {t('teamSpace.folderSubtitle')}
+         </span>
+       </div>
+       <div className={styles.headerActions}>
+         <button
+           type="button"
+           className={styles.inviteBtn}
+           onClick={() => setShowCreateFolder(true)}
+         >
+           <Icon name="plus" size={15} aria-hidden />
+           <span>{t('teamSpace.newSubFolder')}</span>
+         </button>
+       </div>
+     </header>
 
-      <div className={styles.typeTabs} role="tablist">
-        {FOLDER_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={activeTab === tab.id ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <Icon name={tab.icon} size={16} aria-hidden />
-            <span>{t(tab.labelKey)}</span>
-          </button>
-        ))}
-      </div>
 
       <div className={styles.content} role="tabpanel">
-        {activeTab === 'projects' ? (
-          <FoldersPanel
-            teamId={teamId}
-            folderId={folderId}
-            operator={operator}
-            showCreateFolder={showCreateFolder}
-            onShowCreateFolderChange={setShowCreateFolder}
-            breadcrumb={breadcrumb}
-            teamName={teamName}
-          />
-        ) : null}
-        {activeTab === 'resources' ? (
-          <PlaceholderPanel icon="layers-filled" label={t('teamSpace.tabResources')} note={t('teamSpace.resourcesNote')} />
-        ) : null}
-        {activeTab === 'trash' ? (
-          <PlaceholderPanel icon="trash" label={t('teamSpace.tabTrash')} note={t('teamSpace.trashNote')} />
-        ) : null}
+        <FoldersPanel
+          teamId={teamId}
+          folderId={folderId}
+          operator={operator}
+          showCreateFolder={showCreateFolder}
+          onShowCreateFolderChange={setShowCreateFolder}
+          breadcrumb={breadcrumb}
+          teamName={teamName}
+        />
       </div>
     </section>
   );

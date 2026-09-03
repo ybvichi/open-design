@@ -382,7 +382,7 @@
 
 .actionsCell {
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
 }
 
 .removeBtn {
@@ -491,12 +491,14 @@
   transition: background 0.15s;
 }
 
-.confirmOk:hover {
-  background: #c81e1e;
+.confirmOk:hover:not(:disabled) {
+  background: #dc2626;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
-.confirmOk:active {
-  background: #b01a1a;
+.confirmOk:active:not(:disabled) {
+  background: #dc2626;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .statusWrap {

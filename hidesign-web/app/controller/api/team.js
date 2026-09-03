@@ -2,6 +2,7 @@
 
 const { createKnex } = require('../../utils/knex.js');
 const { createTeamId, getTeamMemberId } = require('../../utils/ids.js');
+const { sendHiklinkMessage } = require('../../utils/hiklink.js');
 
 const Controller = require('egg').Controller;
 
@@ -244,6 +245,26 @@ class TeamController extends Controller {
       }
 
       await k('workspace_members').insert(memberRows);
+
+      // 邀请成功后给邀请人和被邀请人都发送 Hiklink 通知
+      const inviterName = check.member.displayname || check.member.username;
+      const invitedNames = memberRows.map(m => m.displayname || m.username).join('、');
+      const teamName = ws.workspace_name;
+      const notifyTargets = [
+        { user: check.member.username, msg: `【HiDesign团队消息】📢 你邀请了 ${invitedNames} 加入了团队「${teamName}」🎉` },
+        ...memberRows.map(m => ({
+          user: m.username,
+          msg: `【HiDesign团队消息】📢 ${inviterName} 邀请你加入了团队「${teamName}」🎉`,
+        })),
+      ];
+      const notifyResults = await Promise.allSettled(
+        notifyTargets.map(t => sendHiklinkMessage(t.msg, t.user))
+      );
+      for (const r of notifyResults) {
+        if (r.status === 'rejected') {
+          ctx.logger.warn('Hiklink notify failed:', r.reason && r.reason.message);
+        }
+      }
       ctx.body = {
         code: 0,
         msg: 'SUCCESS',
@@ -348,19 +369,19 @@ class TeamController extends Controller {
       const member = await k('workspace_members')
         .where({ workspace_id: workspaceId, username })
         .first();
-     ctx.body = {
-       code: 0,
-       msg: 'SUCCESS',
-       data: {
-         is_member: Boolean(member),
-         role: member ? member.role : null,
-       },
-     };
-   } catch (err) {
-     ctx.logger.error('Team checkMember error:', err);
-     ctx.body = { code: -1, msg: 'FAIL', error: err.message };
-   }
- }
+      ctx.body = {
+        code: 0,
+        msg: 'SUCCESS',
+        data: {
+          is_member: Boolean(member),
+          role: member ? member.role : null,
+        },
+      };
+    } catch (err) {
+      ctx.logger.error('Team checkMember error:', err);
+      ctx.body = { code: -1, msg: 'FAIL', error: err.message };
+    }
+  }
 
   // 根据 workspace_member_id 查询单个成员信息
   async memberDetail() {
@@ -400,8 +421,8 @@ class TeamController extends Controller {
     }
   }
 
- // 查询单个团队详情(不含成员)
- async detail() {
+  // 查询单个团队详情(不含成员)
+  async detail() {
     const { ctx } = this;
     const { workspace_id: workspaceId } = ctx.params;
 
@@ -450,7 +471,7 @@ class TeamController extends Controller {
 
       const members = await k('workspace_members')
         .whereIn('workspace_member_id', ids)
-        .select('workspace_member_id', 'username', 'role', 'workspace_id');
+        .select('workspace_member_id', 'username', 'displayname', 'role', 'workspace_id');
       if (members.length === 0) {
         ctx.body = { code: -1, msg: 'FAIL', error: '成员不存在' };
         return;
@@ -481,6 +502,27 @@ class TeamController extends Controller {
       const deleted = await k('workspace_members')
         .whereIn('workspace_member_id', ids)
         .del();
+
+      // 移除成功后给操作人和被移除人都发送 Hiklink 通知
+      const wsInfo = await k('workspaces').where({ workspace_id: workspaceId }).first();
+      const teamName = wsInfo ? wsInfo.workspace_name : workspaceId;
+      const operatorName = check.member.displayname || check.member.username;
+      const removedNames = members.map(m => m.displayname || m.username).join('、');
+      const notifyTargets = [
+        { user: check.member.username, msg: `【HiDesign团队消息】📢 你将 ${removedNames} 移出了团队「${teamName}」` },
+        ...members.map(m => ({
+          user: m.username,
+          msg: `【HiDesign团队消息】📢 ${operatorName} 将你移出了团队「${teamName}」`,
+        })),
+      ];
+      const notifyResults = await Promise.allSettled(
+        notifyTargets.map(t => sendHiklinkMessage(t.msg, t.user))
+      );
+      for (const r of notifyResults) {
+        if (r.status === 'rejected') {
+          ctx.logger.warn('Hiklink notify failed:', r.reason && r.reason.message);
+        }
+      }
       ctx.body = { code: 0, msg: 'SUCCESS', data: { removed: deleted } };
     } catch (err) {
       ctx.logger.error('Team removeMember error:', err);
@@ -531,6 +573,25 @@ class TeamController extends Controller {
       await k('workspace_members')
         .where({ workspace_member_id: memberId })
         .update({ role, updated_at: new Date() });
+
+      // 角色变更后给操作人和被操作人都发送 Hiklink 通知
+      const wsInfo = await k('workspaces').where({ workspace_id: member.workspace_id }).first();
+      const teamName = wsInfo ? wsInfo.workspace_name : member.workspace_id;
+      const operatorName = check.member.displayname || check.member.username;
+      const targetName = member.displayname || member.username;
+      const roleLabel = { admin: '管理员', member: '成员', guest: '访客' }[role] || role;
+      const notifyTargets = [
+        { user: check.member.username, msg: `【HiDesign团队消息】📢 你将 ${targetName} 的角色修改为「${roleLabel}」` },
+        { user: member.username, msg: `【HiDesign团队消息】📢 ${operatorName} 将你的角色修改为「${roleLabel}」` },
+      ];
+      const notifyResults = await Promise.allSettled(
+        notifyTargets.map(t => sendHiklinkMessage(t.msg, t.user))
+      );
+      for (const r of notifyResults) {
+        if (r.status === 'rejected') {
+          ctx.logger.warn('Hiklink notify failed:', r.reason && r.reason.message);
+        }
+      }
       ctx.body = { code: 0, msg: 'SUCCESS', data: { updated: true } };
     } catch (err) {
       ctx.logger.error('Team updateRole error:', err);
