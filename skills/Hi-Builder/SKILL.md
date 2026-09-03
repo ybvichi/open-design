@@ -28,13 +28,14 @@ AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源�
 
 <!-- rule-owner:skill-workflow -->
 
-1. 从需求识别`industry`、`product`和页面类型；HUI兜底时再一次性归一为`schemas/tpp-page-intent.schema.json`定义的`PageIntent`，包含语义族和已确认特征，不确定特征不填。
+1. 从需求识别`industry`、`product`、明确出现的产品版本和页面类型；用户说“ISC新版本”“ISC 3.0”或“ISC 3.0.0”时统一归一为`product=isc`、`product_version=3.0.0`，自动使用`isc-3.0.0`框架。HUI兜底时再一次性归一为`schemas/tpp-page-intent.schema.json`定义的`PageIntent`，包含语义族和已确认特征，不确定特征不填。
 2. 读取`references/knowledge-resolution.md`并解析能力：
 
 ```bash
 python3 scripts/resolve_capabilities.py \
   --industry <industry> \
   --product <product> \
+  --product-version <明确指定时的版本> \
   --page-type <page_type>
 ```
 

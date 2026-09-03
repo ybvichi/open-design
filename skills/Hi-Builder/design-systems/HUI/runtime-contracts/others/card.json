@@ -76,37 +76,52 @@
     },
     "fixed_behavior": {
       "shadow": "hover",
-      "header_divider": false,
+      "header_divider": "profile-defined",
       "media_content": "clip-to-media-region",
       "single_line_content_overflow": "ellipsis",
       "action_button_type": "text",
       "colors": "inherit-hui-css-and-product-token-overrides"
     },
+    "status_tag_semantics": {
+      "variant": "primary",
+      "floods": ["red", "green", "orange"],
+      "mappings": [
+        {
+          "flood": "red",
+          "keywords": ["异常", "告警", "离线", "故障", "关注", "低相似"]
+        },
+        {
+          "flood": "green",
+          "keywords": ["正常", "已恢复", "已处理", "比中", "在岗", "运行正常"]
+        }
+      ],
+      "fallback_flood": "orange"
+    },
     "visual_profiles": {
       "vehicle-card": {
         "page_pattern": "hui.tpp.page.card.vehicle",
-        "structure": "full-bleed-media-with-plate-and-icon-metadata",
+        "structure": "media-header-with-title-and-icon-metadata-body",
         "required_slots": ["media", "primary", "metadata.location", "metadata.time"],
         "hui_components": ["el-card", "h-icon"],
         "header": {
           "padding": "12px",
-          "media_height": "165px",
-          "media_margin": "-12px -12px 12px",
-          "media_fit": "fill"
+          "media_fit": "cover"
         },
         "primary": {
-          "presentation": "plate-badge",
-          "height": "28px",
+          "placement": "body",
+          "presentation": "body-title",
           "font_size": "16px",
-          "line_height": "19px"
+          "font_weight": 500,
+          "line_height": "20px",
+          "metadata_gap": "12px"
         },
         "body": {
-          "padding": "0px 12px 12px",
+          "padding": "12px",
           "metadata_layout": "two-icon-rows",
           "row_line_height": "20px",
           "row_gap": "4px",
           "icon_size": "20px",
-          "icon_text_gap": "4px",
+          "icon_text_gap": "6px",
           "icons": ["h-icon-info_location", "h-icon-info_time"]
         }
       },
@@ -116,16 +131,14 @@
         "required_slots": ["media", "primary", "status", "metadata"],
         "hui_components": ["el-card", "el-tag"],
         "header": {
-          "padding": "16px 16px 12px",
+          "padding": "0px",
           "media_height": "220px",
-          "media_margin": "-16px -16px 16px",
-          "media_fit": "fill",
-          "title_row_height": "24px"
+          "media_fit": "cover"
         },
-        "primary": {"font_size": "16px", "line_height": "20px"},
-        "status": {"presentation": "el-tag", "height": "24px"},
+        "primary": {"placement": "body", "font_size": "16px", "font_weight": 500, "line_height": "20px", "metadata_gap": "12px"},
+        "status": {"placement": "body-title-row", "presentation": "el-tag", "font_size": "14px"},
         "body": {
-          "padding": "0px 16px 12px",
+          "padding": "12px 16px",
           "metadata_layout": "three-key-value-rows",
           "row_line_height": "20px",
           "row_gap": "4px",
@@ -140,13 +153,12 @@
         "required_slots": ["media.reference", "media.capture", "overlay.metric", "primary", "status", "metadata"],
         "hui_components": ["el-card", "el-tag", "h-icon"],
         "header": {
-          "padding": "16px 16px 8px",
+          "padding": "0px",
+          "divider": true,
           "media_layout": "two-equal-columns",
           "media_height": "180px",
           "media_column_gap": "2px",
-          "media_gap_after": "16px",
-          "media_fit": "fill",
-          "title_row_height": "24px"
+          "media_fit": "cover"
         },
         "overlay": {
           "presentation": "centered-metric",
@@ -155,13 +167,12 @@
           "font_size": "20px",
           "line_height": "20px"
         },
-        "primary": {"font_size": "16px", "line_height": "20px"},
-        "status": {"presentation": "el-tag", "height": "24px"},
+        "primary": {"placement": "body", "font_size": "16px", "font_weight": 500, "line_height": "20px", "metadata_gap": "12px"},
+        "status": {"placement": "body-title-row", "presentation": "el-tag", "font_size": "14px"},
         "body": {
-          "padding": "0px 16px 16px",
+          "padding": "12px 16px 16px",
           "metadata_layout": "three-icon-rows",
           "row_line_height": "20px",
-          "row_height": "20px",
           "row_gap": "4px",
           "icon_size": "20px",
           "icon_text_gap": "4px",
@@ -184,14 +195,13 @@
         "primary": {"font_size": "20px", "line_height": "30px"},
         "status": {
           "presentation": "tag-list-with-overflow-count",
-          "height": "24px",
+          "font_size": "14px",
           "tag_gap": "4px"
         },
         "body": {
           "padding": "12px",
           "metadata_layout": "two-icon-rows",
           "row_line_height": "20px",
-          "row_height": "25px",
           "row_gap": "4px",
           "icon_size": "20px",
           "icon_text_gap": "4px",
@@ -206,13 +216,12 @@
         "root": {"display": "flex"},
         "header": {
           "width": "128px",
-          "padding": "16px 16px 4px",
+          "divider": false,
           "media_size": "96px 96px",
           "media_fit": "fill"
         },
         "primary": {"font_size": "20px", "line_height": "30px"},
         "body": {
-          "padding": "0px 16px 4px 8px",
           "content_margin": "16px 0px 8px",
           "metadata_layout": "four-column-key-value-grid",
           "row_line_height": "20px",
@@ -223,7 +232,7 @@
         },
         "status": {
           "presentation": "multi-variant-tag-list",
-          "height": "28px",
+          "font_size": "14px",
           "tag_gap": "8px"
         }
       }

@@ -128,7 +128,7 @@
     "/pages/details/residentAnchorPoint": {
       "family": "details-anchored",
       "variant": "resident-anchor-point",
-      "parameters": {"anchor_mode": "resident", "anchor_position": "right", "anchor_count": 3, "content_width_px": 1275.53, "reserved_width_px": 180.47}
+      "parameters": {"anchor_mode": "resident", "anchor_position": "right", "anchor_count": 3, "content_width_px": 1275.53, "reserved_width_px": 180.47, "text_align": "left"}
     },
     "/pages/details/retractedAnchorPoint": {
       "family": "details-anchored",

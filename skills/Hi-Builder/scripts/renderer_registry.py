@@ -15,10 +15,13 @@ RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
         ],
         "allowed_component_pattern_ids": [
             "portal.global-header", "portal.app-sidebar",
-            "form.data-form", "toolbar.action-toolbar"
+            "form.data-form", "navigation.anchor-nav", "toolbar.action-toolbar"
         ],
         "template": "assets/templates/HUI/renderers/form.html",
-        "styles": ["assets/templates/HUI/styles/form.css"],
+        "styles": [
+            "assets/templates/HUI/styles/page-tabs.css",
+            "assets/templates/HUI/styles/form.css",
+        ],
     },
     "hui.tpp.table": {
         "pipeline": "pattern-page",
@@ -33,7 +36,8 @@ RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
         "allowed_component_pattern_ids": [
             "portal.global-header", "portal.app-sidebar", "filter.search-form",
             "toolbar.action-toolbar", "summary.metric-strip", "navigation.tabs", "table.data-table",
-            "collection.calendar-grid", "detail.details-pane", "pagination.page-navigation"
+            "collection.calendar-grid", "detail.details-pane", "form.data-form",
+            "pagination.page-navigation"
         ],
         "layout_roles": {
             "table-content-margin": "0px 12px",
@@ -57,7 +61,7 @@ RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
         "allowed_component_pattern_ids": [
             "portal.global-header", "portal.app-sidebar", "filter.search-form",
             "toolbar.action-toolbar", "navigation.tabs", "collection.card-grid",
-            "pagination.page-navigation"
+            "navigation.tree-panel", "pagination.page-navigation"
         ],
         "template": "assets/templates/HUI/renderers/card.html",
         "styles": ["assets/templates/HUI/styles/collection.css"],
@@ -82,11 +86,14 @@ RENDERER_CONTRACTS: dict[str, dict[str, Any]] = {
         "allowed_component_pattern_ids": [
             "portal.global-header", "portal.app-sidebar",
             "detail.details-pane", "media.image-viewer",
-            "navigation.anchor-nav", "table.data-table",
+            "navigation.anchor-nav", "navigation.tabs", "table.data-table",
             "pagination.page-navigation"
         ],
         "template": "assets/templates/HUI/renderers/details.html",
-        "styles": ["assets/templates/HUI/styles/details.css"],
+        "styles": [
+            "assets/templates/HUI/styles/page-tabs.css",
+            "assets/templates/HUI/styles/details.css",
+        ],
     },
 }
 

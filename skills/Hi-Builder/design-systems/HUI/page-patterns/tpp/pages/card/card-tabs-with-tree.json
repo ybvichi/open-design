@@ -12,8 +12,7 @@
   },
   "parameters": {
     "tab_style": "card",
-    "tree": true,
-    "collection_presentation": "vehicle-card"
+    "tree": true
   },
   "geometry": {
     "viewport": {

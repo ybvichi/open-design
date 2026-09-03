@@ -1,4 +1,4 @@
-              <div class="form-area" :class="{'is-complex-form': config.form_sections && config.form_sections.length, 'is-first-level-grouped':isFirstLevelGroupedForm, 'is-anchored-form':isAnchoredForm}">
+              <div class="form-area" :class="{'is-complex-form': config.form_sections && config.form_sections.length, 'is-first-level-grouped':isFirstLevelGroupedForm, 'is-anchored-form':isAnchoredForm, 'is-one-column':config.pattern_parameters && config.pattern_parameters.columns === 1}">
                 <div class="form-area__content">
                   <div v-if="isWorkOrderForm" class="form-area__content-head"><span class="form-area__content-head-item">{{ config.title }}</span><span class="form-area__content-head-item">配置状态：待保存</span></div>
                   <div class="permission-form-scroll" :class="{'is-work-order':isWorkOrderForm}" data-zone="form.content" data-component="form.data-form">
@@ -47,7 +47,7 @@
                             <el-radio-group v-else-if="field.kind==='radio'" v-model="formModel[field.key]"><el-radio v-for="option in field.options" :key="option" :label="option">{{ option }}</el-radio></el-radio-group>
                             <el-checkbox-group v-else-if="field.kind==='checkbox'" v-model="formModel[field.key]"><el-checkbox v-for="option in field.options" :key="option" :label="option">{{ option }}</el-checkbox></el-checkbox-group>
                             <el-input-number v-else-if="field.kind==='input-number'" v-model="formModel[field.key]" :min="field.min" :max="field.max" :step="field.step || 1"></el-input-number>
-                            <el-slider v-else-if="field.kind==='slider'" v-model="formModel[field.key]" :min="field.min" :max="field.max" :step="field.step || 1" show-input></el-slider>
+                            <el-slider v-else-if="field.kind==='slider'" v-model="formModel[field.key]" :min="field.min" :max="field.max" :step="field.step || 1" :range="field.range || false" show-input></el-slider>
                             <el-switch v-else-if="field.kind==='switch'" v-model="formModel[field.key]"></el-switch>
                               <div v-if="field.description" class="permission-form__field-description">{{ field.description }}</div>
                             </el-form-item>
@@ -58,7 +58,7 @@
                     </el-form>
                     </div>
                   </div>
-<!-- @include ../navigation/anchor-nav.html -->
                   <div class="form-area__footer" data-zone="form.actions" data-component="toolbar.action-toolbar"><template v-if="isWorkOrderForm"><el-button @click="previousFormSection">上一步</el-button><el-button type="primary" @click="nextFormSection">下一步</el-button><el-button @click="resetForm">取消</el-button></template><template v-else-if="config.form_actions && config.form_actions.length"><el-button v-for="(action,index) in config.form_actions" :key="action" :type="index===0 ? 'primary' : 'default'" @click="formAction(action)">{{ action }}</el-button></template><template v-else><el-button @click="resetForm">取消</el-button><el-button type="primary" @click="saveForm">保存</el-button></template></div>
                 </div>
+<!-- @include ../navigation/anchor-nav.html -->
               </div>

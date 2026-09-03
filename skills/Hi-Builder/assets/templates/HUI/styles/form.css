@@ -17,17 +17,14 @@
     }
     .permission-form-scroll.is-work-order { display: flex; overflow: hidden; }
     .permission-form { width: min(var(--d2c-page-form-width, 832px), 100%); margin: 0 auto; }
-    .page-breadcrumb__tabs { position: absolute; left: 50%; top: 0; display: flex; align-items: center; height: 100%; min-width: 0; transform: translateX(-50%); }
-    .page-breadcrumb__tab { position: relative; height: 40px; margin: 0 16px; padding: 0; border: 0; color: var(--h-color-text-secondary); background: transparent; cursor: pointer; }
-    .page-breadcrumb__tab.is-active { color: var(--h-color-brand); font-weight: 500; }
-    .page-breadcrumb__tab.is-active::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; background: var(--h-color-brand); content: ''; }
     .anchored-form-layout { display: block; padding-top: 24px; }
+    .form-area.is-anchored-form { gap: 24px; }
+    .form-area.is-anchored-form .form-area__content { flex: 1 1 auto; width: min(1280px, calc(100% - 204px)); }
     .form-anchor-nav {
-      position: absolute; z-index: 2; top: 72px; right: 12px; width: 160px; padding: 12px 0;
-      background: var(--h-color-bg-primary); box-shadow: 0 2px 12px rgba(0, 0, 0, .12);
+      position: static; z-index: 2; width: 180px; flex: none; align-self: start;
+      padding: 48px 0 0; background: transparent; box-shadow: none;
     }
-    .form-anchor-nav a { display: block; min-height: 36px; padding: 8px 12px; color: var(--h-color-text-secondary); text-decoration: none; }
-    .form-anchor-nav a:hover { color: var(--h-color-brand); }
+    .form-anchor-nav .h-anchor-wrapper { width: 100%; }
     .anchored-form-layout .permission-form { min-width: 0; }
     .form-area__content-head {
       display: flex; flex: none; align-items: center; justify-content: space-between;
@@ -49,6 +46,8 @@
     .work-order-tabs .permission-form { width: min(var(--d2c-page-form-width, 1280px), 100%); }
     .work-order-tabs .permission-form__section { border-bottom: 0; }
     .permission-form .el-form-item { margin-bottom: 24px; }
+    .permission-form .el-row { display: flex; flex-wrap: wrap; align-items: flex-start; }
+    .permission-form .el-row > .el-col { float: none; }
     .permission-form .el-select,
     .permission-form .el-date-editor { width: 100%; }
     .permission-form .el-slider { width: 100%; }

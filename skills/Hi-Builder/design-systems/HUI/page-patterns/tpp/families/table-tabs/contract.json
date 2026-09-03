@@ -36,6 +36,23 @@
     "h-icon"
   ],
   "invariants": {
+    "required_regions": [
+      "tabs",
+      "search",
+      "toolbar",
+      "table",
+      "pagination"
+    ],
+    "layout_structure": {
+      "tabs": "page-root-child",
+      "main": "tabs-following-sibling",
+      "tree": "h-layout-sidebar",
+      "search": "main-content-child"
+    },
+    "generation_defaults": "../../demo-fixtures/table-tabs-default.json",
+    "non_binding_geometry": {
+      ".table-tabs-search": ["height", "min-height"]
+    },
     "regions": {
       "search": {
         "display": "block",

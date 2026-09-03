@@ -120,13 +120,13 @@ beforeEach(() => {
 });
 
 describe('NewProjectPanel design system defaults', () => {
-  it('uses the configured default design system when it exists in the catalog', () => {
-    expect(defaultDesignSystemSelection('clay', designSystems)).toEqual(['clay']);
+  it('starts without a design system even when a configured default exists', () => {
+    expect(defaultDesignSystemSelection('clay', designSystems)).toEqual([]);
     expect(defaultDesignSystemSelection('missing', designSystems)).toEqual([]);
     expect(defaultDesignSystemSelection(null, designSystems)).toEqual([]);
   });
 
-  it('shows the configured default design system as the active project selection', () => {
+  it('does not render a design-system selection control', () => {
     const markup = renderToStaticMarkup(
       <NewProjectPanel
         skills={skills}
@@ -139,12 +139,10 @@ describe('NewProjectPanel design system defaults', () => {
       />,
     );
 
-    expect(markup).toContain('Clay');
-    expect(markup).toContain('Default');
-    expect(markup).not.toContain('Freeform');
+    expect(markup).not.toContain('data-testid="design-system-trigger"');
   });
 
-  it('filters draft personal design systems out of the new project picker', () => {
+  it('keeps every design system out of the new project panel', () => {
     render(
       <NewProjectPanel
         skills={skills}
@@ -157,11 +155,10 @@ describe('NewProjectPanel design system defaults', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('design-system-trigger'));
-
+    expect(screen.queryByTestId('design-system-trigger')).toBeNull();
     expect(screen.queryByRole('option', { name: /Draft Personal DS/i })).toBeNull();
-    expect(screen.getByRole('option', { name: /Clay/i })).toBeTruthy();
-    expect(screen.getByRole('option', { name: /Editorial Noir/i })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /Clay/i })).toBeNull();
+    expect(screen.queryByRole('option', { name: /Editorial Noir/i })).toBeNull();
   });
 
   it('keeps media project creation from inheriting a hidden design system pick', () => {
@@ -204,7 +201,7 @@ describe('NewProjectPanel design system defaults', () => {
     expect(onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Wireframe fidelity payload',
-        designSystemId: 'clay',
+        designSystemId: null,
         metadata: expect.objectContaining({
           kind: 'prototype',
           fidelity: 'wireframe',
@@ -263,7 +260,7 @@ describe('NewProjectPanel design system defaults', () => {
     );
   });
 
-  it('clears design system metadata when freeform is selected in multi mode', () => {
+  it('always creates without design-system metadata', () => {
     const onCreate = vi.fn();
     render(
       <NewProjectPanel
@@ -280,15 +277,7 @@ describe('NewProjectPanel design system defaults', () => {
     fireEvent.change(screen.getByTestId('new-project-name'), {
       target: { value: 'Freeform prototype' },
     });
-    fireEvent.click(screen.getByTestId('design-system-trigger'));
-    fireEvent.click(screen.getByRole('tab', { name: 'Multi' }));
-    fireEvent.click(screen.getByRole('option', { name: /Editorial Noir/i }));
-    expect(screen.getByTestId('design-system-trigger').textContent).toContain('Clay');
-    expect(screen.getByTestId('design-system-trigger').textContent).toContain('+1');
-
-    fireEvent.click(screen.getByRole('option', { name: /None — freeform/i }));
-    expect(screen.getByTestId('design-system-trigger').textContent).toContain('None — freeform');
-    expect(screen.getByTestId('design-system-trigger').textContent ?? '').not.toContain('+');
+    expect(screen.queryByTestId('design-system-trigger')).toBeNull();
 
     fireEvent.click(screen.getByTestId('create-project'));
 

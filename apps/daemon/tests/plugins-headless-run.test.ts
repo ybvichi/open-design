@@ -606,7 +606,7 @@ process.exit(result.status ?? 0);
     }
   }, 120_000);
 
-  it('runs the CLI install → project create → plugin run path with query and local SKILL.md in the agent prompt', async () => {
+  it('runs a headless plugin as its local SKILL.md without the plugin prompt block', async () => {
     const pluginRoot = await mkdtemp(path.join(tmpdir(), 'od-headless-cli-plugin-'));
     const pluginId = `headless-cli-plugin-${randomUUID().slice(0, 8)}`;
     const fixture = path.join(pluginRoot, pluginId);
@@ -716,10 +716,10 @@ process.stdin.on('end', () => {
         const prompt = await readFile(capturePath, 'utf8');
         expect(prompt).toContain('# Headless Local Skill');
         expect(prompt).toContain('Follow this local skill during headless runs.');
-        expect(prompt).toContain('## Active plugin');
-        expect(prompt).toContain('The plugin\'s example brief is: _Generate a {{topic}} brief for {{audience}}._');
-        expect(prompt).toContain(`- **topic**: ${topic}`);
-        expect(prompt).toContain('- **audience**: general');
+        expect(prompt).not.toContain('## Active plugin');
+        expect(prompt).not.toContain('The plugin\'s example brief is: _Generate a {{topic}} brief for {{audience}}._');
+        expect(prompt).not.toContain(`- **topic**: ${topic}`);
+        expect(prompt).not.toContain('- **audience**: general');
         expect(prompt).toContain(`# User request\n\nGenerate a ${topic} brief for general.`);
       } finally {
         if (previousCapture === undefined) {
@@ -734,12 +734,7 @@ process.stdin.on('end', () => {
     }
   }, 60_000);
 
-  // Full §8 e2e-3 contract — once the pipeline runner fires on a run
-  // with a declared pipeline, the first ND-JSON event should be
-  // `pipeline_stage_started`. Plan §3.I1 wires firePipelineForRun into
-  // POST /api/runs so any plugin run with `od.pipeline.stages[*]`
-  // emits the stage timeline before the agent's message_chunk stream.
-  it('first SSE event on a plugin run with od.pipeline is pipeline_stage_started', async () => {
+  it('does not start an Open Design plugin pipeline in native mode', async () => {
     // Install a fixture plugin with a 2-stage pipeline. We use a
     // disposable manifest rather than the on-disk fixture so the
     // pipeline shape is locked here.
@@ -820,22 +815,15 @@ process.stdin.on('end', () => {
     expect(runResp.status).toBe(202);
     const runBody = (await runResp.json()) as { runId: string };
 
-    // The pipeline emits its first event synchronously inside POST
-    // /api/runs (firePipelineForRun runs before design.runs.start
-    // schedules the agent), so by the time we GET /api/runs/:id/events
-    // the run buffer already contains pipeline_stage_started.
-    // Wait briefly for the async tail (devloop iteration log) to settle.
+    // Give the route time to schedule any legacy pipeline event. Native mode
+    // must leave the declared pipeline inert.
     await new Promise((r) => setTimeout(r, 30));
 
     const statusResp = await fetch(`${baseUrl}/api/runs/${encodeURIComponent(runBody.runId)}`);
     const statusBody = (await statusResp.json()) as { id: string };
     expect(statusBody.id).toBe(runBody.runId);
 
-    // Read the run's event buffer through the SSE stream — the
-    // server pipes every record through res.write, so reading the
-    // body until 'end' or pipeline_stage_completed surfaces the
-    // first events. We don't actually wait for end (the run is
-    // long-running); we just look for the stage-start anchor.
+    // Read the event buffer long enough to prove no stage-start event appears.
     const eventsResp = await fetch(`${baseUrl}/api/runs/${encodeURIComponent(runBody.runId)}/events`, {
       headers: { accept: 'text/event-stream' },
     });
@@ -866,7 +854,7 @@ process.stdin.on('end', () => {
     }
     void reader.cancel().catch(() => undefined);
 
-    expect(firstStageEvent).toBe('pipeline_stage_started');
+    expect(firstStageEvent).toBeNull();
 
     await fetch(`${baseUrl}/api/runs/${encodeURIComponent(runBody.runId)}/cancel`, { method: 'POST' });
     await fs.rm(tmpRoot, { recursive: true, force: true });

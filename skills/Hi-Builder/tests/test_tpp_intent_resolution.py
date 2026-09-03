@@ -40,6 +40,20 @@ class TppIntentResolutionTest(unittest.TestCase):
         self.assertEqual("ambiguous", result["status"])
         self.assertIn("collapse_mode", result["diagnostics"][0])
 
+    def test_anchored_form_defaults_to_persistent_single_container(self) -> None:
+        result = resolve_tpp_intent({
+            "schema_version": "tpp-page-intent.v1",
+            "page_kind": "form",
+            "semantic_family": "form-anchored",
+            "features": {},
+        })
+        self.assertEqual("selected", result["status"])
+        self.assertEqual(
+            "persistent-anchor-single-container",
+            result["selection"]["variant"],
+        )
+        self.assertEqual(3, result["selection"]["parameters"]["columns"])
+
     def test_selected_contract_uses_compiler_relative_path(self) -> None:
         result = resolve_tpp_intent({
             "schema_version": "tpp-page-intent.v1",

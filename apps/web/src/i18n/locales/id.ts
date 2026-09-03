@@ -707,7 +707,7 @@ export const id: Dict = {
   'homeHero.subtitlePrefix': 'Alternatif Claude Design yang open-source.',
   'homeHero.placeholder': 'Jelaskan apa yang ingin Anda hasilkan…',
   'homeHero.placeholderActive': 'Edit contoh kueri atau tulis kueri Anda sendiri…',
-  'homeHero.carousel.hint': 'Lampirkan file, hubungkan design system, atau jelaskan apa yang ingin kamu buat',
+  'homeHero.carousel.hint': 'Lampirkan file atau jelaskan apa yang ingin kamu buat',
   'homeHero.carousel.onePageBrief': 'Buat brief proyek satu halaman',
   'homeHero.carousel.notesToDeck': 'Ubah catatan saya menjadi presentasi',
   'homeHero.carousel.signupFlow': 'Buat mockup alur pendaftaran',

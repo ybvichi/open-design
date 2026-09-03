@@ -10,6 +10,12 @@
   "documentation_status": "api-table",
   "contract_kind": "vue-component",
   "runtime": {
+    "h-anchor": {
+      "props": [],
+      "events": [],
+      "slots": [],
+      "methods": []
+    },
     "h-subanchor": {
       "props": [
         {

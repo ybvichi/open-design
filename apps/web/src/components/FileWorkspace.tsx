@@ -4795,7 +4795,7 @@ function DesignSystemProjectPanel({
             ? t('ds.publishCardPublished')
             : t('ds.publishCardDraft')}
         </p>
-        {published ? (
+        {published && onUseDesignSystem ? (
           <div className="ds-project-use-row">
             <span>
               <strong>{t('ds.useSystemTitle')}</strong>
@@ -4805,8 +4805,7 @@ function DesignSystemProjectPanel({
             </span>
             <Button
               variant="primary"
-              onClick={() => onUseDesignSystem?.(system.id, system.title)}
-              disabled={!onUseDesignSystem}
+              onClick={() => onUseDesignSystem(system.id, system.title)}
             >
               <Icon name="plus" size={14} />
               {t('ds.createNewDesign')}

@@ -135,6 +135,29 @@ describe('GET /api/projects/:id resolvedDir', () => {
     expect(path.isAbsolute(detail.resolvedDir)).toBe(true);
   });
 
+  it('keeps a design-mode project unbound when no plugin is selected', async () => {
+    const projectId = `proj-unbound-${Date.now()}`;
+    const createResp = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: projectId,
+        name: 'Native CLI fixture',
+        skillId: null,
+        designSystemId: null,
+        conversationMode: 'design',
+        metadata: { kind: 'prototype' },
+      }),
+    });
+    expect(createResp.status).toBe(200);
+    const createBody = await createResp.json() as {
+      project: { appliedPluginSnapshotId?: string | null };
+      appliedPluginSnapshotId?: string;
+    };
+    expect(createBody.appliedPluginSnapshotId).toBeUndefined();
+    expect(createBody.project.appliedPluginSnapshotId ?? null).toBeNull();
+  });
+
   it('fails GET /api/projects/:id?ensureDir=1 when a managed folder cannot be materialized', async () => {
     const projectId = `proj-ensure-fails-${Date.now()}`;
     const createResp = await fetch(`${baseUrl}/api/projects`, {
@@ -171,7 +194,7 @@ describe('GET /api/projects/:id resolvedDir', () => {
         id: projectId,
         name: 'Batch fixture',
         skillId: null,
-        designSystemId: 'default',
+        designSystemId: null,
         metadata: { kind: 'prototype', platform: 'responsive' },
         skipDiscoveryBrief: true,
       }),
@@ -180,7 +203,7 @@ describe('GET /api/projects/:id resolvedDir', () => {
     const body = (await createResp.json()) as {
       project: { designSystemId?: string | null; metadata?: { skipDiscoveryBrief?: boolean } };
     };
-    expect(body.project.designSystemId).toBe('default');
+    expect(body.project.designSystemId).toBeNull();
     expect(body.project.metadata?.skipDiscoveryBrief).toBe(true);
   });
 

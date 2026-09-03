@@ -631,6 +631,13 @@ function renderDesignSystemImportModeGuidance(
   return undefined;
 }
 
+export type PromptCoreVariant = 'classic' | 'slim' | 'native';
+
+export function resolvePromptCoreVariant(value: string | undefined): PromptCoreVariant {
+  if (value === 'classic' || value === 'slim') return value;
+  return 'native';
+}
+
 export interface ComposeInput {
   agentId?: string | null | undefined;
   includeCodexImagegenOverride?: boolean | undefined;
@@ -769,14 +776,11 @@ export interface ComposeInput {
   // `true`/`undefined` keep it. Deck-kind projects ignore this — their
   // framework is unconditional.
   freeformDeckSignal?: boolean | undefined;
-  // Which always-on doctrine core to compose. `classic` (default) keeps the
-  // legacy DISCOVERY_AND_PHILOSOPHY + designer-charter stack plus its tail
-  // overrides. `slim` swaps all of that for the single rewritten charter in
-  // `core-slim.ts` (every rule stated once, explicit precedence ladder,
-  // ~6x smaller); the tail overrides it absorbed (filesystem handoff,
-  // active-DS direction, mid-conversation clarifying questions) are then
-  // skipped. Daemon callers select it via OD_PROMPT_CORE=slim.
-  promptCoreVariant?: 'classic' | 'slim' | undefined;
+  // Which prompt core to compose. `native` delegates workflow and reasoning
+  // to the selected agent CLI and injects only the active skill.
+  // `classic` and `slim` remain available as rollback/diagnostic modes for
+  // the legacy Open Design orchestration stack.
+  promptCoreVariant?: PromptCoreVariant | undefined;
   // Whether the visible conversation mentions generating media (see
   // `detectMediaIntentSignal`). Only consulted for non-media projects:
   // `false` skips the MEDIA_DISPATCH_HINT, `true`/`undefined` keep it.
@@ -829,6 +833,12 @@ export function composeSystemPrompt({
   mediaHintSignal,
   platformHintSignal,
 }: ComposeInput): string {
+  if (promptCoreVariant === 'native') {
+    const activeSkillBody = skillBody?.trim();
+    if (!activeSkillBody) return '';
+    return `## Active skill${skillName ? ` — ${skillName}` : ''}\n\nFollow this skill for the current request.\n\n${activeSkillBody}`;
+  }
+
   // Slim core collapses the discovery layer + designer charter + their tail
   // overrides into one charter document; the classic stack keeps the legacy
   // layered composition until the A/B comparison signs off.

@@ -731,7 +731,7 @@ export const zhTW: Dict = {
   "homeHero.subtitlePrefix": "開源的 Claude Design 替代方案。",
   "homeHero.placeholder": "描述您想要產生的內容…",
   "homeHero.placeholderActive": "編輯範例查詢或撰寫您自己的查詢…",
-  "homeHero.carousel.hint": "上傳檔案、連結設計系統，或描述你想創作的內容",
+  "homeHero.carousel.hint": "上傳檔案，或描述你想創作的內容",
   "homeHero.carousel.onePageBrief": "撰寫一頁專案簡介",
   "homeHero.carousel.notesToDeck": "把我的筆記變成簡報",
   "homeHero.carousel.signupFlow": "設計一個註冊流程",

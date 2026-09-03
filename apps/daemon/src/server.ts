@@ -27,6 +27,7 @@ import {
   extractUserAuthoredSignalText,
   renderConnectedExternalMcpDirective,
   resolveExclusiveSurface,
+  resolvePromptCoreVariant,
 } from './prompts/system.js';
 import {
   computeStableSectionHashes,
@@ -3609,18 +3610,22 @@ export async function startServer({
     mediaHintSignal,
     platformHintSignal,
   }) => {
+    const promptCoreVariant = resolvePromptCoreVariant(process.env.OD_PROMPT_CORE);
     const project =
       typeof projectId === 'string' && projectId
         ? getProject(db, projectId)
         : null;
     let appConfigForPrompt = null;
-    try {
-      appConfigForPrompt = await readAppConfig(RUNTIME_DATA_DIR);
-    } catch (err) {
-      console.warn('[app-config] readAppConfig failed', err);
+    if (promptCoreVariant !== 'native') {
+      try {
+        appConfigForPrompt = await readAppConfig(RUNTIME_DATA_DIR);
+      } catch (err) {
+        console.warn('[app-config] readAppConfig failed', err);
+      }
     }
     let pluginDesignSystemId = null;
     if (
+      promptCoreVariant !== 'native' &&
       typeof appliedPluginSnapshotId === 'string' &&
       appliedPluginSnapshotId.length > 0
     ) {
@@ -3645,7 +3650,7 @@ export async function startServer({
     // blocks are skipped for these runs. Step 6 of the skill (replace with
     // the user's own content) is where brand application belongs.
     const isWebCloneRun = metadata?.intent === 'web-clone';
-    const designSystemSelection = isWebCloneRun
+    const designSystemSelection = isWebCloneRun || promptCoreVariant === 'native'
       ? { id: null, source: 'none' }
       : resolveEffectiveDesignSystemSelection({
           requestDesignSystemId: designSystemId,
@@ -3850,6 +3855,32 @@ export async function startServer({
           `[plugins] pluginSkillBody load failed: ${err?.message ?? err}`,
         );
       }
+    }
+
+    if (promptCoreVariant === 'native') {
+      const systemPromptInputs = {
+        skillBody,
+        skillName,
+        promptCoreVariant,
+      };
+      return {
+        prompt: composeSystemPrompt(systemPromptInputs),
+        activeSkillDir,
+        activeSkillDirs,
+        critiqueShouldRun: false,
+        designSystemSelection: {
+          id: null,
+          requestedId: null,
+          source: 'none',
+          digest: null,
+        },
+        promptTelemetryParts: {
+          skillPrompt: skillBody ?? '',
+          designSystemPrompt: '',
+          pluginStagePrompt: '',
+        },
+        stableSectionInputs: systemPromptInputs,
+      };
     }
 
     let craftBody;
@@ -4066,7 +4097,8 @@ export async function startServer({
       || resolvedExclusiveSurface === 'video'
       || resolvedExclusiveSurface === 'audio';
     const isPlainAdapter = (streamFormat ?? 'plain') === 'plain';
-    const critiqueShouldRun = critiqueEnabledForRun
+    const critiqueShouldRun = promptCoreVariant !== 'native'
+      && critiqueEnabledForRun
       && critiqueBrand !== undefined
       && critiqueSkill !== undefined
       && !isMediaSurface
@@ -4176,13 +4208,11 @@ export async function startServer({
       freeformDeckSignal,
       mediaHintSignal,
       platformHintSignal,
-      // VALIDATION DEFAULT — feat/system-prompt integration branch only.
-      // Slim is the default here so packaged beta builds exercise the
-      // rewritten charter without env plumbing (the packaged sidecar env
-      // allowlist does not forward OD_PROMPT_CORE); OD_PROMPT_CORE=classic
-      // restores the classic stack. main keeps classic as the default —
-      // do NOT carry this flip into a PR against main.
-      promptCoreVariant: process.env.OD_PROMPT_CORE === 'classic' ? undefined : 'slim',
+      // Native is the product default: let the selected CLI own its workflow
+      // and reasoning, with only an explicitly selected skill added by the
+      // daemon. The legacy prompt stacks remain opt-in for rollback and
+      // diagnostics through OD_PROMPT_CORE=classic|slim.
+      promptCoreVariant,
     };
     const prompt = composeSystemPrompt(systemPromptInputs);
     // The chat handler also needs to know where the active skill lives
@@ -4225,6 +4255,7 @@ export async function startServer({
   // of pre-Stage-D runs. Errors are swallowed (logged) so a bad
   // pipeline never blocks the agent run.
   const firePipelineForRun = (args) => {
+    if (resolvePromptCoreVariant(process.env.OD_PROMPT_CORE) === 'native') return;
     const { run, snapshot, runs, db: dbHandle } = args;
     if (!snapshot?.pipeline?.stages?.length) return;
     const env = { maxIterations: readPluginEnvKnobs().maxDevloopIterations };
@@ -4302,6 +4333,12 @@ export async function startServer({
       });
   };
 
+  const detectSkillPluginCandidateForRun: typeof detectSkillPluginCandidateOnRunSuccess =
+    (...args) => {
+      if (resolvePromptCoreVariant(process.env.OD_PROMPT_CORE) === 'native') return;
+      detectSkillPluginCandidateOnRunSuccess(...args);
+    };
+
   const startChatRun = async (chatBody, run) => {
     const lifecycle = createRunLifecycleTracer(run);
     lifecycle.mark('chat_run_started');
@@ -4333,6 +4370,8 @@ export async function startServer({
       byokProvider,
       byokMediaDefaults,
     } = chatBody;
+    const nativePromptCore =
+      resolvePromptCoreVariant(process.env.OD_PROMPT_CORE) === 'native';
     lifecycle.mark('prompt_build_start');
     if (typeof projectId === 'string' && projectId) run.projectId = projectId;
     if (typeof conversationId === 'string' && conversationId)
@@ -4416,10 +4455,12 @@ export async function startServer({
     ) {
       return design.runs.fail(run, 'BAD_REQUEST', 'message required');
     }
-    const browserUseRunState = buildBrowserUseRunState({
-      requested: isBrowserUseRequested(message, currentPrompt, systemPrompt),
-      agentId: def.id,
-    });
+    const browserUseRunState = nativePromptCore
+      ? null
+      : buildBrowserUseRunState({
+          requested: isBrowserUseRequested(message, currentPrompt, systemPrompt),
+          agentId: def.id,
+        });
     if (browserUseRunState) {
       run.browserUse = browserUseRunState;
       design.runs.emit(run, 'diagnostic', {
@@ -4438,6 +4479,7 @@ export async function startServer({
     // turn's prompt. Failures are swallowed — memory is best-effort and
     // must never block the agent run.
     if (
+      !nativePromptCore &&
       (run.retryAttemptCount ?? 0) === 0 &&
       typeof message === 'string' &&
       message.trim().length > 0
@@ -4524,17 +4566,19 @@ export async function startServer({
       typeof projectId === 'string' && projectId
         ? getProject(db, projectId)
         : null;
-    const runContextPrompt = renderRunContextPrompt(context, projectRecord?.metadata);
+    const runContextPrompt = nativePromptCore
+      ? ''
+      : renderRunContextPrompt(context, projectRecord?.metadata);
     const linkedDirs = (() => {
       if (!Array.isArray(projectRecord?.metadata?.linkedDirs)) return [];
       const v = validateLinkedDirs(projectRecord.metadata.linkedDirs);
       return v.dirs ?? [];
     })();
-    const cwdHint = cwd
+    const cwdHint = !nativePromptCore && cwd
       ? formatDesignFilesWorkspaceHint(cwd, existingProjectFiles, existingProjectFolders)
       : '';
     const linkedDirsHint = linkedDirs.length > 0
-      ? `\n\nLinked code folders (read-only reference code the user wants you to see):\n${
+      ? `\n\n${nativePromptCore ? 'Linked directories' : 'Linked code folders (read-only reference code the user wants you to see)'}:\n${
           linkedDirs.map((d) => `- \`${d}\``).join('\n')
         }`
       : '';
@@ -4584,7 +4628,9 @@ export async function startServer({
         activeChatRunHandles.delete(sinkRunId);
       };
     }
-    const runtimeToolPrompt = createAgentRuntimeToolPrompt(daemonUrl, toolTokenGrant);
+    const runtimeToolPrompt = nativePromptCore
+      ? ''
+      : createAgentRuntimeToolPrompt(daemonUrl, toolTokenGrant);
     const commentHint = renderCommentAttachmentHint(safeCommentAttachments);
 
     // Resolve external MCP config + stored OAuth tokens up-front so the
@@ -4676,22 +4722,25 @@ export async function startServer({
     //      flip a previously seen signal back OFF.
     // OD_INTENT_SIGNAL_MODE=legacy restores the pre-hotfix whole-text,
     // unlatched scan.
-    const legacyIntentSignalScan = process.env.OD_INTENT_SIGNAL_MODE === 'legacy';
-    const intentSignalTexts = legacyIntentSignalScan
-      ? [message, currentPrompt]
-      : [
-          extractUserAuthoredSignalText(message),
-          extractUserAuthoredSignalText(currentPrompt),
-        ];
-    const freshIntentSignals = {
-      deck: detectDeckIntentSignal(...intentSignalTexts),
-      media: detectMediaIntentSignal(...intentSignalTexts),
-      platform: detectPlatformIntentSignal(...intentSignalTexts),
-    };
-    const intentSignals =
-      !legacyIntentSignalScan && typeof run.conversationId === 'string' && run.conversationId
-        ? latchConversationIntentSignals(db, run.conversationId, freshIntentSignals)
-        : freshIntentSignals;
+    let intentSignals = { deck: false, media: false, platform: false };
+    if (!nativePromptCore) {
+      const legacyIntentSignalScan = process.env.OD_INTENT_SIGNAL_MODE === 'legacy';
+      const intentSignalTexts = legacyIntentSignalScan
+        ? [message, currentPrompt]
+        : [
+            extractUserAuthoredSignalText(message),
+            extractUserAuthoredSignalText(currentPrompt),
+          ];
+      const freshIntentSignals = {
+        deck: detectDeckIntentSignal(...intentSignalTexts),
+        media: detectMediaIntentSignal(...intentSignalTexts),
+        platform: detectPlatformIntentSignal(...intentSignalTexts),
+      };
+      intentSignals =
+        !legacyIntentSignalScan && typeof run.conversationId === 'string' && run.conversationId
+          ? latchConversationIntentSignals(db, run.conversationId, freshIntentSignals)
+          : freshIntentSignals;
+    }
 
     const {
       prompt: daemonSystemPrompt,
@@ -4903,17 +4952,18 @@ export async function startServer({
       linkedDirs,
       codexGeneratedImagesDir,
     });
-    const codexImagegenOverride = resolveGrantedCodexImagegenOverride({
-      agentId,
-      metadata: projectRecord?.metadata,
-      codexGeneratedImagesDir,
-      extraAllowedDirs,
-      mediaExecution: run?.mediaExecution,
-    });
-    const researchCommandContract = resolveResearchCommandContract(
-      research,
-      message,
-    );
+    const codexImagegenOverride = nativePromptCore
+      ? null
+      : resolveGrantedCodexImagegenOverride({
+          agentId,
+          metadata: projectRecord?.metadata,
+          codexGeneratedImagesDir,
+          extraAllowedDirs,
+          mediaExecution: run?.mediaExecution,
+        });
+    const researchCommandContract = nativePromptCore
+      ? ''
+      : resolveResearchCommandContract(research, message);
     // Resume-capable adapters continue their own upstream session so they
     // keep working memory across turns. Decide once per run; reuse for the
     // prompt-composition skipTranscript choice, the buildArgs flags, and the
@@ -5071,7 +5121,11 @@ export async function startServer({
     // turns and changed-hash turns send the full block (byte-identical to the
     // previous behavior); non-resume agents have isResuming === false and so
     // always send the full block.
-    const stableInstructionFingerprint = [daemonSystemPrompt, runtimeToolPrompt, systemPrompt]
+    const stableInstructionFingerprint = (
+      nativePromptCore
+        ? [daemonSystemPrompt]
+        : [daemonSystemPrompt, runtimeToolPrompt, systemPrompt]
+    )
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
       .join('\n\n---\n\n');
     const currentStableHash = hashStableInstructions(stableInstructionFingerprint);
@@ -5081,7 +5135,7 @@ export async function startServer({
     const currentStableSections = computeStableSectionHashes({
       ...(stableSectionInputs ?? {}),
       runtimeToolPrompt,
-      clientSystemPrompt: systemPrompt,
+      clientSystemPrompt: nativePromptCore ? '' : systemPrompt,
     });
     // `runtimeToolPrompt` is part of the fingerprint and varies only when the
     // tool-token grant's presence flips between turns (rare cwd/projectId edge
@@ -5099,8 +5153,11 @@ export async function startServer({
       currentStableSections,
     });
     const currentStableSectionsJson = serializeStableSections(currentStableSections);
-    const browserUsePromptGuard = renderBrowserUseUnavailablePrompt(run.browserUse ?? null);
+    const browserUsePromptGuard = nativePromptCore
+      ? ''
+      : renderBrowserUseUnavailablePrompt(run.browserUse ?? null);
     const titleGenerationRequested =
+      !nativePromptCore &&
       titleGeneration &&
       typeof titleGeneration === 'object' &&
       titleGeneration.enabled === true &&
@@ -5120,9 +5177,18 @@ export async function startServer({
     // the per-turn slice keeps the upstream prompt-cache prefix byte-stable
     // across resumes (protecting the conversation-history cache) while still
     // giving the model the current MCP auth state on every turn.
-    const mcpConnectedDirective = renderConnectedExternalMcpDirective(connectedExternalMcp);
+    const mcpConnectedDirective = nativePromptCore
+      ? ''
+      : renderConnectedExternalMcpDirective(connectedExternalMcp);
     const clientInstructionParts = includeStableInstructions
-      ? [researchCommandContract, runContextPrompt, mcpConnectedDirective, browserUsePromptGuard, titleGenerationPrompt, systemPrompt]
+      ? [
+          researchCommandContract,
+          runContextPrompt,
+          mcpConnectedDirective,
+          browserUsePromptGuard,
+          titleGenerationPrompt,
+          nativePromptCore ? '' : systemPrompt,
+        ]
       : [researchCommandContract, runContextPrompt, mcpConnectedDirective, browserUsePromptGuard, titleGenerationPrompt];
     const clientInstructionPrompt = clientInstructionParts
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
@@ -5141,11 +5207,14 @@ export async function startServer({
     // "do not echo" line cuts the regression in practice without changing
     // the turn-shape every agent CLI expects (user message carrying both
     // instructions and request) — see server.ts:9920 composer notes.
-    const ECHO_GUARD =
-      '\n\n(Do not quote, restate, or echo the # Instructions block above in your reply. Begin your response with the answer to the # User request below.)';
-    const formAnswerMatch = FORM_ANSWERS_HEADER_RE.exec(
-      typeof currentPrompt === 'string' ? currentPrompt : '',
-    );
+    const echoGuard = nativePromptCore
+      ? ''
+      : '\n\n(Do not quote, restate, or echo the # Instructions block above in your reply. Begin your response with the answer to the # User request below.)';
+    const formAnswerMatch = nativePromptCore
+      ? null
+      : FORM_ANSWERS_HEADER_RE.exec(
+          typeof currentPrompt === 'string' ? currentPrompt : '',
+        );
     const formIdForOverride = formAnswerMatch
       ? ((formAnswerMatch[1] || 'form').trim().replace(/[^\w.-]/g, '') || 'form').toLowerCase()
       : null;
@@ -5162,13 +5231,13 @@ export async function startServer({
     );
     const composed = [
       instructionPrompt
-        ? `# Instructions (read first)\n\n${formOverride}${instructionPrompt}${cwdHint}${linkedDirsHint}${ECHO_GUARD}\n\n---\n`
+        ? `# Instructions (read first)\n\n${formOverride}${instructionPrompt}${cwdHint}${linkedDirsHint}${echoGuard}\n\n---\n`
         : cwdHint
-          ? `# Instructions\n\n${formOverride}${cwdHint}${linkedDirsHint}${ECHO_GUARD}\n\n---\n`
+          ? `# Instructions\n\n${formOverride}${cwdHint}${linkedDirsHint}${echoGuard}\n\n---\n`
           : linkedDirsHint
-            ? `# Instructions\n\n${formOverride}${linkedDirsHint}${ECHO_GUARD}\n\n---\n`
+            ? `# Instructions\n\n${formOverride}${linkedDirsHint}${echoGuard}\n\n---\n`
             : formOverride
-              ? `# Instructions\n\n${formOverride}${ECHO_GUARD}\n\n---\n`
+              ? `# Instructions\n\n${formOverride}${echoGuard}\n\n---\n`
               : '',
       `# User request\n\n${userRequestPrompt}${attachmentHint}${commentHint}`,
       promptImagePaths.length
@@ -5188,7 +5257,7 @@ export async function startServer({
         { kind: 'runContextPrompt', content: runContextPrompt },
         { kind: 'browserUsePromptGuard', content: browserUsePromptGuard },
         { kind: 'clientSystemPrompt', content: clientInstructionPrompt },
-        { kind: 'echoGuard', content: ECHO_GUARD },
+        { kind: 'echoGuard', content: echoGuard },
         { kind: 'userRequest', content: userRequestPrompt },
         { kind: 'skillPrompt', content: promptTelemetryParts?.skillPrompt },
         {
@@ -5293,7 +5362,7 @@ export async function startServer({
       // or `stdout` chunks (plain/BYOK/antigravity). Both carry already-guarded,
       // user-visible text, so this never captures thinking, tool traffic, or raw
       // transport frames.
-      if (memoryReplyText.length < MEMORY_REPLY_CAP) {
+      if (!nativePromptCore && memoryReplyText.length < MEMORY_REPLY_CAP) {
         const replyPiece =
           event === 'agent' && data && data.type === 'text_delta' && typeof data.delta === 'string'
             ? data.delta
@@ -6749,7 +6818,7 @@ export async function startServer({
     // hook_started/hook_response frames — none of which is the reply; mining it
     // produced empty extractions that, near-identical across a build's re-fires,
     // caused the same turn to be re-analyzed dozens of times.
-    child.on('close', () => {
+    if (!nativePromptCore) child.on('close', () => {
       const userMsg = typeof message === 'string' ? message : '';
       // Forward the chat agent id so memory-llm.pickProvider can
       // constrain its auto-pick to the chat protocol's family — keeps
@@ -8497,7 +8566,7 @@ export async function startServer({
     lifecycle: { isDaemonShuttingDown: () => daemonShuttingDown },
     plugins: {
       connectorService,
-      detectSkillPluginCandidateOnRunSuccess,
+      detectSkillPluginCandidateOnRunSuccess: detectSkillPluginCandidateForRun,
       firePipelineForRun,
       loadPluginRegistryView,
       renderPluginBriefTemplate,
@@ -8894,7 +8963,7 @@ export async function startServer({
     mcp: { pendingAuth: mcpPendingAuth, daemonUrlRef },
     plugins: {
       connectorService,
-      detectSkillPluginCandidateOnRunSuccess,
+      detectSkillPluginCandidateOnRunSuccess: detectSkillPluginCandidateForRun,
       firePipelineForRun,
       loadPluginRegistryView,
       renderPluginBriefTemplate,

@@ -113,6 +113,11 @@
         "height": 56
       }
     },
+    "selected_filter_clear_action": {
+      "placement": "after-selected-items",
+      "tone": "brand",
+      "interactive_tone": "brand-stable"
+    },
     "variant_values_must_come_from_page_contract": true
   },
   "variants": [

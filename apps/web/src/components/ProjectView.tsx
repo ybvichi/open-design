@@ -67,16 +67,12 @@ import {
 } from '@open-design/contracts/analytics';
 import type {
   TrackingArtifactKind,
-  TrackingDesignSystemApplyTargetKind,
-  TrackingDesignSystemOrigin,
-  TrackingDesignSystemStatusValue,
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackArtifactHeaderClick,
   trackByokPreflightBlocked,
   trackComposerBarClick,
-  trackDesignSystemApplyResult,
   trackDesignSystemEnrichClick,
   trackPageView,
   trackOnboardingPromptPrefilled,
@@ -221,7 +217,6 @@ import { MessageCenter } from './MessageCenter';
 import { HandoffButton } from './HandoffButton';
 import { Icon } from './Icon';
 import { localizePluginTitle } from './plugins-home/localization';
-import { DesignSystemPicker } from './DesignSystemPicker';
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { DesignSystemPreviewModal } from './DesignSystemPreviewModal';
 import { ChatPane } from './ChatPane';
@@ -445,7 +440,6 @@ interface Props {
   onDeleteProject?: (id: string) => Promise<boolean> | boolean;
   onChangeDefaultDesignSystem?: (designSystemId: string | null) => void;
   onDesignSystemsRefresh?: () => Promise<void> | void;
-  onCreateProjectFromDesignSystem?: (designSystemId: string, title: string) => Promise<void> | void;
   onCreateDesignSystemFromProject?: (
     sourceProjectId: string,
     input: { name?: string; pendingPrompt?: string },
@@ -1361,7 +1355,6 @@ export function ProjectView({
   onDeleteProject,
   onChangeDefaultDesignSystem,
   onDesignSystemsRefresh,
-  onCreateProjectFromDesignSystem,
   onCreateDesignSystemFromProject,
   onDuplicateProject,
 }: Props) {
@@ -5911,7 +5904,7 @@ export function ProjectView({
           skillId: project.skillId ?? null,
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
-          designSystemId: projectDesignSystemId ?? null,
+          designSystemId: null,
           attachments: runAttachments.map((a) => a.path),
           commentAttachments: runCommentAttachments,
           sessionMode: runSessionMode,
@@ -6072,7 +6065,7 @@ export function ProjectView({
           skillId: project.skillId ?? null,
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
-          designSystemId: projectDesignSystemId ?? null,
+          designSystemId: null,
           attachments: runAttachments.map((a) => a.path),
           commentAttachments: runCommentAttachments,
           sessionMode: runSessionMode,
@@ -7284,84 +7277,6 @@ export function ProjectView({
     ],
   );
 
-  const handleChangeDesignSystemId = useCallback(
-    (nextId: string | null) => {
-      if ((projectDesignSystemId ?? null) === nextId) return;
-      // `design_system_apply_result` studio variant. The existing
-      // NewProjectPanel picker fires the same event under
-      // `page_name=home`; this in-project header picker fires under
-      // `page_name=studio` so the funnel sees applies from both
-      // surfaces. `target_project_kind` derives from
-      // `project.metadata.kind`.
-      const target =
-        // NOTE: `target_project_kind` uses the narrower
-        // `TrackingDesignSystemApplyTargetKind` enum, which intentionally does
-        // NOT carry the prototype subtypes (wireframe/mobile) or `document`.
-        // Derive the coarse kind here (subtypes collapse back to `prototype`)
-        // so a Home-created Wireframe/Mobile/Document project never emits a
-        // value outside this field's schema. The fine-grained split only
-        // belongs on `project_kind` (create/run events).
-        (projectKindToTracking(project.metadata?.kind ?? null, project.metadata?.videoModel) ?? 'unknown') as TrackingDesignSystemApplyTargetKind;
-      const picked = nextId
-        ? designSystems.find((d) => d.id === nextId)
-        : null;
-      const origin: TrackingDesignSystemOrigin | undefined = picked
-        ? picked.source === 'user'
-          ? 'manual_create'
-          : picked.source === 'built-in'
-            ? 'official_preset'
-            : picked.source === 'installed'
-              ? 'template'
-              : 'unknown'
-        : undefined;
-      const status: TrackingDesignSystemStatusValue | undefined = picked
-        ? picked.status === 'draft' || picked.status === 'published'
-          ? picked.status
-          : 'unknown'
-        : undefined;
-      if (nextId === null) {
-        trackDesignSystemApplyResult(analytics.track, {
-          page_name: 'studio',
-          area: 'design_system_picker',
-          action: 'clear_selection',
-          result: 'success',
-          target_project_kind: target,
-          design_system_applied: false,
-          design_system_selection_mode: 'none',
-          is_default: false,
-          is_auto_selected: false,
-          available_design_system_count: designSystems.length,
-          duration_ms: 0,
-        });
-      } else {
-        trackDesignSystemApplyResult(analytics.track, {
-          page_name: 'studio',
-          area: 'design_system_picker',
-          action: 'select_design_system',
-          result: 'success',
-          target_project_kind: target,
-          design_system_id: nextId,
-          design_system_source: origin,
-          design_system_status: status,
-          design_system_applied: true,
-          design_system_selection_mode: 'manual',
-          is_default: false,
-          is_auto_selected: false,
-          available_design_system_count: designSystems.length,
-          duration_ms: 0,
-        });
-      }
-      const updated: Project = {
-        ...project,
-        designSystemId: nextId,
-        updatedAt: Date.now(),
-      };
-      onProjectChange(updated);
-      void patchProject(project.id, { designSystemId: nextId });
-    },
-    [project, projectDesignSystemId, onProjectChange, designSystems, analytics.track],
-  );
-
   // Canonical project-type chip shown next to the editable title. We label
   // by the resolved skill/template `mode` (the real type taxonomy) rather
   // than the skill's display name, so every project kind — prototype, deck,
@@ -7857,7 +7772,6 @@ export function ProjectView({
   const [brandAgentExtractionStarting, setBrandAgentExtractionStarting] = useState(false);
   const [brandProgrammaticContinueStarting, setBrandProgrammaticContinueStarting] = useState(false);
   const brandProgrammaticContinueStartingRef = useRef(false);
-  const [brandCreateDesignStarting, setBrandCreateDesignStarting] = useState(false);
   const [projectDesignSystemCreateStarting, setProjectDesignSystemCreateStarting] = useState(false);
   const [projectDuplicateStarting, setProjectDuplicateStarting] = useState(false);
   useEffect(() => {
@@ -8146,21 +8060,6 @@ export function ProjectView({
     skills,
   ]);
 
-  const handleCreateDesignFromActiveDesignSystem = useCallback(() => {
-    if (brandCreateDesignStarting) return;
-    const system = designSystemProject ?? activeDesignSystemSummary;
-    if (!system || !onCreateProjectFromDesignSystem) return;
-    setBrandCreateDesignStarting(true);
-    void Promise.resolve(onCreateProjectFromDesignSystem(system.id, system.title)).finally(() => {
-      setBrandCreateDesignStarting(false);
-    });
-  }, [
-    activeDesignSystemSummary,
-    brandCreateDesignStarting,
-    designSystemProject,
-    onCreateProjectFromDesignSystem,
-  ]);
-
   const handleCreateDesignSystemFromProject = useCallback(() => {
     if (
       projectDesignSystemCreateStarting ||
@@ -8352,15 +8251,6 @@ export function ProjectView({
   const handleOpenContextDesignSystemDetails = useCallback((system: DesignSystemSummary) => {
     setContextDesignSystemDetails(system);
   }, []);
-  const chatDesignSystemSummary = useMemo(() => {
-    if (activeDesignSystemSummary) return activeDesignSystemSummary;
-    const designSystemName = activePluginSnapshot?.inputs?.designSystem;
-    if (typeof designSystemName !== 'string') return null;
-    const normalized = designSystemName.trim();
-    if (!normalized || normalized === 'the active project design system') return null;
-    return designSystems.find((d) => d.title === normalized) ?? null;
-  }, [activeDesignSystemSummary, activePluginSnapshot?.inputs, designSystems]);
-
   // Lift finalize errors into the shared project-actions toast so the
   // user sees both the daemon's category message and any upstream
   // detail (per #450 verification commitment).
@@ -8576,8 +8466,6 @@ export function ProjectView({
               projectKindForTracking={projectKindFromMetadataToTracking(currentProject.metadata)}
               projectFiles={projectFiles}
               activeProjectFileName={activeProjectFileName}
-              hasActiveDesignSystem={!!projectDesignSystemId}
-              activeDesignSystem={chatDesignSystemSummary}
               projectFileNames={projectFileNames}
               projectResolvedDir={projectDetail.resolvedDir}
               skills={skills}
@@ -8659,8 +8547,6 @@ export function ProjectView({
               continueBrandAgentExtractionBusy={brandAgentExtractionStarting}
               onContinueBrandExtraction={handleContinueBrandExtraction}
               continueBrandExtractionBusy={brandProgrammaticContinueStarting}
-              onCreateDesignFromActiveDesignSystem={handleCreateDesignFromActiveDesignSystem}
-              createDesignFromActiveDesignSystemBusy={brandCreateDesignStarting}
               onCreateDesignSystemFromProject={
                 projectIsDesignSystemProject ? undefined : handleCreateDesignSystemFromProject
               }
@@ -8698,10 +8584,6 @@ export function ProjectView({
                 onProjectChange({ ...project, skillId });
               }}
               activePluginSnapshot={activePluginSnapshot}
-              currentDesignSystemId={projectDesignSystemId}
-              onActiveDesignSystemChange={(updatedProject) => {
-                onProjectChange(updatedProject);
-              }}
               onShowToast={(message) => {
                 setProjectActionsToast({ message, details: null });
               }}
@@ -8732,13 +8614,6 @@ export function ProjectView({
                     <span className="meta" data-testid="project-meta">{projectTypeLabel}</span>
                   ) : null}
                 </span>
-              )}
-              designSystemPicker={(
-                <DesignSystemPicker
-                  designSystems={designSystems}
-                  selectedId={projectDesignSystemId ?? null}
-                  onChange={handleChangeDesignSystemId}
-                />
               )}
             />
           ) : (
@@ -8826,7 +8701,6 @@ export function ProjectView({
           onDesignSystemNeedsWork={sendDesignSystemFeedback}
           designSystemReview={currentProject.metadata?.designSystemReview}
           onDesignSystemReviewDecision={persistDesignSystemReviewDecision}
-          onUseDesignSystem={onCreateProjectFromDesignSystem}
           designSystemEditRequest={designSystemEditRequest}
           onConnectRepo={handleConnectRepo}
           githubConnected={githubConnected}

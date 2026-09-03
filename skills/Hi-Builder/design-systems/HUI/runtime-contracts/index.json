@@ -706,6 +706,21 @@
       },
       "verification": "official-api-table"
     },
+    "h-anchor": {
+      "component_ids": [
+        "anchor"
+      ],
+      "contract_files": [
+        "runtime-contracts/navigation/anchor.json"
+      ],
+      "interface_counts": {
+        "props": 0,
+        "events": 0,
+        "slots": 0,
+        "methods": 0
+      },
+      "verification": "official-examples-only"
+    },
     "h-subanchor": {
       "component_ids": [
         "anchor"

@@ -26,13 +26,17 @@
     .page-frame.has-external-master-media > .page-breadcrumb { grid-column: 1 / -1; }
     .page-frame.has-external-master-media > .details-master-photo { grid-column: 1; grid-row: 2; }
     .page-frame.has-external-master-media > .page-workspace { grid-column: 2; grid-row: 2; }
+    .page-frame.has-external-master-media.has-portal-breadcrumb { grid-template-rows: minmax(0, 1fr); }
+    .page-frame.has-external-master-media.has-portal-breadcrumb > .details-master-photo { grid-row: 1; }
+    .page-frame.has-external-master-media.has-portal-breadcrumb > .page-workspace { grid-row: 1; }
     .page-breadcrumb {
       position: relative; display: flex; align-items: center; height: 40px; flex: none;
       padding: 0 16px; border-bottom: 1px solid var(--h-color-border-tertiary);
       color: var(--h-color-text-secondary); background: var(--h-color-bg-primary);
     }
-    .page-breadcrumb strong { margin-left: 8px; color: var(--h-color-text-primary); font-weight: 500; }
-    .page-workspace { min-height: 0; flex: 1; padding: 16px 16px 0; overflow: hidden; }
+    .page-breadcrumb .el-breadcrumb { display: flex; align-items: center; min-width: 0; }
+    .page-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner { color: var(--h-color-text-primary); font-weight: 500; }
+    .page-workspace { min-height: 0; flex: 1; padding: 16px 16px 0; overflow: hidden; background: var(--h-color-bg-secondary); }
 
 /* __RENDERER_STYLES__ */
     @media (max-width: 1380px) {
@@ -44,8 +48,8 @@
   <div id="app" v-cloak>
 <!-- __PRODUCT_SHELL_START__ -->
         <section class="content-shell">
-          <div class="page-frame" :class="{'has-external-master-media':externalMasterMedia}" :data-page-kind="config.page_kind" :data-pattern-id="config.pattern_ids.join(',')">
-            <div class="page-breadcrumb"><span>{{ config.portal.section }}</span><!-- @include ../fragments/navigation/page-tabs.html --><template v-if="!formTabsInBreadcrumb"><i class="h-icon-angle_right_sm"></i><strong>{{ config.title }}</strong></template></div>
+          <div class="page-frame" :class="{'has-external-master-media':externalMasterMedia,'has-portal-breadcrumb':config.portal.breadcrumb_placement === 'portal-body'}" :data-page-kind="config.page_kind" :data-pattern-id="config.pattern_ids.join(',')">
+            <div v-if="config.portal.breadcrumb_placement !== 'portal-body'" class="page-breadcrumb"><div class="page-breadcrumb__path" data-zone="navigation.breadcrumb" data-component="navigation.breadcrumb"><el-breadcrumb separator-class="h-icon-angle_right_sm"><el-breadcrumb-item>{{ config.portal.section }}</el-breadcrumb-item><el-breadcrumb-item v-if="!formTabsInBreadcrumb">{{ config.title }}</el-breadcrumb-item></el-breadcrumb></div><!-- @include ../fragments/navigation/page-tabs.html --></div>
             <section v-if="config.summary_metrics && config.summary_metrics.length" class="statisticsStyle collection-summary-metrics" data-zone="summary.metrics" data-component="summary.metric-strip">
               <div v-for="item in config.summary_metrics" :key="item.key" class="card" :class="{'is-active':activeSummaryMetric===item.key}" role="button" :aria-pressed="activeSummaryMetric===item.key?'true':'false'" tabindex="0" @click="selectSummaryMetric(item)" @keyup.enter="selectSummaryMetric(item)">
                 <div class="image"><i :class="item.image_icon || item.icon || 'h-icon-menu'"></i></div>

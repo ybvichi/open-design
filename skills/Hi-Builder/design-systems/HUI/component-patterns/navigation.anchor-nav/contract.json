@@ -8,7 +8,7 @@
   "category": "navigation",
   "status": "active",
   "use_when": ["长表单或长详情页需要快速定位内容章节"],
-  "hui_components": ["h-affix", "h-subanchor", "h-anchor-link"],
+  "hui_components": ["h-anchor", "h-anchor-link"],
   "variants": ["persistent", "retractable"],
   "owner": "hui-common"
 }

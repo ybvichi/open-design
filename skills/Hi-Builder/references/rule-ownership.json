@@ -147,7 +147,7 @@
     {
       "id": "hui-icon-usage",
       "owner": "references/hui-vue-runtime-contract.md",
-      "machine_sources": ["design-systems/HUI/manifest.json", "design-systems/HUI/runtime-contracts/basic-form/icon.json", "design-systems/HUI/runtime-contracts/basic-form/svg-icon.json"],
+      "machine_sources": ["design-systems/HUI/manifest.json", "design-systems/HUI/icons/catalog.json", "design-systems/HUI/runtime-contracts/basic-form/icon.json", "design-systems/HUI/runtime-contracts/basic-form/svg-icon.json"],
       "exclusive_literals": ["el-icon-*", "@hui/icons-vue"]
     },
     {

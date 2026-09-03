@@ -19,7 +19,6 @@ import {
   fidelityToTracking,
 } from '@open-design/contracts/analytics';
 import type { AmrModelsResponse, ChatSessionMode, RunContextSelection } from '@open-design/contracts';
-import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
@@ -1132,23 +1131,6 @@ function AppInner() {
     config.onboardingCompleted,
   ]);
 
-  // Auto-pick the default design system the same way — only after daemon
-  // config has merged so we never overwrite a daemon-stored selection.
-  useEffect(() => {
-    if (!daemonConfigLoaded || dsLoading) return;
-    if (config.designSystemId) return;
-    if (designSystems.length === 0) return;
-    const id =
-      designSystems.find((d) => d.id === 'default')?.id ?? designSystems[0]!.id;
-    setConfig((prev) => {
-      if (prev.designSystemId) return prev;
-      const next: AppConfig = { ...prev, designSystemId: id };
-      saveConfig(next);
-      void syncConfigToDaemon(next);
-      return next;
-    });
-  }, [daemonConfigLoaded, dsLoading, designSystems, config.designSystemId]);
-
   // One-shot self-healing migration for pets adopted before the
   // overlay learned atlas-row switching. If the stored pet is a
   // custom / codex pet whose imageUrl is a single-row strip
@@ -1546,10 +1528,6 @@ function AppInner() {
       input: AppCreateProjectInput,
     ): Promise<boolean> => {
       console.log('官方创建工程的参数',input);
-      // Honor an explicit `null` design system — the create panel defaults
-      // to "None" for every kind now, and the user expects that to land
-      // as a no-design-system project rather than silently inheriting the
-      // workspace default.
       const derivedPendingPrompt =
       input.pendingPrompt ??
       (input.metadata?.promptTemplate?.prompt?.trim() || undefined);
@@ -1564,7 +1542,7 @@ function AppInner() {
         result = await createProject({
           name: input.name,
           skillId: input.skillId,
-          designSystemId: input.designSystemId,
+          designSystemId: null,
           pendingPrompt: derivedPendingPrompt,
           metadata,
           ...(input.conversationMode ? { conversationMode: input.conversationMode } : {}),
@@ -1781,38 +1759,6 @@ function AppInner() {
       return true;
     },
     [analytics.track, rememberLocalProject],
-  );
-
-  const handleCreateProjectFromDesignSystem = useCallback(
-    async (designSystemId: string, designSystemTitle: string) => {
-      // "Create with this design system" must NOT assume a prototype. Route
-      // the click through the hidden default design router (od-default) —
-      // exactly like a free-form Home prompt — so the agent first asks (via
-      // the task-type question-form) what to build with this system instead
-      // of silently binding the web-prototype scenario + high-fidelity
-      // metadata. The preset prompt seeds the conversation and is auto-sent
-      // so the router surfaces the confirmation form immediately; `kind`
-      // stays the neutral 'other' so no surface-specific default leaks back
-      // in on the daemon side.
-      const presetPrompt = t('nextStep.brandCreateDesignPrompt', {
-        designSystem: designSystemTitle,
-      });
-      await handleCreateProject({
-        name: t('common.untitled'),
-        skillId: null,
-        designSystemId,
-        pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
-        pluginInputs: { prompt: presetPrompt },
-        pendingPrompt: presetPrompt,
-        autoSendFirstMessage: true,
-        conversationMode: 'design',
-        metadata: {
-          kind: 'other',
-          nameSource: 'generated',
-        },
-      });
-    },
-    [handleCreateProject, t],
   );
 
   const handleCreateDesignSystemFromProject = useCallback(
@@ -2507,7 +2453,6 @@ function AppInner() {
         onDeleteProject={handleDeleteProject}
         onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
         onDesignSystemsRefresh={refreshDesignSystems}
-        onCreateProjectFromDesignSystem={handleCreateProjectFromDesignSystem}
         onCreateDesignSystemFromProject={handleCreateDesignSystemFromProject}
         onDuplicateProject={handleDuplicateProject}
       />

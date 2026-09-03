@@ -68,6 +68,7 @@
   "component_pattern_registry": "component-patterns/",
   "component_pattern_catalog": "component-patterns/catalog.json",
   "atom_catalog": "runtime-contracts/index.json",
+  "icon_catalog": "icons/catalog.json",
   "theme": {
     "token_contract": "theme/token-contract.json"
   },
@@ -417,7 +418,7 @@
   "runtime_contracts": {
     "index": "runtime-contracts/index.json",
     "policy": "verified-only",
-    "entry_count": 95
+    "entry_count": 96
   },
   "runtime_contract_batches": {
     "basic-form": {

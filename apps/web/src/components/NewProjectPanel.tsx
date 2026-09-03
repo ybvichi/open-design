@@ -244,14 +244,14 @@ const MEDIA_SURFACE_LABEL_KEYS: Record<MediaSurface, keyof Dict> = {
   audio: 'newproj.surfaceAudio',
 };
 
+// A configured design system may still be highlighted in the picker, but it
+// is never inherited by a new generation. Applying one requires an explicit
+// picker action.
 export function defaultDesignSystemSelection(
-  defaultDesignSystemId: string | null,
-  designSystems: DesignSystemSummary[],
+  _defaultDesignSystemId: string | null,
+  _designSystems: DesignSystemSummary[],
 ): string[] {
-  if (!defaultDesignSystemId) return [];
-  return designSystems.some((d) => d.id === defaultDesignSystemId && (d.status ?? 'published') !== 'draft')
-    ? [defaultDesignSystemId]
-    : [];
+  return [];
 }
 
 function isSelectableProjectDesignSystem(system: DesignSystemSummary): boolean {
@@ -340,7 +340,6 @@ export function NewProjectPanel({
   const [selectedDsIds, setSelectedDsIds] = useState<string[]>(
     () => initialDefaultDsSelection,
   );
-  const [dsSelectionTouched, setDsSelectionTouched] = useState(false);
   const [dsMulti, setDsMulti] = useState(false);
 
   // Per-tab metadata. Tracked independently so switching tabs preserves
@@ -378,100 +377,10 @@ export function NewProjectPanel({
   const [videoPromptTemplate, setVideoPromptTemplate] =
     useState<PromptTemplatePick | null>(null);
 
-  // Design system is meaningful only for the structured/visual surfaces
-  // (prototype, deck, template, and the freeform "other" canvas). The
-  // media surfaces use prompt templates instead — design tokens don't map
-  // onto image/video/audio generations, and the picker just adds noise
-  // there. Keep this list explicit so future tabs declare their intent.
-  const tabSupportsDesignSystem =
-    tab === 'prototype' ||
-    tab === 'deck' ||
-    tab === 'template' ||
-    tab === 'other';
-  // Orbit briefings ship their own complete visual language baked into
-  // example.html and explicitly opt out of DESIGN.md injection via
-  // `od.design_system.requires: false`. Hide the picker only for those
-  // Orbit scenario skills; the general prototype creation surface should
-  // still honor the user's configured default design system even when a
-  // non-Orbit default skill does not require one.
-  const tabDefaultSkillForcesNoDs = useMemo(() => {
-    // A "Start from" template pick overrides the tab default, so the DS
-    // decision must follow the picked template's own declaration.
-    if (startTemplateId) {
-      const picked =
-        designTemplates.find((x) => x.id === startTemplateId)
-        ?? skills.find((x) => x.id === startTemplateId);
-      return picked
-        ? picked.scenario === 'orbit' && picked.designSystemRequired === false
-        : false;
-    }
-    const tabSkillId = ((): string | null => {
-      if (tab === 'prototype' || tab === 'live-artifact') {
-        const list = skills.filter((s) => s.mode === 'prototype');
-        return list.find((s) => s.defaultFor.includes('prototype'))?.id
-          ?? list[0]?.id ?? null;
-      }
-      if (tab === 'deck') {
-        const list = skills.filter((s) => s.mode === 'deck');
-        return list.find((s) => s.defaultFor.includes('deck'))?.id
-          ?? list[0]?.id ?? null;
-      }
-      return null;
-    })();
-    if (!tabSkillId) return false;
-    const s = skills.find((x) => x.id === tabSkillId);
-    return s
-      ? s.scenario === 'orbit' && s.designSystemRequired === false
-      : false;
-  }, [tab, skills, startTemplateId, designTemplates]);
-  const showDesignSystemPicker =
-    tabSupportsDesignSystem && !tabDefaultSkillForcesNoDs;
-
-  useEffect(() => {
-    if (dsSelectionTouched) return;
-    setSelectedDsIds(initialDefaultDsSelection);
-  }, [dsSelectionTouched, initialDefaultDsSelection]);
-
-  // Fires `design_system_apply_result` with `auto_select` when the
-  // picker mounts/refreshes and pre-selects the user's default DS
-  // without an explicit click. Only emits once per default-id while
-  // the picker is showing, and only while the user hasn't manually
-  // changed the selection (so the dashboard separates auto vs manual
-  // attribution). The picker visibility guard skips media tabs where
-  // the DS picker isn't rendered.
-  const autoSelectFiredForRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!showDesignSystemPicker) return;
-    if (dsSelectionTouched) return;
-    const primary = initialDefaultDsSelection[0];
-    if (!primary) return;
-    if (autoSelectFiredForRef.current === primary) return;
-    autoSelectFiredForRef.current = primary;
-    const picked = selectableDesignSystems.find((d) => d.id === primary);
-    trackDesignSystemApplyResult(analytics.track, {
-      page_name: 'home',
-      area: 'design_system_picker',
-      action: 'auto_select',
-      result: 'success',
-      target_project_kind: newProjectTabToApplyKind(tab),
-      design_system_id: primary,
-      design_system_source: deriveDesignSystemOrigin(picked),
-      design_system_status: deriveDesignSystemStatusValue(picked),
-      design_system_applied: true,
-      design_system_selection_mode: 'default',
-      is_default: true,
-      is_auto_selected: true,
-      available_design_system_count: designSystems.length,
-      duration_ms: 0,
-    });
-  }, [
-    analytics.track,
-    dsSelectionTouched,
-    initialDefaultDsSelection,
-    selectableDesignSystems,
-    showDesignSystemPicker,
-    tab,
-  ]);
+  // Native generation is deliberately independent from design systems. Keep
+  // the legacy picker implementation available to the non-native rollback
+  // surface, but do not expose or submit it in the default product flow.
+  const showDesignSystemPicker = false;
 
   // When entering the template tab, snap to the first user-saved template
   // if there is one (and we don't already have a valid pick). The template
@@ -636,7 +545,6 @@ export function NewProjectPanel({
   }
 
   function handleDesignSystemChange(ids: string[]) {
-    setDsSelectionTouched(true);
     setSelectedDsIds(ids);
     const previousPrimary = selectedDsIds[0] ?? null;
     const nextPrimary = ids[0] ?? null;
@@ -675,10 +583,6 @@ export function NewProjectPanel({
       design_system_applied: true,
       design_system_selection_mode: isDefault ? 'default' : 'manual',
       is_default: isDefault,
-      // `is_auto_selected` reports whether this row was picked by the
-      // app (initial default selection from `initialDefaultDsSelection`)
-      // rather than by the user. Once `dsSelectionTouched` is set we
-      // know any subsequent change came from a click.
       is_auto_selected: false,
       available_design_system_count: designSystems.length,
       duration_ms: 0,

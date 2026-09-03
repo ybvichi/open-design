@@ -766,6 +766,7 @@ class PipelineTest(unittest.TestCase):
             "h-ip-input",
             "h-stats",
             "h-color-picker",
+            "h-anchor",
             "h-subanchor",
             "el-layout-page-header",
             "el-descriptions-row",
@@ -1344,8 +1345,7 @@ class PipelineTest(unittest.TestCase):
                 self.assertIn('"card_tab_style": "linear"', html)
                 self.assertIn('"media_column_gap": "2px"', html)
                 self.assertIn('"title_status_gap": "8px"', html)
-                self.assertIn('"row_height": "20px"', html)
-                self.assertIn('"row_height": "25px"', html)
+                self.assertNotIn('"row_height"', html)
             if name == "device-details-master-detail":
                 self.assertIn('"renderer": "hui.tpp.details"', html)
                 self.assertIn(".details-side .details-fields { grid-template-columns: minmax(0, 1fr); }", html)
@@ -1467,17 +1467,52 @@ class PipelineTest(unittest.TestCase):
         ]
         html = compile_pattern_page(spec)
         self.assertIn("page-breadcrumb__tab.is-active::after", html)
+        self.assertIn("margin: 0 !important; padding: 0 12px", html)
+        self.assertIn("right: 0; bottom: 0; left: 0", html)
+        self.assertNotIn("overflow: visible !important", html)
+        self.assertIn(".page-breadcrumb__tab:hover,", html)
+        self.assertIn("text-decoration: none !important", html)
         self.assertNotIn("page-breadcrumb__separator", html)
         self.assertIn('v-for="section in visibleFormSections"', html)
         self.assertIn(
             'v-if="!isWorkOrderForm && visibleFormSections.length"', html
         )
-        self.assertIn('@click.prevent="activateFormSection(section.id)"', html)
+        self.assertIn(
+            '<h-anchor :affix="true" container=".permission-form-scroll">', html
+        )
+        self.assertIn(
+            '<h-anchor-link v-for="section in visibleFormSections"', html
+        )
+        self.assertNotIn("activateFormSection: function", html)
         self.assertIn("'is-anchored-form':isAnchoredForm", html)
         self.assertIn("--d2c-page-form-title-field-gap: 24px", html)
         self.assertIn("--d2c-page-form-group-gap: 48px", html)
+        self.assertIn('"columns": 3', html)
+        self.assertIn(
+            "var columns = Number((this.config.pattern_parameters || {}).columns) || 3;",
+            html,
+        )
         self.assertIn(".form-area.is-anchored-form .permission-form__section", html)
-        self.assertIn("position: absolute; z-index: 2", html)
+        self.assertIn(
+            ".permission-form .el-row { display: flex; flex-wrap: wrap; align-items: flex-start; }",
+            html,
+        )
+        self.assertIn(".permission-form .el-row > .el-col { float: none; }", html)
+        self.assertIn(
+            ".form-area.is-anchored-form { gap: 24px; }", html
+        )
+        self.assertIn(
+            "flex: 1 1 auto; width: min(1280px, calc(100% - 204px))",
+            html,
+        )
+        self.assertIn(
+            "position: static; z-index: 2; width: 180px; flex: none; align-self: start",
+            html,
+        )
+        self.assertIn(
+            "padding: 48px 0 0; background: transparent; box-shadow: none",
+            html,
+        )
         self.assertIn(
             "margin-right: calc(-1 * var(--d2c-page-form-content-inline-padding))",
             html,
@@ -1503,8 +1538,6 @@ class PipelineTest(unittest.TestCase):
             html,
         )
         self.assertIn("position: relative; z-index: 1", html)
-        self.assertIn("right: 12px", html)
-        self.assertIn("box-shadow: 0 2px 12px rgba(0, 0, 0, .12)", html)
         self.assertGreater(
             html.find('class="form-anchor-nav"'),
             html.find("</el-form>", html.find('ref="permissionForm"')),

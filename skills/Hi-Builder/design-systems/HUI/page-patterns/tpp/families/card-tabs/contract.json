@@ -126,8 +126,7 @@
       "contract": "../../pages/card/card-tabs.json",
       "parameters": {
         "tab_style": "card",
-        "tree": false,
-        "collection_presentation": "vehicle-card"
+        "tree": false
       }
     },
     {
@@ -136,8 +135,7 @@
       "contract": "../../pages/card/card-tabs-with-tree.json",
       "parameters": {
         "tab_style": "card",
-        "tree": true,
-        "collection_presentation": "vehicle-card"
+        "tree": true
       }
     },
     {
@@ -146,8 +144,7 @@
       "contract": "../../pages/card/linear-tabs.json",
       "parameters": {
         "tab_style": "linear",
-        "tree": false,
-        "collection_presentation": "vehicle-card"
+        "tree": false
       }
     },
     {
@@ -156,8 +153,7 @@
       "contract": "../../pages/card/linear-tabs-with-tree.json",
       "parameters": {
         "tab_style": "linear",
-        "tree": true,
-        "collection_presentation": "vehicle-card"
+        "tree": true
       }
     }
   ]

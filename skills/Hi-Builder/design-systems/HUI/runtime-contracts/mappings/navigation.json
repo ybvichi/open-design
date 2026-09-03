@@ -94,6 +94,7 @@
     },
     "anchor": {
       "runtime": {
+        "h-anchor": {},
         "h-subanchor": {
           "props": ["属性"],
           "slots": ["插槽"],

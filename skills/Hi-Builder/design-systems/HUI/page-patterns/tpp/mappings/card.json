@@ -137,8 +137,7 @@
       "variant": "card-tabs",
       "parameters": {
         "tab_style": "card",
-        "tree": false,
-        "collection_presentation": "vehicle-card"
+        "tree": false
       }
     },
     "/pages/card/cardTypeTabPageAndTreeControl": {
@@ -146,8 +145,7 @@
       "variant": "card-tabs-with-tree",
       "parameters": {
         "tab_style": "card",
-        "tree": true,
-        "collection_presentation": "vehicle-card"
+        "tree": true
       }
     },
     "/pages/card/linearTabPage": {
@@ -155,8 +153,7 @@
       "variant": "linear-tabs",
       "parameters": {
         "tab_style": "linear",
-        "tree": false,
-        "collection_presentation": "vehicle-card"
+        "tree": false
       }
     },
     "/pages/card/linearTabPageAndTreeControl": {
@@ -164,8 +161,7 @@
       "variant": "linear-tabs-with-tree",
       "parameters": {
         "tab_style": "linear",
-        "tree": true,
-        "collection_presentation": "vehicle-card"
+        "tree": true
       }
     },
     "/pages/card/treeControl": {

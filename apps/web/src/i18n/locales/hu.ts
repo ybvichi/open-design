@@ -707,7 +707,7 @@ export const hu: Dict = {
   'homeHero.subtitlePrefix': 'A nyílt forráskódú Claude Design alternatíva.',
   'homeHero.placeholder': 'Írd le, mit szeretnél generálni…',
   'homeHero.placeholderActive': 'Szerkeszd a példalekérdezést, vagy írj sajátot…',
-  'homeHero.carousel.hint': 'Csatolj egy fájlt, kapcsold össze a dizájnrendszered, vagy írd le, mit szeretnél készíteni',
+  'homeHero.carousel.hint': 'Csatolj egy fájlt, vagy írd le, mit szeretnél készíteni',
   'homeHero.carousel.onePageBrief': 'Egyoldalas projektösszefoglaló írása',
   'homeHero.carousel.notesToDeck': 'Jegyzeteim átalakítása prezentációvá',
   'homeHero.carousel.signupFlow': 'Regisztrációs folyamat megtervezése',

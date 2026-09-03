@@ -18,26 +18,26 @@ class PatternCompositionTest(unittest.TestCase):
 
     def test_normal_case_uses_one_exact_variant(self) -> None:
         spec = self.load_case("pvia-face-alarm-case-normal")
-        html = compile_pattern_page(spec)
-        self.assertIn('"pattern_family": "hui.tpp.family.table-manual-filter"', html)
-        self.assertNotIn('"composition_resolution"', html)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "normal.html"
+            html = compile_pattern_page(spec, path)
+            self.assertIn('"pattern_family": "hui.tpp.family.table-manual-filter"', html)
+            self.assertNotIn('"composition_resolution"', html)
             path.write_text(html, encoding="utf-8")
             self.assertEqual(validate_pattern_html(spec, path), [])
 
     def test_positive_composition_generates_filter_and_statistics(self) -> None:
         spec = self.load_case("pvia-face-alarm-case-composition-positive")
-        html = compile_pattern_page(spec)
-        self.assertIn('"status": "verified"', html)
-        self.assertIn('"contribution": "summary.metrics"', html)
-        self.assertIn("hui.tpp.page.table.horizontal-filter-high-low", html)
-        self.assertIn("hui.tpp.page.table.with-statistics", html)
-        self.assertIn('class="manual-horizontal-filter"', html)
-        self.assertIn('data-zone="summary.metrics"', html)
-        self.assertIn("<h-stats", html)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "positive.html"
+            html = compile_pattern_page(spec, path)
+            self.assertIn('"status": "verified"', html)
+            self.assertIn('"contribution": "summary.metrics"', html)
+            self.assertIn("hui.tpp.page.table.horizontal-filter-high-low", html)
+            self.assertIn("hui.tpp.page.table.with-statistics", html)
+            self.assertIn('class="manual-horizontal-filter"', html)
+            self.assertIn('data-zone="summary.metrics"', html)
+            self.assertIn("<h-stats", html)
             path.write_text(html, encoding="utf-8")
             self.assertEqual(validate_pattern_html(spec, path), [])
 

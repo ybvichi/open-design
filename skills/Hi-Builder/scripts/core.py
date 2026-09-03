@@ -180,6 +180,7 @@ def load_context(spec: dict[str, Any]) -> dict[str, Any]:
     industry = spec.get("industry")
     product = spec.get("product")
     page_type = spec.get("page_type")
+    product_version = spec.get("product_version")
     if not all(isinstance(value, str) and value for value in (industry, product, page_type)):
         raise ContractError("PageSpec必须包含industry、product和page_type")
     resolution = resolve_design_system(industry, product, page_type)
@@ -193,6 +194,13 @@ def load_context(spec: dict[str, Any]) -> dict[str, Any]:
     page_root = resolution["page_root"]
     profile = load_json(resolution["profile_path"])
     portal_shell = load_json(resolution["portal_shell_path"])
+    resolved_shell_standard = None
+    if product_version:
+        version_context = load_product_context(
+            industry, product, product_version=product_version
+        )
+        portal_shell = version_context["portal_shell"]
+        resolved_shell_standard = version_context["portal_shell_standard"]
     product_tokens = load_json(resolution["theme_path"])
     composition = load_json(resolution["composition_path"])
     validate_composition_template_ownership(composition)
@@ -275,7 +283,72 @@ def validate_product_tokens(
         raise ContractError(f"产品token值必须是非空字符串: {invalid}")
 
 
-def load_product_context(industry: str, product: str) -> dict[str, Any]:
+def validate_personnel_management_knowledge(
+    portal_shell: dict[str, Any]
+) -> None:
+    knowledge = portal_shell.get("personnel_management")
+    if knowledge is None:
+        return
+    if knowledge.get("schema_version") != "isc-personnel-management.v1":
+        raise ContractError("人员管理知识库schema_version无效")
+    pages = knowledge.get("pages")
+    if not isinstance(pages, dict) or set(pages) != {
+        "list", "add_form", "detail", "field_configuration"
+    }:
+        raise ContractError(
+            "人员管理知识库必须登记list、add_form、detail和field_configuration"
+        )
+    spec_ids: list[str] = []
+    for page_id, page in pages.items():
+        if not page.get("page_kind") or not page.get("pattern_contract"):
+            raise ContractError(f"人员管理{page_id}缺少页面类型或HUI页面合同")
+        page_portal = page.get("portal")
+        if not isinstance(page_portal, dict) or not all(
+            key in page_portal
+            for key in (
+                "active_icon_menu", "active_side_menu", "show_context_sidebar"
+            )
+        ):
+            raise ContractError(f"人员管理{page_id}缺少页面导航Composition")
+        ids = page.get("spec_ids")
+        if not isinstance(ids, list) or not ids or not all(
+            isinstance(item, str) and item for item in ids
+        ):
+            raise ContractError(f"人员管理{page_id}.spec_ids无效")
+        spec_ids.extend(ids)
+    if len(spec_ids) != len(set(spec_ids)):
+        raise ContractError("人员管理知识库存在重复PageSpec id")
+    tabs = knowledge.get("shared", {}).get("breadcrumb_tabs", {})
+    inline_padding = tabs.get("item_inline_padding_px")
+    indicator_extension = tabs.get("active_indicator_total_extension_px")
+    if (
+        not isinstance(inline_padding, int)
+        or not isinstance(indicator_extension, int)
+        or indicator_extension != inline_padding * 2
+    ):
+        raise ContractError("人员管理Tab指示器总延伸量必须等于两侧内边距之和")
+    if tabs.get("hover_text_underline") is not False:
+        raise ContractError("人员管理Tab悬浮态必须关闭文本下划线")
+    if tabs.get("active_indicator_visible") is not True:
+        raise ContractError("人员管理Tab激活指示器必须保留")
+    operation_icons = knowledge.get("shared", {}).get("operation_icons", {})
+    if operation_icons.get("style") != "linear":
+        raise ContractError("人员管理操作图标必须使用线性风格")
+    if (
+        operation_icons.get("classification_ref")
+        != "hui-icon-catalog.v1#/font_style_classification"
+    ):
+        raise ContractError("人员管理操作图标必须引用HUI字体图标风格分类规则")
+    if operation_icons.get("applies_to") != ["toolbar_actions", "row_actions"]:
+        raise ContractError("人员管理操作图标风格必须覆盖工具栏和行操作")
+
+
+def load_product_context(
+    industry: str,
+    product: str,
+    shell_standard: str | None = None,
+    product_version: str | None = None,
+) -> dict[str, Any]:
     product_root = (
         DESIGN_SYSTEMS_ROOT / "industry-products" / industry / "products" / product
     )
@@ -286,9 +359,44 @@ def load_product_context(industry: str, product: str) -> dict[str, Any]:
     product_tokens = load_json(resolve_declared_file(
         product_root, product_contract.get("theme"), "product.theme"
     ))
+    portal_shell_relative = product_contract.get("portal_shell")
+    portal_shell_template_bundle = None
+    resolved_shell_standard = shell_standard
+    standards = product_contract.get("portal_shell_standards", {})
+    if not resolved_shell_standard and product_version and isinstance(standards, dict):
+        matches = [
+            standard_id
+            for standard_id, definition in standards.items()
+            if isinstance(definition, dict)
+            and not definition.get("alias_of")
+            and product_version in definition.get("version_aliases", [])
+        ]
+        if len(matches) != 1:
+            raise ContractError(
+                f"产品版本未唯一匹配Portal Shell标准: {product_version}"
+            )
+        resolved_shell_standard = matches[0]
+    if resolved_shell_standard:
+        standard = standards.get(resolved_shell_standard) if isinstance(standards, dict) else None
+        if not isinstance(standard, dict):
+            raise ContractError(f"产品未登记Portal Shell标准: {resolved_shell_standard}")
+        portal_shell_relative = standard.get("contract")
+        portal_shell_template_bundle = standard.get("template_bundle")
     portal_shell = load_json(resolve_declared_file(
-        product_root, product_contract.get("portal_shell"), "product.portal_shell"
+        product_root, portal_shell_relative, "product.portal_shell"
     ))
+    validate_personnel_management_knowledge(portal_shell)
+    if portal_shell.get("personnel_management"):
+        personnel_entry = product_contract.get("knowledge", {}).get(
+            "isc-3.0.0.personnel-management", {}
+        )
+        if (
+            personnel_entry.get("contract") != portal_shell_relative
+            or personnel_entry.get("json_pointer") != "/personnel_management"
+            or personnel_entry.get("page_ids")
+            != ["list", "add_form", "detail", "field_configuration"]
+        ):
+            raise ContractError("ISC 3.0人员管理知识未在产品入口正确登记")
     hui_root = DESIGN_SYSTEMS_ROOT / "HUI"
     manifest = load_json(hui_root / "manifest.json")
     token_contract = load_json(hui_root / manifest["theme"]["token_contract"])
@@ -299,6 +407,8 @@ def load_product_context(industry: str, product: str) -> dict[str, Any]:
         "profile": profile,
         "product_tokens": product_tokens,
         "portal_shell": portal_shell,
+        "portal_shell_standard": resolved_shell_standard,
+        "portal_shell_template_bundle": portal_shell_template_bundle,
         "manifest": manifest,
         "token_contract": token_contract,
     }
@@ -333,18 +443,92 @@ def _load_business_field_catalogs(industry: str) -> dict[str, dict[str, Any]]:
     return fields
 
 
+def _shell_capability_summary(portal_shell: dict[str, Any]) -> dict[str, Any]:
+    portal = portal_shell.get("portal", {})
+    summary: dict[str, Any] = {
+        "id": portal_shell["id"],
+        "top_menus": portal.get("top_menus", []),
+        "side_menu_ids": [
+            item["id"] for item in portal.get("side_menus", [])
+        ],
+    }
+    catalog = portal_shell.get("framework_variants")
+    if catalog:
+        summary["framework"] = {
+            "model": "unified-tree-with-independent-navigation-features",
+            "feature_switches": catalog["unified_tree"]["feature_switches"],
+            "combination_status": catalog["unified_tree"]["combination_status"],
+            "business_header_modes": list(catalog["business_headers"]),
+            "verified_presets": [
+                {
+                    "id": preset_id,
+                    "show_left_selector": preset["show_left_selector"],
+                    "show_top_tabs": preset["show_top_tabs"],
+                }
+                for preset_id, preset in catalog["navigation_presets"].items()
+            ],
+            "variant_aliases": [
+                {
+                    "id": variant["id"],
+                    "show_left_selector": variant["show_left_selector"],
+                    "show_top_tabs": variant["show_top_tabs"],
+                    "business_header": variant["business_header"],
+                }
+                for variant in catalog["variants"]
+            ],
+            "input_requirements": {
+                "left_selector": ["selector_nodes", "selector_active_node"],
+                "top_tabs": ["tabs", "active_tab"],
+                "business_header": {
+                    "intro": ["intro"],
+                    "intro-actions": ["intro", "global_actions"],
+                    "intro-actions-extra": [
+                        "intro", "global_actions", "extra_info"
+                    ],
+                },
+            },
+        }
+    toolbar = portal_shell.get("collection_toolbar")
+    if toolbar:
+        summary["collection_toolbar"] = {
+            "page_spec_field": "collection_toolbar_variant",
+            "applies_to_page_kinds": toolbar.get("applies_to_page_kinds", []),
+            "selection_strategy": toolbar.get("selection_strategy", {}),
+            "variants": [
+                {
+                    "id": variant["id"],
+                    "left_region": variant["left_region"],
+                    "query_region": variant["query_region"],
+                }
+                for variant in toolbar.get("variants", [])
+            ],
+        }
+    personnel = portal_shell.get("personnel_management")
+    if personnel:
+        summary["personnel_management"] = {
+            "schema_version": personnel.get("schema_version"),
+            "page_ids": list(personnel.get("pages", {})),
+            "shared": personnel.get("shared", {}),
+        }
+    return summary
+
+
 def build_capability_bundle(
-    industry: str, product: str, page_type: str
+    industry: str, product: str, page_type: str, product_version: str | None = None
 ) -> dict[str, Any]:
     resolution = resolve_design_system(industry, product, page_type)
     page_pattern = resolution["hui_page_pattern"]["contract"]
     if not resolution["matched"]:
         try:
-            renderer = renderer_for_hui_pattern(page_pattern["id"])
-            product_context = load_product_context(industry, product)
-        except (ValueError, ContractError):
-            renderer = None
+            product_context = load_product_context(
+                industry, product, product_version=product_version
+            )
+        except ContractError:
             product_context = None
+        try:
+            renderer = renderer_for_hui_pattern(page_pattern["id"])
+        except ValueError:
+            renderer = None
         variants = []
         if renderer:
             family_path = (
@@ -380,6 +564,11 @@ def build_capability_bundle(
             "selection": {
                 "industry": industry,
                 "product": product,
+                "product_version": product_version,
+                "shell_standard": (
+                    product_context.get("portal_shell_standard")
+                    if product_context else None
+                ),
                 "product_name": (
                     product_context["profile"]["brand"]["name"]
                     if product_context else None
@@ -401,13 +590,10 @@ def build_capability_bundle(
             "business_fields": [],
             "business_actions": [],
             "extension_kinds": [],
-            "shell_capabilities": ({
-                "id": portal_shell["id"],
-                "top_menus": portal.get("top_menus", []),
-                "side_menu_ids": [
-                    item["id"] for item in portal.get("side_menus", [])
-                ],
-            } if product_context else None),
+            "shell_capabilities": (
+                _shell_capability_summary(portal_shell)
+                if product_context else None
+            ),
             "runtime_features": ["hui-vue", "cdn-preview"],
             "pattern_variants": variants,
             "knowledge_gaps": [] if can_compile else ["product-page-composition-or-hui-renderer"],
@@ -415,6 +601,13 @@ def build_capability_bundle(
 
     profile = load_json(resolution["profile_path"])
     portal_shell = load_json(resolution["portal_shell_path"])
+    resolved_shell_standard = None
+    if product_version:
+        version_context = load_product_context(
+            industry, product, product_version=product_version
+        )
+        portal_shell = version_context["portal_shell"]
+        resolved_shell_standard = version_context["portal_shell_standard"]
     capabilities = load_json(resolution["capabilities_path"])
     composition = load_json(resolution["composition_path"])
     validate_composition_template_ownership(composition)
@@ -447,6 +640,8 @@ def build_capability_bundle(
         "selection": {
             "industry": industry,
             "product": product,
+            "product_version": product_version,
+            "shell_standard": resolved_shell_standard,
             "product_name": profile["brand"]["name"],
             "page_intent": page_type,
             "page_pattern": page_pattern["id"],
@@ -460,13 +655,7 @@ def build_capability_bundle(
         "business_fields": business_fields,
         "business_actions": business_actions,
         "extension_kinds": allowed.get("extension_kinds", []),
-        "shell_capabilities": {
-            "id": portal_shell["id"],
-            "top_menus": portal.get("top_menus", []),
-            "side_menu_ids": [
-                item["id"] for item in portal.get("side_menus", [])
-            ],
-        },
+        "shell_capabilities": _shell_capability_summary(portal_shell),
         "runtime_features": ["hui-vue", "cdn-preview"],
         "page_options": capabilities,
         "knowledge_gaps": [],

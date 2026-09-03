@@ -8,7 +8,10 @@ import {
   PLATFORM_CONTRACTS_BLOCK,
   renderSlimCoreCharter,
 } from '../../src/prompts/core-slim.js';
-import { composeSystemPrompt } from '../../src/prompts/system.js';
+import {
+  composeSystemPrompt,
+  resolvePromptCoreVariant,
+} from '../../src/prompts/system.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../../..');
@@ -342,6 +345,51 @@ describe('composeSystemPrompt — promptCoreVariant switch', () => {
     expect(out).toContain('## Active skill — test-skill');
     expect(out).toContain('# Slide deck — fixed framework');
     expect(out).toContain('## Media generation (if asked)');
+  });
+});
+
+describe('composeSystemPrompt — native CLI + skill delegation', () => {
+  it('selects native by default while keeping legacy cores as explicit rollbacks', () => {
+    expect(resolvePromptCoreVariant(undefined)).toBe('native');
+    expect(resolvePromptCoreVariant('unknown')).toBe('native');
+    expect(resolvePromptCoreVariant('classic')).toBe('classic');
+    expect(resolvePromptCoreVariant('slim')).toBe('slim');
+  });
+
+  it('adds no daemon workflow prompt when no skill is selected', () => {
+    expect(composeSystemPrompt({
+      promptCoreVariant: 'native',
+      metadata: { kind: 'prototype' },
+      designSystemBody: '# Brand system',
+      memoryBody: 'Always add a task brief.',
+      craftBody: 'Run the craft self-check.',
+      pluginBlock: 'Run the plugin pipeline.',
+      activeStageBlocks: ['Run the critique stage.'],
+    })).toBe('');
+  });
+
+  it('injects only the selected skill body', () => {
+    const out = composeSystemPrompt({
+      promptCoreVariant: 'native',
+      skillName: 'landing-page',
+      skillBody: '# Landing page skill\n\nBuild the requested page.',
+      designSystemBody: '# Brand system',
+      memoryBody: 'Always add a task brief.',
+      craftBody: 'Run the craft self-check.',
+      pluginBlock: 'Run the plugin pipeline.',
+      activeStageBlocks: ['Run the critique stage.'],
+    });
+
+    expect(out).toBe(
+      '## Active skill — landing-page\n\n'
+      + 'Follow this skill for the current request.\n\n'
+      + '# Landing page skill\n\nBuild the requested page.',
+    );
+    expect(out).not.toContain('Brand system');
+    expect(out).not.toContain('task brief');
+    expect(out).not.toContain('craft self-check');
+    expect(out).not.toContain('plugin pipeline');
+    expect(out).not.toContain('critique stage');
   });
 });
 

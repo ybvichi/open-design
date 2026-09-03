@@ -208,9 +208,8 @@
 
 /* Plugins section composite — wraps InlinePluginsRail + ContextChipStrip +
    PluginInputsForm. Mounted above ChatComposer (strip variant). The
-   NewProjectPanel mount has been removed: that flow now binds the
-   default scenario plugin transparently at create time, so the wide
-   variant has no remaining host. */
+   NewProjectPanel mount has been removed, so the wide variant has no
+   remaining host. */
 .plugins-section {
   display: flex;
   flex-direction: column;

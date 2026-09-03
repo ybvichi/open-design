@@ -16,6 +16,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="输出AI可消费的精简页面能力")
     parser.add_argument("--industry", required=True)
     parser.add_argument("--product", required=True)
+    parser.add_argument("--product-version")
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--page-type")
     selection.add_argument("--intent", type=str)
@@ -28,7 +29,8 @@ def main() -> int:
             intent = intent_resolution["intent"]
             selected = intent_resolution["selection"]
             result = build_capability_bundle(
-                args.industry, args.product, intent["semantic_family"]
+                args.industry, args.product, intent["semantic_family"],
+                args.product_version
             )
             result["selection"]["page_intent"] = intent
             result["selection"]["variant"] = selected["variant"]
@@ -44,7 +46,8 @@ def main() -> int:
                 )
         else:
             result = build_capability_bundle(
-                args.industry, args.product, args.page_type
+                args.industry, args.product, args.page_type,
+                args.product_version
             )
     except (ContractError, OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

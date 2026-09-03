@@ -44,6 +44,10 @@
     "form-anchored": {
       "name": "锚点表单页",
       "match": ["anchored-form", "锚点表单", "带锚点"],
+      "defaults": {
+        "anchor_behavior": "persistent",
+        "container_count": 1
+      },
       "semantics": [
         "section-navigation",
         "scroll-linked-anchor",
@@ -136,7 +140,11 @@
       "variant": "persistent-anchor-single-container",
       "parameters": {
         "anchor_behavior": "persistent",
-        "container_count": 1
+        "container_count": 1,
+        "columns": 3,
+        "anchor_reserved_width_px": 180,
+        "anchor_content_gap_px": 24,
+        "anchor_top_offset_px": 48
       }
     },
     "/pages/form/multipleContainers": {

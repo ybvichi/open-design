@@ -105,11 +105,7 @@
   },
   "table_columns": {
     "selection": {
-      "kind": "selection",
-      "width": "48",
-      "align": "center",
-      "header_align": "center",
-      "header_class": "event-selection-header"
+      "kind": "selection"
     },
     "event-type": {
       "kind": "plain",

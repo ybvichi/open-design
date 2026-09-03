@@ -707,7 +707,7 @@ export const ar: Dict = {
   'homeHero.subtitlePrefix': 'البديل مفتوح المصدر لـ Claude Design.',
   'homeHero.placeholder': 'صِف ما تريد إنشاءه…',
   'homeHero.placeholderActive': 'عدّل الاستعلام المثال أو اكتب استعلامك الخاص…',
-  'homeHero.carousel.hint': 'أرفق ملفًا، أو اربط نظام التصميم الخاص بك، أو صف ما تريد إنشاءه',
+  'homeHero.carousel.hint': 'أرفق ملفًا أو صف ما تريد إنشاءه',
   'homeHero.carousel.onePageBrief': 'كتابة موجز مشروع من صفحة واحدة',
   'homeHero.carousel.notesToDeck': 'تحويل ملاحظاتي إلى عرض تقديمي',
   'homeHero.carousel.signupFlow': 'تصميم نموذج لتدفق التسجيل',

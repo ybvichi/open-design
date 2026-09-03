@@ -8,10 +8,13 @@ Resolver只接受语义标识：
 
 - `industry`
 - `product`
+- `product_version`（用户明确指定产品版本时）
 - `page_type`或标准页面意图
 - 用户明确提供的参考资料类型
 
 不得使用颜色、坐标或DOM片段决定知识命中。
+
+ISC版本表达统一归一如下：用户说“ISC新版本”“ISC 3.0”或“ISC 3.0.0”时，`product=isc`、`product_version=3.0.0`，并自动选择产品登记的`isc-3.0.0` Portal Shell标准。未提版本时不得擅自升级，继续使用产品默认Shell。
 
 ## 分层检索顺序
 

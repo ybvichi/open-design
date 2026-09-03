@@ -1518,13 +1518,7 @@ process.stdin.on('end', () => {
       },
     );
   });
-  it('closes the # Instructions block with an explicit "do not echo" guard so models do not parrot the prompt back', async () => {
-    // claude-opus-4-7 (and a few other instruction-tuned models) start
-    // their reply by echoing the # Instructions block verbatim, which
-    // shows up to users as the system prompt leading the visible
-    // answer. server.ts:9934 closes every Instructions block with a
-    // trailing guard line; this test pins the literal so a future
-    // refactor cannot silently drop it.
+  it('forwards only the user request when native mode has no selected skill', async () => {
     await withFakeAgent(
       'opencode',
       `
@@ -1535,9 +1529,13 @@ process.stdin.on('data', (chunk) => {
 });
 process.stdin.on('end', () => {
   const checks = [
-    prompt.includes('Do not quote, restate, or echo the # Instructions block above')
-      ? 'has-echo-guard'
-      : 'missing-echo-guard',
+    prompt.includes('native-user-request') ? 'has-user-request' : 'missing-user-request',
+    prompt.includes('## Runtime tool environment') ? 'has-runtime-tools' : 'no-runtime-tools',
+    prompt.includes('client-system-marker') ? 'has-client-system' : 'no-client-system',
+    prompt.includes('## Selected run context') ? 'has-run-context' : 'no-run-context',
+    prompt.includes('Canonical query for this run') ? 'has-research-contract' : 'no-research-contract',
+    prompt.includes('Internal title task:') ? 'has-title-task' : 'no-title-task',
+    prompt.includes('Do not quote, restate, or echo the # Instructions block above') ? 'has-echo-guard' : 'no-echo-guard',
   ];
   console.log(JSON.stringify({ type: 'step_start' }));
   console.log(JSON.stringify({ type: 'text', part: { text: checks.join('\\n') } }));
@@ -1551,14 +1549,30 @@ process.stdin.on('end', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             agentId: 'opencode',
-            message: 'hello',
+            message: 'native-user-request',
+            systemPrompt: 'client-system-marker',
+            research: { enabled: true, query: 'host research query' },
+            titleGeneration: { enabled: true },
+            context: {
+              workspaceItems: [{ id: 'file-1', kind: 'file', label: 'brief.md', path: 'brief.md' }],
+            },
           }),
         });
         const body = await response.text();
 
         expect(response.ok).toBe(true);
-        expect(body).toContain('has-echo-guard');
-        expect(body).not.toContain('missing-echo-guard');
+        for (const marker of [
+          'has-user-request',
+          'no-runtime-tools',
+          'no-client-system',
+          'no-run-context',
+          'no-research-contract',
+          'no-title-task',
+          'no-echo-guard',
+        ]) {
+          expect(body).toContain(marker);
+        }
+        expect(body).not.toContain('missing-user-request');
       },
     );
   });
@@ -1738,7 +1752,7 @@ process.stdin.on('end', () => {
     );
   });
 
-  it('propagates the composed skill mode for ad-hoc-only deck skills', async () => {
+  it('injects an ad-hoc deck skill without adding the Open Design deck framework', async () => {
     await withFakeAgent(
       'opencode',
       `
@@ -1772,9 +1786,9 @@ process.stdin.on('end', () => {
 
         expect(response.ok).toBe(true);
         expect(body).toContain('has-deck-skill-header');
-        expect(body).toContain('has-deck-framework');
+        expect(body).toContain('missing-deck-framework');
         expect(body).not.toContain('missing-deck-skill-header');
-        expect(body).not.toContain('missing-deck-framework');
+        expect(body).not.toContain('has-deck-framework');
       },
     );
   });
@@ -1817,11 +1831,11 @@ process.stdin.on('end', () => {
         expect(response.ok).toBe(true);
         expect(body).toContain('has-base-image-skill-body');
         expect(body).toContain('has-composed-deck-skill-header');
-        expect(body).toContain('has-image-contract');
+        expect(body).toContain('missing-image-contract');
         expect(body).toContain('kept-deck-framework-out');
         expect(body).not.toContain('missing-base-image-skill-body');
         expect(body).not.toContain('missing-composed-deck-skill-header');
-        expect(body).not.toContain('missing-image-contract');
+        expect(body).not.toContain('has-image-contract');
         expect(body).not.toContain('unexpected-deck-framework');
       },
     );
@@ -3134,7 +3148,7 @@ process.stdin.on('end', () => {
     }
   });
 
-  it('latches intent signals on the conversation so a signal-free later turn keeps the deck framework', async () => {
+  it('does not detect or persist Open Design intent signals in native mode', async () => {
     // Red spec for specs/current/intent-signal-cache-hotfix.md §3 case 6 (R2).
     // History is trimmed on agent switch (scopeHistoryToAgent) and
     // non-transcript clients never resend prior turns, so a deck signal that
@@ -3209,33 +3223,30 @@ process.stdin.on('end', () => {
             return readFileSync(capturePath, 'utf8');
           };
 
-          // Turn 1 mentions a deck in the user's own words → framework present.
+          // Native mode forwards the request without adding a deck framework.
           const deckBrief = '帮我做一份路演材料，先出内容大纲';
           const turn1Prompt = await runTurn(
             { message: `## user\n${deckBrief}`, currentPrompt: deckBrief },
             join(captureDir, 'turn1.txt'),
           );
-          expect(turn1Prompt).toContain(MAYBE_DECK_HEADING);
+          expect(turn1Prompt).not.toContain(MAYBE_DECK_HEADING);
 
-          // Turn 2 carries no deck vocabulary and a trimmed transcript
-          // (agent-switch trim / non-transcript client): the latched
-          // conversation signal must keep the framework present.
+          // A later turn remains free of host-injected deck instructions.
           const followUp = '把主色调调亮一点';
           const turn2Prompt = await runTurn(
             { message: `## user\n${followUp}`, currentPrompt: followUp },
             join(captureDir, 'turn2.txt'),
           );
-          expect(turn2Prompt).toContain(MAYBE_DECK_HEADING);
+          expect(turn2Prompt).not.toContain(MAYBE_DECK_HEADING);
 
-          // The latch is persisted on the conversation row.
+          // Native mode never mutates the conversation's intent-signal latch.
           const dbFile = resolve(process.env.OD_DATA_DIR as string, 'app.sqlite');
           const sqlite = new Database(dbFile, { readonly: true });
           try {
             const row = sqlite
               .prepare(`SELECT intent_signals_json AS intentSignalsJson FROM conversations WHERE id = ?`)
               .get(conversationId) as { intentSignalsJson: string | null } | undefined;
-            expect(row?.intentSignalsJson).toBeTruthy();
-            expect(JSON.parse(row?.intentSignalsJson ?? '{}')).toMatchObject({ deck: true });
+            expect(row?.intentSignalsJson).toBeNull();
           } finally {
             sqlite.close();
           }
@@ -3250,7 +3261,7 @@ process.stdin.on('end', () => {
     }
   });
 
-  it('uses a project design system in sandboxed chat runs without an explicit run designSystemId', async () => {
+  it('ignores a project design system in native chat runs', async () => {
     const projectId = `project-ds-${randomUUID()}`;
     const projectResponse = await fetch(`${baseUrl}/api/projects`, {
       method: 'POST',
@@ -3258,7 +3269,7 @@ process.stdin.on('end', () => {
       body: JSON.stringify({
         id: projectId,
         name: 'Project DS fixture',
-        designSystemId: 'default',
+        designSystemId: 'apple',
         skipDiscoveryBrief: true,
       }),
     });
@@ -3298,10 +3309,10 @@ process.stdin.on('end', () => {
         const body = await response.text();
 
         expect(response.ok).toBe(true);
-        expect(body).toContain('has-active-design-system');
-        expect(body).toContain('has-design-system-contract');
-        expect(body).not.toContain('missing-active-design-system');
-        expect(body).not.toContain('missing-design-system-contract');
+        expect(body).toContain('missing-active-design-system');
+        expect(body).toContain('missing-design-system-contract');
+        expect(body).not.toContain('has-active-design-system');
+        expect(body).not.toContain('has-design-system-contract');
 
         const runsResponse = await fetch(
           `${baseUrl}/api/runs?conversationId=${encodeURIComponent(conversationId)}`,
@@ -3317,17 +3328,17 @@ process.stdin.on('end', () => {
         };
         expect(runsBody.runs).toHaveLength(1);
         expect(runsBody.runs[0]).toMatchObject({
-          designSystemId: 'default',
-          designSystemRequestedId: 'default',
-          designSystemSelectionSource: 'project',
+          designSystemId: null,
+          designSystemRequestedId: null,
+          designSystemSelectionSource: 'none',
+          designSystemDigest: null,
           promptCache: { hit: false, missReason: 'new-session' },
         });
-        expect(runsBody.runs[0]?.designSystemDigest).toMatch(/^[a-f0-9]{64}$/);
       },
     );
   });
 
-  it('keeps requested design systems separate from missing injected design systems', async () => {
+  it('ignores a requested design system in native mode', async () => {
     const missingDesignSystemId = `missing-ds-${randomUUID()}`;
     const projectId = `project-missing-ds-${randomUUID()}`;
     const projectResponse = await fetch(`${baseUrl}/api/projects`, {
@@ -3393,7 +3404,7 @@ process.stdin.on('end', () => {
         expect(runsBody.runs).toHaveLength(1);
         expect(runsBody.runs[0]).toMatchObject({
           designSystemId: null,
-          designSystemRequestedId: missingDesignSystemId,
+          designSystemRequestedId: null,
           designSystemSelectionSource: 'none',
           designSystemDigest: null,
         });

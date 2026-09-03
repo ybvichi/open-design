@@ -57,10 +57,12 @@ def resolve_tpp_intent(intent: dict[str, Any]) -> dict[str, Any]:
             f"PageIntent包含{family}未登记特征: {unknown}; 可用特征: {known_features}"
         )
 
+    family_defaults = mapping.get("families", {}).get(family, {}).get("defaults", {})
+    effective_features = {**family_defaults, **intent["features"]}
     candidates = []
     for route, page in family_pages:
         parameters = page.get("parameters", {})
-        if all(parameters.get(key) == value for key, value in intent["features"].items()):
+        if all(parameters.get(key) == value for key, value in effective_features.items()):
             catalog_page = catalog_by_route.get(route)
             if not catalog_page:
                 raise ContractError(f"TPP目录缺少路由: {route}")

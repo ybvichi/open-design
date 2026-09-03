@@ -35,7 +35,10 @@ class VehicleAlarmStatisticsTest(unittest.TestCase):
     def test_generated_page_passes_pattern_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             html_path = Path(directory) / "vehicle-alarm.html"
-            html_path.write_text(self.html, encoding="utf-8")
+            html_path.write_text(
+                compile_pattern_page(self.spec, html_path),
+                encoding="utf-8",
+            )
             self.assertEqual(validate_pattern_html(self.spec, html_path), [])
 
     def test_detail_action_toggles_alarm_detail_pane(self) -> None:
@@ -89,6 +92,10 @@ class VehicleAlarmStatisticsTest(unittest.TestCase):
         self.assertIn('"selected_filter_clear_action_interactive_tone": "brand-stable"', self.html)
         self.assertIn('v-if="selectedRealtimeFilters.length" class="realtime-filter__selected"', self.html)
         self.assertIn(".realtime-filter__selected .el-button { margin-left: 0; }", self.html)
+        self.assertIn(
+            ".realtime-filter-sidebar__selected .el-button { font-size: 14px; }",
+            self.html,
+        )
         self.assertIn(".realtime-filter__selected .realtime-filter__clear { color: var(--h-color-brand) !important; }", self.html)
         self.assertIn(".realtime-filter__selected .realtime-filter__clear:active { color: var(--h-color-brand) !important; }", self.html)
         self.assertIn(".realtime-filter { flex: none; margin: 0 24px; padding: 16px 0; border-bottom: 1px solid var(--h-color-border-tertiary); }", self.html)

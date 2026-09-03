@@ -3,7 +3,6 @@ import type Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
-  defaultScenarioPluginIdForProjectMetadata,
   RUN_RESULT_PACKAGE_SCHEMA,
   type AppliedPluginSnapshot,
   type ArtifactManifest,
@@ -50,7 +49,6 @@ import { parseMediaExecutionPolicyInput } from '../media/policy.js';
 import { isManagedProjectCwd } from '../mcp-config.js';
 import {
   buildConnectorProbe,
-  getInstalledPlugin,
   resolvePluginSnapshot,
 } from '../plugins/index.js';
 import {
@@ -405,30 +403,6 @@ function toProjectFiles(value: unknown): ProjectFileEntry[] {
     : [];
 }
 
-// Intents the scenario-plugin fallback resolver is allowed to see. Mirrors the
-// `ProjectMetadata['intent']` contract union so an unknown/legacy string in a
-// stored project row never gets cast into the union.
-const SCENARIO_PROJECT_INTENTS: readonly NonNullable<ContractProjectMetadata['intent']>[] = [
-  'live-artifact',
-  'web-clone',
-  'document',
-];
-
-function toScenarioProjectIntent(value: unknown): ContractProjectMetadata['intent'] | undefined {
-  return SCENARIO_PROJECT_INTENTS.find((intent) => intent === value);
-}
-
-function toScenarioProjectMetadata(
-  metadata: ProjectMetadata,
-): Pick<ContractProjectMetadata, 'kind' | 'intent'> | null {
-  if (!metadata || typeof metadata.kind !== 'string') return null;
-  const intent = toScenarioProjectIntent(metadata.intent);
-  return {
-    kind: metadata.kind as ContractProjectMetadata['kind'],
-    ...(intent ? { intent } : {}),
-  };
-}
-
 type DesignSystemSelectionSource = 'request' | 'plugin' | 'project' | 'app-default' | 'none';
 
 function normalizedDesignSystemId(value: unknown): string | null {
@@ -562,49 +536,39 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     }
     let resolvedSnapshot = null;
     if (typeof requestBody.projectId === 'string' && requestBody.projectId) {
-      let registryView: Parameters<typeof resolvePluginSnapshot>[0]['registry'];
-      try {
-        registryView = await loadPluginRegistryView();
-      } catch (err) {
-        return res.status(500).json({ error: String(err) });
-      }
       const explicitPlugin =
         requestBody.pluginId || requestBody.appliedPluginSnapshotId;
-      let runResolveBody: JsonRecord = requestBody;
-      if (!explicitPlugin) {
-        const projectRow = toProjectRecord(getProject(db, requestBody.projectId));
-        const hasPin =
-          typeof projectRow?.appliedPluginSnapshotId === 'string'
-          && projectRow.appliedPluginSnapshotId.length > 0;
-        if (!hasPin) {
-          const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(
-            toScenarioProjectMetadata(projectRow?.metadata),
-          );
-          if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
-            runResolveBody = { ...requestBody, pluginId: fallbackPluginId };
-          }
+      const projectRow = toProjectRecord(getProject(db, requestBody.projectId));
+      const hasPinnedPlugin =
+        typeof projectRow?.appliedPluginSnapshotId === 'string'
+        && projectRow.appliedPluginSnapshotId.length > 0;
+      if (explicitPlugin || hasPinnedPlugin) {
+        let registryView: Parameters<typeof resolvePluginSnapshot>[0]['registry'];
+        try {
+          registryView = await loadPluginRegistryView();
+        } catch (err) {
+          return res.status(500).json({ error: String(err) });
         }
-      }
-      const resolved = resolvePluginSnapshot({
-        db,
-        body: runResolveBody,
-        projectId: requestBody.projectId,
-        conversationId: typeof requestBody.conversationId === 'string'
-          ? requestBody.conversationId
-          : null,
-        registry: registryView,
-        connectorProbe: buildConnectorProbe(connectorService),
-      });
-      if (resolved && !resolved.ok) {
-        if (!explicitPlugin) {
+        const resolved = resolvePluginSnapshot({
+          db,
+          body: requestBody,
+          projectId: requestBody.projectId,
+          conversationId: typeof requestBody.conversationId === 'string'
+            ? requestBody.conversationId
+            : null,
+          registry: registryView,
+          connectorProbe: buildConnectorProbe(connectorService),
+        });
+        if (resolved && !resolved.ok) {
+          if (explicitPlugin) {
+            return res.status(resolved.status).json(resolved.body);
+          }
           console.warn(
-            `[plugins] default-scenario fallback skipped for run on project ${requestBody.projectId}: ${resolved.body?.error?.code ?? 'unknown'}`,
+            `[plugins] pinned snapshot resolution skipped for run on project ${requestBody.projectId}: ${resolved.body?.error?.code ?? 'unknown'}`,
           );
         } else {
-          return res.status(resolved.status).json(resolved.body);
+          resolvedSnapshot = resolved;
         }
-      } else {
-        resolvedSnapshot = resolved;
       }
     }
     const meta: RunCreateMeta = {

@@ -22,7 +22,7 @@
     "composite": "由多个不同Vue控件组合成一个业务区域",
     "repeat-item": "由多个同类单项Vue组件重复组成"
   },
-  "entry_count": 24,
+  "entry_count": 25,
   "entries": {
     "collection.calendar-grid": {
       "name": "日历排班集合",
@@ -148,6 +148,15 @@
       "description": "组合章节锚点并与页面滚动位置保持联动",
       "use_when": [
         "长表单或长详情页需要快速定位内容章节"
+      ]
+    },
+    "navigation.breadcrumb": {
+      "name": "面包屑导航",
+      "split_mode": "composite",
+      "vue_component": "BreadcrumbNavigation",
+      "description": "使用标准HUI面包屑组件展示页面层级路径",
+      "use_when": [
+        "页面需要展示当前业务区域和页面标题的层级关系"
       ]
     },
     "navigation.classification-panel": {

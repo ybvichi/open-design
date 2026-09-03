@@ -9,6 +9,7 @@
     "schema_version": {"const": "page-spec.v2"},
     "industry": {"type": "string", "pattern": "^[a-z0-9-]+$"},
     "product": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "product_version": {"type": "string", "minLength": 1},
     "page_type": {"type": "string", "pattern": "^[a-z0-9-]+$"},
     "title": {"type": "string", "minLength": 1},
     "shell": {

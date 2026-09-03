@@ -370,6 +370,189 @@ def validate_generation_templates(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def validate_renderer_geometry_ownership(root: Path = ROOT) -> list[str]:
+    """校验TPP证据几何只由页面合同拥有，Renderer仅消费CSS变量。"""
+    errors: list[str] = []
+    tpp_root = root / "design-systems" / "HUI" / "page-patterns" / "tpp"
+    styles: dict[str, str] = {}
+    for contract in RENDERER_CONTRACTS.values():
+        for relative in contract.get("styles", []):
+            path = root / relative
+            if path.is_file():
+                styles[str(path.relative_to(root))] = path.read_text(encoding="utf-8")
+    for family_path in sorted((tpp_root / "families").glob("*/contract.json")):
+        family = load_json(family_path)
+        non_binding = family.get("invariants", {}).get("non_binding_geometry", {})
+        if not isinstance(non_binding, dict):
+            errors.append(
+                f"TPP页面族non_binding_geometry必须是对象: {family_path.relative_to(root)}"
+            )
+            non_binding = {}
+        for selector, properties in non_binding.items():
+            if not isinstance(selector, str) or not isinstance(properties, list):
+                errors.append(f"TPP非绑定几何声明无效: {family.get('id')} -> {selector}")
+                continue
+            selector_pattern = re.compile(
+                rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", re.S
+            )
+            for label, source in styles.items():
+                for block in selector_pattern.findall(source):
+                    for property_name in properties:
+                        if re.search(
+                            rf"(?:^|;)\s*{re.escape(property_name)}\s*:",
+                            block,
+                        ):
+                            errors.append(
+                                "Renderer不得绑定TPP观测几何: "
+                                f"{label} -> {selector} {property_name}"
+                            )
+        bindings = family.get("invariants", {}).get("geometry_bindings", {})
+        if not isinstance(bindings, dict):
+            errors.append(
+                f"TPP页面族geometry_bindings必须是对象: {family_path.relative_to(root)}"
+            )
+            continue
+        for region, binding in bindings.items():
+            if not isinstance(binding, dict):
+                errors.append(f"TPP几何绑定无效: {family.get('id')} -> {region}")
+                continue
+            selector = binding.get("selector")
+            property_name = binding.get("property")
+            css_variable = binding.get("css_variable")
+            if not all(isinstance(value, str) and value for value in (selector, property_name, css_variable)):
+                errors.append(f"TPP几何绑定字段不完整: {family.get('id')} -> {region}")
+                continue
+            selector_pattern = re.compile(
+                rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", re.S
+            )
+            matched = False
+            for label, source in styles.items():
+                for block in selector_pattern.findall(source):
+                    matched = True
+                    declaration = re.search(
+                        rf"(?:^|;)\s*{re.escape(property_name)}\s*:\s*([^;]+)",
+                        block,
+                    )
+                    if not declaration:
+                        continue
+                    value = declaration.group(1).strip()
+                    if re.fullmatch(r"-?\d+(?:\.\d+)?px(?:\s*!important)?", value):
+                        errors.append(
+                            "Renderer不得硬编码TPP证据几何: "
+                            f"{label} -> {selector} {property_name}: {value}"
+                        )
+                    if f"var({css_variable}" not in value:
+                        errors.append(
+                            "Renderer必须通过页面级CSS变量消费TPP证据几何: "
+                            f"{label} -> {selector} {property_name} / {css_variable}"
+                        )
+            if not matched:
+                errors.append(
+                    f"Renderer缺少TPP几何绑定选择器: {selector}"
+                )
+    return errors
+
+
+def validate_filter_search_form_ownership(root: Path = ROOT) -> list[str]:
+    """校验所有标准组合筛选栏复用公共合同，不允许页面类型旁路。"""
+    errors: list[str] = []
+    contract_path = (
+        root
+        / "design-systems/HUI/component-patterns/filter.search-form/contract.json"
+    )
+    shell_path = root / "assets/templates/HUI/shells/page-end.html"
+    collection_path = root / "assets/templates/HUI/fragments/collection/page.html"
+    if not contract_path.is_file() or not shell_path.is_file() or not collection_path.is_file():
+        return ["标准组合筛选栏公共合同或Renderer模板不存在"]
+
+    behavior = load_json(contract_path).get("fixed_behavior", {})
+    expected = {
+        "grid_columns": 4,
+        "action_column": 4,
+        "collapsed_visible_fields": 3,
+        "collapse_threshold": 3,
+    }
+    for key, value in expected.items():
+        if behavior.get(key) != value:
+            errors.append(f"标准组合筛选栏默认行为被修改: {key} != {value}")
+
+    shell = shell_path.read_text(encoding="utf-8")
+    for marker, message in (
+        (
+            "Number((this.config.filter_search_form_behavior || {}).collapse_threshold)",
+            "标准组合筛选栏折叠阈值必须消费公共合同",
+        ),
+        (
+            "Number((this.config.filter_search_form_behavior || {}).collapsed_visible_fields)",
+            "标准组合筛选栏折叠态展示数量必须消费公共合同",
+        ),
+    ):
+        if marker not in shell:
+            errors.append(message)
+
+    collection = collection_path.read_text(encoding="utf-8")
+    start = collection.find('v-if="isTableTabsSearch"')
+    end = collection.find('<div v-if="showPageToolbar"', start)
+    table_tabs_search = collection[start:end] if start >= 0 and end > start else ""
+    if not table_tabs_search:
+        errors.append("标签页表格缺少标准组合筛选栏")
+    else:
+        if 'v-for="field in visibleFilters"' not in table_tabs_search:
+            errors.append("标签页表格不得绕过公共筛选项显隐逻辑")
+        if 'v-if="hasCollapsibleFilters"' not in table_tabs_search:
+            errors.append("标签页表格不得绕过公共筛选栏展开收起逻辑")
+        if 'v-for="field in config.filters"' in table_tabs_search:
+            errors.append("标签页表格不得直接渲染全部筛选项")
+    return errors
+
+
+def validate_selection_column_ownership(root: Path = ROOT) -> list[str]:
+    """校验selection列完整沿用HUI默认布局，不得覆盖宽度、对齐与内部样式。"""
+    errors: list[str] = []
+    template_path = root / "assets/templates/HUI/fragments/collection/page.html"
+    if not template_path.is_file():
+        return ["表格Renderer模板不存在"]
+    source = template_path.read_text(encoding="utf-8")
+    selection_tags = re.findall(
+        r'<el-table-column\b(?=[^>]*\btype="selection")[^>]*>',
+        source,
+    )
+    if not selection_tags:
+        errors.append("表格Renderer缺少selection列")
+    for tag in selection_tags:
+        if re.search(
+            r'\b(?:width|min-width|align|header-align|class-name|label-class-name)\s*=',
+            tag,
+        ):
+            errors.append("selection列必须完整使用HUI默认布局，Renderer不得覆盖")
+
+    styles_path = root / "assets/templates/HUI/styles/collection.css"
+    if not styles_path.is_file():
+        errors.append("表格Renderer样式不存在")
+    else:
+        styles = styles_path.read_text(encoding="utf-8")
+        if re.search(
+            r"[^{}]*\.el-table-column--selection[^{}]*\{",
+            styles,
+        ):
+            errors.append("selection列不得覆盖HUI原生样式")
+
+    compositions = root.glob(
+        "design-systems/industry-products/*/products/*/pages/*/composition.json"
+    )
+    for path in compositions:
+        document = load_json(path)
+        for column_id, column in document.get("table_columns", {}).items():
+            if not isinstance(column, dict) or column.get("kind") != "selection":
+                continue
+            if "width" in column or "min_width" in column:
+                errors.append(
+                    "selection列必须使用HUI默认宽度，产品Composition不得覆盖: "
+                    f"{path.relative_to(root)} -> {column_id}"
+                )
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     required = [
@@ -437,6 +620,9 @@ def main() -> int:
     errors.extend(validate_rule_ownership())
     errors.extend(validate_knowledge_index_maintenance())
     errors.extend(validate_generation_templates())
+    errors.extend(validate_renderer_geometry_ownership())
+    errors.extend(validate_filter_search_form_ownership())
+    errors.extend(validate_selection_column_ownership())
     if (ROOT / "knowledge").exists():
         errors.append("旧knowledge目录仍存在，应统一使用design-systems")
     product_dictionaries = list(

@@ -707,7 +707,7 @@ export const tr: Dict = {
   'homeHero.subtitlePrefix': 'Açık kaynaklı Claude Design alternatifi.',
   'homeHero.placeholder': 'Ne oluşturmak istediğinizi açıklayın…',
   'homeHero.placeholderActive': 'Örnek sorguyu düzenleyin veya kendinizinkini yazın…',
-  'homeHero.carousel.hint': 'Dosya ekle, tasarım sistemini bağla ya da ne yapmak istediğini anlat',
+  'homeHero.carousel.hint': 'Dosya ekle ya da ne yapmak istediğini anlat',
   'homeHero.carousel.onePageBrief': 'Tek sayfalık proje özeti yaz',
   'homeHero.carousel.notesToDeck': 'Notlarımı bir sunuma dönüştür',
   'homeHero.carousel.signupFlow': 'Bir kayıt akışı taslağı oluştur',

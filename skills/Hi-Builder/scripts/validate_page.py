@@ -206,6 +206,12 @@ def validate_runtime_contract(
         if node["parent_tag"] == "h-icon"
         and node["tag"] not in {"svg", "template"}
     ]
+    business_svg_nodes = [
+        node
+        for node in parser.nodes
+        if node["tag"] == "d2c-icon"
+        and "business-svg" in node["attrs"].get(":icon", "")
+    ]
     if svg_icon_url:
         svg_icon_count = sum(
             1
@@ -213,7 +219,9 @@ def validate_runtime_contract(
             if node["tag"] == "script"
             and node["attrs"].get("src") == svg_icon_url
         )
-        uses_icon_v2 = bool(icon_v2_nodes)
+        uses_icon_v2 = bool(icon_v2_nodes) or bool(business_svg_nodes) or bool(
+            re.search(r'"mode"\s*:\s*"(?:icon-v2|business-svg)"', scripts)
+        )
         registration = f"Vue.use(window['{svg_icon_resource['global']}'])"
         if uses_icon_v2 and svg_icon_count != 1:
             errors.append(f"使用Icon V2组件时SVG图标资源必须出现一次，实际{svg_icon_count}次")
@@ -266,17 +274,10 @@ def validate_runtime_contract(
             errors.append(f"禁止使用HUI全局服务: {global_name}，请使用Vue实例服务")
     if re.search(r"\bel-icon-[a-zA-Z0-9_-]+", source):
         errors.append("禁止使用el-icon-*，请使用已登记的HUI图标模式")
-    icon_contract = load_json(
-        PROJECT_ROOT
-        / "design-systems"
-        / "HUI"
-        / "runtime-contracts"
-        / "basic-form"
-        / "icon.json"
+    icon_catalog = load_json(
+        PROJECT_ROOT / "design-systems" / "HUI" / "icons" / "catalog.json"
     )
-    verified_font_classes = set(
-        icon_contract.get("d2c_usage", {}).get("verified_font_classes", [])
-    )
+    verified_font_classes = set(icon_catalog.get("font", []))
     used_font_classes = set(
         re.findall(r"\bh-icon-[A-Za-z0-9_-]+\b", source)
     )

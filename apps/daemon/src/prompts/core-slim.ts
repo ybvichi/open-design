@@ -5,7 +5,7 @@
  * (~14K chars) + the duplicated tail overrides with ONE document in which
  * every rule is stated exactly once under an explicit precedence ladder.
  * Selected via `ComposeInput.promptCoreVariant: 'slim'` (daemon:
- * OD_PROMPT_CORE=slim); classic remains the default until A/B sign-off.
+ * OD_PROMPT_CORE=slim); native CLI + skill delegation is the product default.
  *
  * What deliberately does NOT live here (and must not creep back):
  * - The od-default task-type router form — it ships inside

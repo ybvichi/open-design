@@ -8,6 +8,10 @@ vi.mock('../../src/components/home-hero/PlaceholderCarousel', () => ({
   PlaceholderCarousel: () => null,
 }));
 
+vi.mock('lottie-react', () => ({
+  default: () => null,
+}));
+
 import { HomeView } from '../../src/components/HomeView';
 import {
   createPluginAuthoringHandoff,
@@ -694,7 +698,7 @@ describe('HomeView prompt handoff', () => {
     })));
   });
 
-  it('routes free-form submits through the hidden default plugin without applying a visible chip', async () => {
+  it('keeps free-form submits unbound when no plugin or skill is selected', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({ plugins: [HIDDEN_DEFAULT_PLUGIN, DEFAULT_PLUGIN] }), {
@@ -723,11 +727,11 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByTestId('home-hero-active-plugin')).toBeNull();
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: 'Make a launch page for a robotics studio',
-      pluginId: 'od-default',
+      pluginId: null,
       appliedPluginSnapshotId: null,
-      pluginInputs: { prompt: 'Make a launch page for a robotics studio' },
       projectKind: 'other',
     }));
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('pluginInputs');
   });
 
   it('falls back to od-new-generation when od-plugin-authoring is not registered yet', async () => {
@@ -834,18 +838,11 @@ describe('HomeView prompt handoff', () => {
     expect(fetchMock.mock.calls.some(([url]) => (
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ))).toBe(false);
-    // The design-system picker is now a persistent control in the row below the
-    // composer (next to the working-directory picker), available for every
-    // product kind rather than gated on the prototype/deck footer.
-    expect(
-      screen.getByTestId('home-hero-design-system-trigger').textContent,
-    ).toContain('Refly Design System');
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
     // Fidelity is no longer a prototype footer control — the agent asks for it
     // in discovery instead.
     expect(screen.queryByTestId('home-hero-footer-option-fidelity')).toBeNull();
-    // The design-system footer pill is gone; the persistent picker replaces it.
     expect(screen.queryByTestId('home-hero-footer-option-designSystem')).toBeNull();
-    expect(screen.getByTestId('home-hero-design-system-trigger')).toBeTruthy();
     expect(homeHeroPromptValue()).toBe('');
     expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     // Inline `{{slot}}` prompt widgets were removed in the Lexical migration;
@@ -872,14 +869,13 @@ describe('HomeView prompt handoff', () => {
     expect(protoApplyInputs).toMatchObject({
       artifactKind: 'web prototype',
       audience: 'product evaluators',
-      designSystem: 'Refly Design System',
       template: 'the bundled web prototype seed',
     });
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       pluginId: 'example-web-prototype',
       projectKind: 'prototype',
       prompt: 'Build a pricing-page prototype.',
-      designSystemId: 'ds-refly',
+      designSystemId: null,
       projectMetadata: expect.objectContaining({
         kind: 'prototype',
       }),
@@ -958,7 +954,7 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('defaults to "No design system" (不指定) when the user has no personal default and submits a null designSystemId', async () => {
+  it('hides design systems and submits a null designSystemId', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
@@ -978,8 +974,6 @@ describe('HomeView prompt handoff', () => {
     stubAnimationFrame();
     const onSubmit = vi.fn();
 
-    // A preset is offered (REFLY) but it is NOT the user's personal default, so
-    // the composer must default to "No design system" rather than a preset.
     render(
       <HomeView
         projects={[]}
@@ -997,9 +991,7 @@ describe('HomeView prompt handoff', () => {
     await waitFor(() => {
       expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
     });
-    expect(
-      screen.getByTestId('home-hero-design-system-trigger').textContent,
-    ).toContain('No design system');
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
 
     await setPromptAndSettle('Build a pricing-page prototype.');
     fireEvent.click(screen.getByTestId('home-hero-submit'));
@@ -1008,11 +1000,6 @@ describe('HomeView prompt handoff', () => {
       '/api/plugins/example-web-prototype/apply',
       expect.anything(),
     ));
-    const applyCall = fetchMock.mock.calls.find(([url]) => (
-      typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
-    ));
-    const protoApplyInputs = JSON.parse(String((applyCall?.[1] as RequestInit).body)).inputs;
-    expect(protoApplyInputs).toMatchObject({ designSystem: 'No design system' });
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       pluginId: 'example-web-prototype',
       projectKind: 'prototype',
@@ -1021,7 +1008,7 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('lets the user explicitly pick "No design system" to override a personal default and submit a null designSystemId', async () => {
+  it('does not expose a design-system picker even when a default exists', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
@@ -1055,24 +1042,7 @@ describe('HomeView prompt handoff', () => {
     await clearActiveTypeChip();
     fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
 
-    // The personal default pre-selects, as before.
-    await waitFor(() => {
-      expect(
-        screen.getByTestId('home-hero-design-system-trigger').textContent,
-      ).toContain('Refly Design System');
-    });
-
-    // Open the shared design-system picker popover and pick the explicit
-    // "No design system" row.
-    fireEvent.click(screen.getByTestId('home-hero-design-system-trigger'));
-    const popover = await screen.findByTestId('project-ds-picker-popover');
-    const noneOption = await within(popover).findByText('No design system');
-    fireEvent.mouseDown(noneOption);
-    await waitFor(() => {
-      expect(
-        screen.getByTestId('home-hero-design-system-trigger').textContent,
-      ).toContain('No design system');
-    });
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
 
     await setPromptAndSettle('Build a pricing-page prototype.');
     fireEvent.click(screen.getByTestId('home-hero-submit'));
@@ -1130,10 +1100,7 @@ describe('HomeView prompt handoff', () => {
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ))).toBe(false);
     expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
-    // The design-system picker is now the persistent control below the composer.
-    expect(
-      screen.getByTestId('home-hero-design-system-trigger').textContent,
-    ).toContain('Refly Design System');
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
     // Fidelity is no longer a prototype footer control (asked in discovery).
     expect(screen.queryByTestId('home-hero-footer-option-fidelity')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-designSystem')).toBeNull();
@@ -1157,16 +1124,12 @@ describe('HomeView prompt handoff', () => {
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ));
     // The preset card seeds the prompt as plain text while preserving the
-    // chip's structured inputs (artifactKind / fidelity / audience /
-    // designSystem / template all round-trip). Seeding the editor does NOT
-    // re-run the host's prompt-extraction (HomeHero suppresses the seed echo
-    // in onChange), so designSystem keeps the chip/footer default rather than
-    // being re-read from the prompt text.
+    // chip's structured inputs. Seeding the editor does not re-run the host's
+    // prompt extraction (HomeHero suppresses the seed echo in onChange).
     expect(JSON.parse(String((applyCall?.[1] as RequestInit).body))).toMatchObject({
       inputs: {
         artifactKind: 'web prototype',
         audience: 'product evaluators',
-        designSystem: 'Refly Design System',
         template: 'the bundled web prototype seed',
       },
     });
@@ -1174,7 +1137,7 @@ describe('HomeView prompt handoff', () => {
       pluginId: 'example-web-prototype',
       projectKind: 'prototype',
       prompt: 'Build a high-fidelity web prototype for product evaluators using the active project design system from the bundled web prototype seed.',
-      designSystemId: 'ds-refly',
+      designSystemId: null,
       projectMetadata: expect.objectContaining({
         kind: 'prototype',
       }),
@@ -1329,10 +1292,9 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('binds the deck chip and keeps only the design-system picker in the footer', async () => {
+  it('binds the deck chip without a design-system picker', async () => {
     // Slide count + speaker-notes footer controls were removed from the deck
     // composer; the agent asks for them in the first-turn discovery flow. The
-    // deck footer now mirrors the prototype footer — design system only.
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({ plugins: [SIMPLE_DECK_PLUGIN] }), {
@@ -1372,8 +1334,7 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByTestId('home-hero-footer-option-speakerNotes')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-slideCount')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-designSystem')).toBeNull();
-    // The design-system picker is the persistent control below the composer.
-    expect(screen.getByTestId('home-hero-design-system-trigger')).toBeTruthy();
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
 
     await setPromptAndSettle('Create an investor deck for a local-first design tool.');
     fireEvent.click(screen.getByTestId('home-hero-submit'));

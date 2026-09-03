@@ -3,7 +3,6 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
 import {
-  defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
   type PluginManifest,
   type ProjectFile,
@@ -37,7 +36,6 @@ import {
 import {
   FIRST_PARTY_ATOMS,
   buildConnectorProbe,
-  getInstalledPlugin,
   listInstalledPlugins,
   resolvePluginSnapshot,
 } from '../../plugins/index.js';
@@ -1745,14 +1743,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           ? true
           : typeof req.body?.appliedPluginSnapshotId === 'string'
             && req.body.appliedPluginSnapshotId.trim().length > 0;
-      let resolveBody =
+      const resolveBody =
         explicitPlugin ? (req.body as Record<string, unknown>) : null;
-      if (!resolveBody && initialSessionMode === 'design') {
-        const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(projectMetadata);
-        if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
-          resolveBody = { ...(req.body || {}), pluginId: fallbackPluginId };
-        }
-      }
       let resolvedSnapshot = null;
       if (resolveBody) {
         const registry = await loadPluginRegistryView();
@@ -1769,13 +1761,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           connectorProbe: buildConnectorProbe(connectorService),
         });
         if (resolved && !resolved.ok) {
-          if (!explicitPlugin) {
-            console.warn(
-              `[plugins] default-scenario fallback skipped for project ${id}: ${resolved.body?.error?.code ?? 'unknown'}`,
-            );
-          } else {
-            return res.status(resolved.status).json(resolved.body);
-          }
+          return res.status(resolved.status).json(resolved.body);
         } else {
           resolvedSnapshot = resolved;
         }

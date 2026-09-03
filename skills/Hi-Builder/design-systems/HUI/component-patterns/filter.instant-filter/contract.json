@@ -9,5 +9,8 @@
   "status": "active",
   "use_when": ["选择过滤条件后结果需要立即更新且无需提交查询"],
   "hui_components": ["el-input", "el-select", "el-option", "el-date-picker", "el-checkable-tag", "el-tag", "el-button"],
+  "fixed_behavior": {
+    "selected_state_font_size": "14px"
+  },
   "owner": "hui-common"
 }

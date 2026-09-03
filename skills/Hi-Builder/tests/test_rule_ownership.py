@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import tempfile
@@ -10,7 +11,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from validate_skill import validate_rule_ownership
+from core import load_json
+from validate_skill import (
+    validate_filter_search_form_ownership,
+    validate_renderer_geometry_ownership,
+    validate_rule_ownership,
+    validate_selection_column_ownership,
+)
 
 
 class RuleOwnershipTest(unittest.TestCase):
@@ -63,6 +70,146 @@ class RuleOwnershipTest(unittest.TestCase):
             errors = validate_rule_ownership(copied)
             self.assertTrue(
                 any("机器事实不得复制到导航文档" in error for error in errors),
+                errors,
+            )
+
+    def test_current_renderer_geometry_ownership_passes(self) -> None:
+        self.assertEqual(validate_renderer_geometry_ownership(ROOT), [])
+
+    def test_renderer_cannot_hardcode_tpp_evidence_geometry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            styles_path = copied / "assets/templates/HUI/styles/collection.css"
+            source = styles_path.read_text(encoding="utf-8").replace(
+                ".table-tabs-search { box-sizing: border-box; }",
+                ".table-tabs-search { min-height: 109px; box-sizing: border-box; }",
+            )
+            styles_path.write_text(source, encoding="utf-8")
+            errors = validate_renderer_geometry_ownership(copied)
+            self.assertTrue(
+                any("Renderer不得绑定TPP观测几何" in error for error in errors),
+                errors,
+            )
+
+    def test_renderer_cannot_bind_tpp_height_through_variable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            styles_path = copied / "assets/templates/HUI/styles/collection.css"
+            source = styles_path.read_text(encoding="utf-8").replace(
+                ".table-tabs-search { box-sizing: border-box; }",
+                ".table-tabs-search { min-height: var(--page-search-height); box-sizing: border-box; }",
+            )
+            styles_path.write_text(source, encoding="utf-8")
+            errors = validate_renderer_geometry_ownership(copied)
+            self.assertTrue(
+                any("Renderer不得绑定TPP观测几何" in error for error in errors),
+                errors,
+            )
+
+    def test_current_filter_search_form_ownership_passes(self) -> None:
+        self.assertEqual(validate_filter_search_form_ownership(ROOT), [])
+
+    def test_table_tabs_cannot_bypass_common_filter_visibility(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            template_path = copied / "assets/templates/HUI/fragments/collection/page.html"
+            source = template_path.read_text(encoding="utf-8")
+            marker = 'v-if="isTableTabsSearch"'
+            start = source.index(marker)
+            end = source.index('<div v-if="showPageToolbar"', start)
+            block = source[start:end].replace(
+                'v-for="field in visibleFilters"',
+                'v-for="field in config.filters"',
+                1,
+            )
+            template_path.write_text(source[:start] + block + source[end:], encoding="utf-8")
+            errors = validate_filter_search_form_ownership(copied)
+            self.assertTrue(
+                any("不得绕过公共筛选项显隐逻辑" in error for error in errors),
+                errors,
+            )
+
+    def test_filter_collapse_threshold_cannot_be_hardcoded_in_renderer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            shell_path = copied / "assets/templates/HUI/shells/page-end.html"
+            source = shell_path.read_text(encoding="utf-8").replace(
+                "Number((this.config.filter_search_form_behavior || {}).collapse_threshold)",
+                "6",
+                1,
+            )
+            shell_path.write_text(source, encoding="utf-8")
+            errors = validate_filter_search_form_ownership(copied)
+            self.assertTrue(
+                any("折叠阈值必须消费公共合同" in error for error in errors),
+                errors,
+            )
+
+    def test_current_selection_columns_use_hui_default_width(self) -> None:
+        self.assertEqual(validate_selection_column_ownership(ROOT), [])
+
+    def test_renderer_cannot_override_selection_column_width(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            template_path = copied / "assets/templates/HUI/fragments/collection/page.html"
+            source = template_path.read_text(encoding="utf-8").replace(
+                'type="selection"',
+                'type="selection" width="48"',
+                1,
+            )
+            template_path.write_text(source, encoding="utf-8")
+            errors = validate_selection_column_ownership(copied)
+            self.assertTrue(
+                any("Renderer不得覆盖" in error for error in errors),
+                errors,
+            )
+
+    def test_product_composition_cannot_override_selection_column_width(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            composition_path = copied / (
+                "design-systems/industry-products/general/products/isc/"
+                "pages/event-search/composition.json"
+            )
+            document = load_json(composition_path)
+            document["table_columns"]["selection"]["width"] = "48"
+            composition_path.write_text(
+                json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            errors = validate_selection_column_ownership(copied)
+            self.assertTrue(
+                any("产品Composition不得覆盖" in error for error in errors),
+                errors,
+            )
+
+    def test_renderer_cannot_override_selection_column_alignment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            template_path = copied / "assets/templates/HUI/fragments/collection/page.html"
+            source = template_path.read_text(encoding="utf-8").replace(
+                'type="selection"',
+                'type="selection" align="center" header-align="center"',
+                1,
+            )
+            template_path.write_text(source, encoding="utf-8")
+            errors = validate_selection_column_ownership(copied)
+            self.assertTrue(
+                any("完整使用HUI默认布局" in error for error in errors),
+                errors,
+            )
+
+    def test_selection_must_not_override_hui_native_styles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied = self.copy_skill(Path(directory))
+            styles_path = copied / "assets/templates/HUI/styles/collection.css"
+            source = styles_path.read_text(encoding="utf-8") + (
+                "\n.data-table-pattern .el-table-column--selection .cell { display: flex; }\n"
+            )
+            styles_path.write_text(source, encoding="utf-8")
+            errors = validate_selection_column_ownership(copied)
+            self.assertTrue(
+                any("不得覆盖HUI原生样式" in error for error in errors),
                 errors,
             )
 
