@@ -16,6 +16,7 @@ import {
   mergeNoProxyWithLoopbackDefaults,
   proxyDispatcherRequestInit,
   redactSecrets,
+  resolveCodexProxyEnv,
   resolveOpenAIConnectionTestRunProviderPackage,
   resolveConnectionTestTimeoutMs,
   testAgentConnection,
@@ -208,6 +209,39 @@ afterEach(() => {
 });
 
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+describe('resolveCodexProxyEnv', () => {
+  it('prefers refreshed login-shell proxy values and preserves loopback bypasses', () => {
+    const env = resolveCodexProxyEnv(
+      { HOME: '/Users/tester', HTTPS_PROXY: 'http://stale-proxy:8080' },
+      { HTTPS_PROXY: 'http://system-proxy:8080' },
+      { HTTPS_PROXY: 'http://shell-proxy:8080', NO_PROXY: '.corp.example' },
+      'darwin',
+    );
+
+    expect(env).toMatchObject({
+      HOME: '/Users/tester',
+      HTTPS_PROXY: 'http://shell-proxy:8080',
+      NO_PROXY: '.corp.example,localhost,127.0.0.1,[::1]',
+      NODE_USE_ENV_PROXY: '1',
+    });
+  });
+
+  it('keeps explicit process proxy values when no refreshed source overrides them', () => {
+    const env = resolveCodexProxyEnv(
+      { HTTPS_PROXY: 'http://process-proxy:8080', NO_PROXY: 'localhost' },
+      {},
+      {},
+      'linux',
+    );
+
+    expect(env).toMatchObject({
+      HTTPS_PROXY: 'http://process-proxy:8080',
+      NO_PROXY: 'localhost,127.0.0.1,[::1]',
+      NODE_USE_ENV_PROXY: '1',
+    });
+  });
+});
 
 describe('POST /api/provider/models', () => {
   it('lists OpenAI-compatible models from /models', async () => {
@@ -2372,6 +2406,64 @@ describe('POST /api/test/connection provider mode', () => {
 });
 
 describe('POST /api/test/connection agent mode', () => {
+  it('refreshes proxy settings before the first Codex connection attempt', async () => {
+    const proxyKeys = [
+      'ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'NODE_USE_ENV_PROXY', 'NO_PROXY',
+      'all_proxy', 'http_proxy', 'https_proxy', 'no_proxy',
+    ] as const;
+    const previous = new Map(proxyKeys.map((key) => [key, process.env[key]]));
+    const previousTimeout = process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+    const systemProxy = vi.spyOn(platform, 'resolveSystemProxyEnv').mockReturnValue({});
+    const shellProxy = vi.spyOn(platform, 'resolveLoginShellProxyEnv').mockReturnValue({
+      HTTPS_PROXY: 'http://proxy.corp:8080',
+    });
+    try {
+      for (const key of proxyKeys) delete process.env[key];
+      process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = '80';
+      await withFakeCodex(
+        `
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  console.log('codex-cli 9.9.9');
+  process.exit(0);
+}
+if (args[0] === 'debug' && args[1] === 'models') {
+  console.log(JSON.stringify({ models: [] }));
+  process.exit(0);
+}
+if (args[0] === 'login' && args[1] === 'status') {
+  console.log('Logged in using ChatGPT');
+  process.exit(0);
+}
+if (process.env.HTTPS_PROXY === 'http://proxy.corp:8080') {
+  console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));
+  process.exit(0);
+}
+setInterval(() => {}, 1000);
+`,
+        async () => {
+          await expect(testAgentConnection({ agentId: 'codex' })).resolves.toMatchObject({
+            ok: true,
+            kind: 'success',
+          });
+        },
+      );
+      expect(process.env.HTTPS_PROXY).toBe('http://proxy.corp:8080');
+      expect(process.env.NO_PROXY).toBe('localhost,127.0.0.1,[::1]');
+      expect(shellProxy).toHaveBeenCalledTimes(1);
+    } finally {
+      systemProxy.mockRestore();
+      shellProxy.mockRestore();
+      for (const key of proxyKeys) {
+        const value = previous.get(key);
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      if (previousTimeout === undefined) delete process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+      else process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = previousTimeout;
+    }
+  }, 10_000);
+
   it('uses the AMR profile-scoped remembered model during connection tests when no explicit model is selected', async () => {
     rememberLiveModels('amr', [{ id: 'local-scoped-model', label: 'local-scoped-model' }], 'local');
 

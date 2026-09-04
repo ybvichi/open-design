@@ -31,6 +31,7 @@ import {
   resolvePackagedChildBaseEnv,
   resolvePackagedElectronNodeCommand,
   resolvePackagedPathEnv,
+  resolvePackagedStartupProxyEnv,
   waitForStatus,
   waitForHttpReady,
 } from '../src/sidecars.js';
@@ -253,6 +254,35 @@ describe('packaged child Vite+ environment forwarding', () => {
       NODE_USE_ENV_PROXY: '1',
     });
     expect(env.HTTP_PROXY).toBeUndefined();
+  });
+
+  it('builds one startup proxy snapshot for installer, daemon, web, and Codex CLI', () => {
+    const startupProxyEnv = resolvePackagedStartupProxyEnv(
+      {
+        HTTP_PROXY: 'http://system-proxy:8080',
+        HTTPS_PROXY: 'http://system-proxy:8443',
+      },
+      {
+        HTTPS_PROXY: 'http://shell-proxy:9443',
+        NO_PROXY: '.corp.example',
+      },
+      'darwin',
+    );
+    const daemonEnv = resolvePackagedChildBaseEnv(
+      { HOME: '/Users/tester' },
+      true,
+      {},
+      false,
+      startupProxyEnv,
+    );
+
+    expect(daemonEnv).toMatchObject({
+      HOME: '/Users/tester',
+      HTTP_PROXY: 'http://system-proxy:8080',
+      HTTPS_PROXY: 'http://shell-proxy:9443',
+      NO_PROXY: '.corp.example,localhost,127.0.0.1,[::1]',
+      NODE_USE_ENV_PROXY: '1',
+    });
   });
 
   it('adds custom VP_HOME/bin to the packaged PATH builder', () => {

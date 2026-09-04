@@ -32,6 +32,7 @@ import {
 import {
   createCommandInvocation,
   mergeProxyAwareEnv,
+  resolveLoginShellProxyEnv,
   resolveSystemProxyEnv,
 } from '@open-design/platform';
 import { attachAcpSession } from './agent-protocol/index.js';
@@ -253,6 +254,13 @@ export async function assertAndFetchExternalAsset(
 // or distant providers; invalid values fall back to the default.
 const DEFAULT_PROVIDER_TIMEOUT_MS = 12_000;
 const LOOPBACK_NO_PROXY_TOKENS = ['localhost', '127.0.0.1', '[::1]'] as const;
+const PROXY_ENV_KEYS = [
+  'ALL_PROXY',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NODE_USE_ENV_PROXY',
+  'NO_PROXY',
+] as const;
 // CLI boot time is dominated by adapter auth/session restore; the heavy
 // adapters (Codex, Cursor Agent) regularly take 5–10 s on a cold first
 // run, so 45 s leaves headroom without making a hung child invisible.
@@ -312,6 +320,45 @@ export function mergeNoProxyWithLoopbackDefaults(noProxy: string | undefined): s
     values.push(token);
   }
   return values.length > 0 ? values.join(',') : null;
+}
+
+function proxyEnvValue(env: NodeJS.ProcessEnv, key: string): string {
+  const entry = Object.entries(env).find(([candidate]) => candidate.toLowerCase() === key.toLowerCase());
+  return entry?.[1] ?? '';
+}
+
+export function resolveCodexProxyEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  systemProxyEnv: NodeJS.ProcessEnv = resolveSystemProxyEnv(),
+  loginShellProxyEnv: NodeJS.ProcessEnv = resolveLoginShellProxyEnv({ env: baseEnv }),
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  return mergeProxyAwareEnv(platform, baseEnv, systemProxyEnv, loginShellProxyEnv);
+}
+
+function proxyEnvChanged(baseEnv: NodeJS.ProcessEnv, candidateEnv: NodeJS.ProcessEnv): boolean {
+  return PROXY_ENV_KEYS.some(
+    (key) => proxyEnvValue(baseEnv, key) !== proxyEnvValue(candidateEnv, key),
+  );
+}
+
+function hasProxyEndpoint(env: NodeJS.ProcessEnv): boolean {
+  return ['ALL_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY'].some(
+    (key) => proxyEnvValue(env, key).trim().length > 0,
+  );
+}
+
+function applyResolvedProxyEnv(target: NodeJS.ProcessEnv, source: NodeJS.ProcessEnv): void {
+  for (const canonicalKey of PROXY_ENV_KEYS) {
+    for (const key of Object.keys(target)) {
+      if (key.toLowerCase() === canonicalKey.toLowerCase()) delete target[key];
+    }
+    for (const [key, value] of Object.entries(source)) {
+      if (key.toLowerCase() === canonicalKey.toLowerCase() && value != null) {
+        target[key] = value;
+      }
+    }
+  }
 }
 
 function defaultPortForProtocol(protocol: string): string {
@@ -2128,6 +2175,7 @@ async function resolveConnectionTestModelForAgent(
 
 async function testAgentConnectionInternal(
   input: AgentConnectionInput,
+  baseProcessEnv: NodeJS.ProcessEnv = process.env,
 ): Promise<ConnectionTestResponse> {
   const start = Date.now();
   let model =
@@ -2397,7 +2445,7 @@ async function testAgentConnectionInternal(
     const baseEnv = spawnEnvForAgent(
       input.agentId,
       {
-        ...process.env,
+        ...baseProcessEnv,
         ...(def.env || {}),
       },
       configuredAgentEnv,
@@ -2408,7 +2456,7 @@ async function testAgentConnectionInternal(
     const mmdRouteLaunchEnv = input.agentId === 'claude'
       ? await loadMmdRouteLaunchEnv(
           {
-            ...process.env,
+            ...baseProcessEnv,
             ...(def.env || {}),
             ...configuredAgentEnv,
           },
@@ -2883,7 +2931,28 @@ async function testAgentConnectionInternal(
 export async function testAgentConnection(
   input: AgentConnectionInput,
 ): Promise<ConnectionTestResponse> {
-  const primaryResult = await testAgentConnectionInternal(input);
+  // Refresh the desktop/system proxy before the first Codex process starts.
+  // Packaged launches normally already inherit this snapshot, while this also
+  // covers a proxy changed during an open client session. The timeout retry
+  // below remains a safety net for another change while the probe is running.
+  if (input.agentId === 'codex') {
+    const startupProxyEnv = resolveCodexProxyEnv();
+    if (hasProxyEndpoint(startupProxyEnv) && proxyEnvChanged(process.env, startupProxyEnv)) {
+      applyResolvedProxyEnv(process.env, startupProxyEnv);
+    }
+  }
+
+  let primaryResult = await testAgentConnectionInternal(input);
+  if (input.agentId === 'codex' && primaryResult.kind === 'timeout' && !input.signal?.aborted) {
+    const repairedEnv = resolveCodexProxyEnv();
+    if (hasProxyEndpoint(repairedEnv) && proxyEnvChanged(process.env, repairedEnv)) {
+      const retryResult = await testAgentConnectionInternal(input, repairedEnv);
+      if (retryResult.ok) {
+        applyResolvedProxyEnv(process.env, repairedEnv);
+        primaryResult = retryResult;
+      }
+    }
+  }
   const validatedPrefs = validateAgentCliEnv(input.agentCliEnv);
   const configuredCodexBin = validatedPrefs?.codex?.CODEX_BIN?.trim() || '';
   const configuredAgentEnv = agentCliEnvForAgent(validatedPrefs, input.agentId);

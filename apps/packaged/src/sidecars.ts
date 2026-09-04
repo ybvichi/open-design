@@ -33,6 +33,10 @@ import {
 } from "@open-design/platform";
 
 import type { PackagedWebOutputMode } from "./config.js";
+import {
+  codexStandaloneBinDir,
+  ensureCodexCliForInstalledCodex,
+} from "./codex-cli-bootstrap.js";
 import type { PackagedNamespacePaths } from "./paths.js";
 import {
   prewarmPackagedFiles,
@@ -455,6 +459,7 @@ const PACKAGED_POSIX_SYSTEM_BINS = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] as
 export function resolvePackagedPathEnv(basePath = process.env.PATH ?? ""): string {
   const candidates = [
     ...basePath.split(delimiter),
+    codexStandaloneBinDir(),
     ...wellKnownUserToolchainBins(),
     ...PACKAGED_POSIX_SYSTEM_BINS,
   ];
@@ -466,7 +471,7 @@ export function resolvePackagedChildBaseEnv(
   includeProviderSecrets = false,
   systemProxyEnv: NodeJS.ProcessEnv = resolveSystemProxyEnv(),
   includeSystemProxyEnv = true,
-  loginShellProxyEnv: NodeJS.ProcessEnv = {},
+  startupProxyEnv: NodeJS.ProcessEnv = {},
 ): NodeJS.ProcessEnv {
   const forwardedEnv: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(env)) {
@@ -475,8 +480,16 @@ export function resolvePackagedChildBaseEnv(
     }
   }
   return includeSystemProxyEnv
-    ? mergeProxyAwareEnv(process.platform, systemProxyEnv, loginShellProxyEnv, forwardedEnv)
-    : mergeProxyAwareEnv(process.platform, loginShellProxyEnv, forwardedEnv);
+    ? mergeProxyAwareEnv(process.platform, systemProxyEnv, startupProxyEnv, forwardedEnv)
+    : mergeProxyAwareEnv(process.platform, startupProxyEnv, forwardedEnv);
+}
+
+export function resolvePackagedStartupProxyEnv(
+  systemProxyEnv: NodeJS.ProcessEnv,
+  loginShellProxyEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  return mergeProxyAwareEnv(platform, systemProxyEnv, loginShellProxyEnv);
 }
 
 function createPackagedDaemonManagedPathEnv(
@@ -585,7 +598,7 @@ async function spawnSidecarChild(options: {
   electronNodeCommand: string | null;
   entryPath: string;
   env: NodeJS.ProcessEnv;
-  loginShellProxyEnv: NodeJS.ProcessEnv;
+  startupProxyEnv: NodeJS.ProcessEnv;
   nodeCommand: string | null;
   paths: PackagedNamespacePaths;
   runtime: SidecarRuntimeContext<SidecarStamp>;
@@ -616,9 +629,9 @@ async function spawnSidecarChild(options: {
       ...resolvePackagedChildBaseEnv(
         process.env,
         options.app === APP_KEYS.DAEMON,
-        resolveSystemProxyEnv(),
-        options.app !== APP_KEYS.DAEMON,
-        options.loginShellProxyEnv,
+        {},
+        false,
+        options.startupProxyEnv,
       ),
       ...options.env,
       NODE_ENV: "production",
@@ -729,12 +742,17 @@ export async function startPackagedSidecars(
   await mkdir(paths.electronSessionDataRoot, { recursive: true });
 
   const children: ManagedSidecarChild[] = [];
-  // Finder/Dock launches do not source `.zshrc`. Resolve the small proxy-only
-  // subset once per packaged startup so the daemon, web sidecar, and local
-  // agent CLIs inherit the same proxy that works in the user's terminal.
+  // Finder/Dock launches do not source `.zshrc`. Resolve a proxy-only snapshot
+  // once per packaged startup so installation, daemon, web, and local agent
+  // CLIs all use the same environment from their very first request.
+  const systemProxyEnv = resolveSystemProxyEnv();
   const loginShellProxyEnv = options.requireDesktopAuth
     ? resolveLoginShellProxyEnv({ env: process.env })
     : {};
+  const startupProxyEnv = resolvePackagedStartupProxyEnv(
+    systemProxyEnv,
+    loginShellProxyEnv,
+  );
 
   const daemonSidecarEntry =
     options.daemonSidecarEntry ?? resolveSidecarEntry("@open-design/daemon", "sidecar");
@@ -745,6 +763,17 @@ export async function startPackagedSidecars(
   };
 
   try {
+    if (options.requireDesktopAuth) {
+      const installerEnv = mergeProxyAwareEnv(
+        process.platform,
+        startupProxyEnv,
+        process.env,
+      );
+      installerEnv.PATH = resolvePackagedPathEnv();
+      const codexBootstrap = await ensureCodexCliForInstalledCodex({ env: installerEnv });
+      prewarmLog(`[open-design packaged] Codex CLI bootstrap status=${codexBootstrap.status}`);
+    }
+
     // Issue #5835: on Linux AppImage the payload lives on a fresh FUSE mount
     // with a cold page cache. Read the daemon's cold-start set (bundled node
     // binary + daemon dist) into the page cache BEFORE spawning, so the
@@ -777,7 +806,7 @@ export async function startPackagedSidecars(
         posthogHost: options.posthogHost,
       }),
       electronNodeCommand: options.electronNodeCommand,
-      loginShellProxyEnv,
+      startupProxyEnv: options.requireDesktopAuth ? startupProxyEnv : {},
       nodeCommand: options.nodeCommand,
       paths,
       runtime,
@@ -825,7 +854,7 @@ export async function startPackagedSidecars(
         OD_HOST: "0.0.0.0",
       },
       electronNodeCommand: options.electronNodeCommand,
-      loginShellProxyEnv,
+      startupProxyEnv,
       nodeCommand: options.nodeCommand,
       paths,
       runtime,
