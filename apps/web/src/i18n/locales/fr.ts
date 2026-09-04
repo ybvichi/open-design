@@ -1230,6 +1230,10 @@ export const fr: Dict = {
   'recentProjects.moveToPersonalDescPost': '.',
   'recentProjects.moveDontRemind': 'Ne plus me le rappeler',
   'recentProjects.confirmMoveToTeam': 'Confirmer le déplacement',
+
+  'recentProjects.moveToTeamTreeDesc': 'Select a team space or folder to move this project into.',
+  'recentProjects.treeNoFolders': 'No folders',
+  'recentProjects.treeNoTeams': 'No team spaces available',
   'recentProjects.confirmMoveToPersonal': 'Confirmer le déplacement',
   'recentProjects.unshareInProgress': 'Retrait…',
   'recentProjects.moveOutOfTeam': "Retirer de l'espace d'équipe",

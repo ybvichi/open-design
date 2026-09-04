@@ -49,11 +49,24 @@ export interface ResourcePublishAdapter {
    */
   pull?(input: ResourcePublishInput): Promise<PublishedResourceVersion | null>;
   /**
-   * Remove the project from the shared team index. Existing immutable versions may
-   * remain in the hub, but team members should no longer discover/pull it from the
-   * team project list. Optional: older/local adapters can no-op.
-   */
-  unpublish?(input: ResourcePublishInput): Promise<void>;
+  * Remove the project from the shared team index. Existing immutable versions may
+  * remain in the hub, but team members should no longer discover/pull it from the
+  * team project list. Optional: older/local adapters can no-op.
+  */
+ unpublish?(input: ResourcePublishInput): Promise<void>;
+
+  /**
+   * Transfer a project from one workspace to another on the resource hub.
+   * This is a metadata-only operation: blobs stay where they are, only the
+   * resource row and catalog entry move. Returns the new version in the
+   * target workspace, or null when the adapter does not support transfer
+   * (caller should fall back to publish + unpublish). Optional: adapters
+  * that don't support cross-workspace transfer can omit this.
+  */
+  transferToWorkspace?(input: ResourcePublishInput & { reason: string } & {
+    sourceWorkspaceId: string;
+    targetWorkspaceId: string;
+  }): Promise<PublishedResourceVersion | null>;
 }
 
 export interface CollabPublishSchedulerOptions {

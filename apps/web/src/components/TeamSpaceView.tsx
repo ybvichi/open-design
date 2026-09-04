@@ -9,6 +9,8 @@ import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { avatarColorFor } from '../utils/avatarColor';
 import { FolderCardMenu } from './FolderCardMenu';
+import { RecentProjectsStrip } from './RecentProjectsStrip';
+import type { DesignSystemSummary, Project } from '../types';
 import styles from './TeamSpaceView.module.css';
 
  type TeamTab = 'projects' | 'members' | 'skill' | 'mcp';
@@ -57,9 +59,13 @@ function formatJoinedDate(dateStr: string): string {
 interface Props {
   teamId?: string;
   onInvite?: () => void;
+  designSystems?: DesignSystemSummary[];
+  onOpenProject?: (id: string) => void;
+  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+  onRenameProject?: (id: string, name: string) => void;
 }
 
-export function TeamSpaceView({ teamId, onInvite }: Props) {
+export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProject, onDeleteProject, onRenameProject }: Props) {
   const t = useT();
   const [activeTab, setActiveTab] = useState<TeamTab>('projects');
   const [teamName, setTeamName] = useState<string | null>(null);
@@ -184,7 +190,7 @@ export function TeamSpaceView({ teamId, onInvite }: Props) {
 
       <div className={styles.content} role="tabpanel">
        {activeTab === 'projects' ? (
-          <ProjectsPanel teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} />
+          <ProjectsPanel teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
        ) : null}
        {activeTab === 'members' ? (
         <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
@@ -232,21 +238,30 @@ function ProjectsPanel({
   operator,
   showCreateGroup,
   onShowCreateGroupChange,
+  designSystems = [],
+  onOpenProject,
+  onDeleteProject,
+  onRenameProject,
 }: {
   teamId?: string;
   operator: OperatorInfo | null;
   showCreateGroup: boolean;
   onShowCreateGroupChange: (v: boolean) => void;
+  designSystems?: DesignSystemSummary[];
+  onOpenProject?: (id: string) => void;
+  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+  onRenameProject?: (id: string, name: string) => void;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<TeamFolderItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<TeamFolderItem | null>(null);
   const [removing, setRemoving] = useState(false);
-
   const operatorMemberId = operator?.memberId ?? null;
   const operatorRole = operator?.role ?? null;
   const canManage = operatorRole === 'owner' || operatorRole === 'admin';
@@ -286,6 +301,43 @@ function ProjectsPanel({
       const detail = (e as CustomEvent).detail;
       if (detail?.teamId !== teamId) return;
       void loadFolders();
+    }
+    window.addEventListener('hdw:folders-updated', onFoldersUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hdw:folders-updated', onFoldersUpdated);
+    };
+  }, [teamId]);
+
+  // Fetch root-level team projects (folder_id IS NULL) from the local
+  // SQLite workspace_projects table. Refreshes alongside folders on the
+  // `hdw:folders-updated` event so a move/create stays in sync.
+  useEffect(() => {
+    if (!teamId) { setProjects([]); return; }
+    let cancelled = false;
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/folders/root/projects?workspace_id=${encodeURIComponent(teamId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) { if (!cancelled) setProjects([]); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        const list: any[] = body?.data?.projects ?? [];
+        setProjects(list);
+      } catch {
+        if (!cancelled) setProjects([]);
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
+      }
+    };
+    void loadProjects();
+    function onFoldersUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.teamId !== teamId) return;
+      void loadProjects();
     }
     window.addEventListener('hdw:folders-updated', onFoldersUpdated);
     return () => {
@@ -422,10 +474,32 @@ function ProjectsPanel({
                   </div>
                 </div>
              </div>
-           </article>
-          ))}
+          </article>
+         ))}
+     </div>
+      {/* Projects at the workspace root (folder_id IS NULL). Rendered
+          below the folder cards so the two areas stay visually separate,
+          mirroring the personal-all layout. */}
+      <div className={styles.projectsSection}>
+        {projectsLoading ? (
+          <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
+        ) : projects.length === 0 ? (
+          null
+        ) : (
+          <RecentProjectsStrip
+            projects={projects}
+            designSystems={designSystems}
+            limit={1000}
+            heading={t('entry.navDrafts')}
+            space="team"
+            onOpen={(id) => onOpenProject?.(id)}
+            onDelete={onDeleteProject}
+            onRename={onRenameProject}
+            hideTitle
+          />
+        )}
       </div>
-      {showCreateGroup ? (
+     {showCreateGroup ? (
         createPortal(
           <div className={styles.confirmOverlay} onClick={() => onShowCreateGroupChange(false)}>
             <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
@@ -744,12 +818,16 @@ function MembersTable({ teamId, onInvite, operator }: { teamId?: string; onInvit
 // Folder view — /team/:teamId/folder/:folderId
 // ---------------------------------------------------------------------------
 
- interface FolderViewProps {
+interface FolderViewProps {
   teamId?: string;
   folderId?: string;
+  designSystems?: DesignSystemSummary[];
+  onOpenProject?: (id: string) => void;
+  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+  onRenameProject?: (id: string, name: string) => void;
 }
 
-export function FolderView({ teamId, folderId }: FolderViewProps) {
+export function FolderView({ teamId, folderId, designSystems = [], onOpenProject, onDeleteProject, onRenameProject }: FolderViewProps) {
   const t = useT();
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([]);
   const [teamName, setTeamName] = useState<string | null>(null);
@@ -886,6 +964,10 @@ export function FolderView({ teamId, folderId }: FolderViewProps) {
           onShowCreateFolderChange={setShowCreateFolder}
           breadcrumb={breadcrumb}
           teamName={teamName}
+          designSystems={designSystems}
+          onOpenProject={onOpenProject}
+          onDeleteProject={onDeleteProject}
+          onRenameProject={onRenameProject}
         />
       </div>
     </section>
@@ -900,6 +982,10 @@ function FoldersPanel({
   onShowCreateFolderChange,
   breadcrumb,
   teamName,
+  designSystems = [],
+  onOpenProject,
+  onDeleteProject,
+  onRenameProject,
 }: {
   teamId?: string;
   folderId?: string;
@@ -908,9 +994,15 @@ function FoldersPanel({
   onShowCreateFolderChange: (v: boolean) => void;
   breadcrumb: BreadcrumbItem[];
   teamName: string | null;
+  designSystems?: DesignSystemSummary[];
+  onOpenProject?: (id: string) => void;
+  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+  onRenameProject?: (id: string, name: string) => void;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<TeamFolderItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -956,6 +1048,43 @@ function FoldersPanel({
       const detail = (e as CustomEvent).detail;
       if (detail?.folderId !== folderId) return;
       void loadFolders();
+    }
+    window.addEventListener('hdw:subfolders-updated', onFoldersUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hdw:subfolders-updated', onFoldersUpdated);
+    };
+  }, [teamId, folderId]);
+
+  // Fetch projects directly inside this folder (folder_id = folderId)
+  // from the local SQLite workspace_projects table. Refreshes alongside
+  // subfolders on the `hdw:subfolders-updated` event.
+  useEffect(() => {
+    if (!teamId || !folderId) { setProjects([]); return; }
+    let cancelled = false;
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/folders/${encodeURIComponent(folderId)}/projects?workspace_id=${encodeURIComponent(teamId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) { if (!cancelled) setProjects([]); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        const list: any[] = body?.data?.projects ?? [];
+        setProjects(list);
+      } catch {
+        if (!cancelled) setProjects([]);
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
+      }
+    };
+    void loadProjects();
+    function onFoldersUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.folderId !== folderId) return;
+      void loadProjects();
     }
     window.addEventListener('hdw:subfolders-updated', onFoldersUpdated);
     return () => {
@@ -1122,8 +1251,30 @@ function FoldersPanel({
                 </div>
               </div>
            </div>
-         </article>
-        ))}
+        </article>
+       ))}
+     </div>
+      {/* Projects directly inside this folder (folder_id = folderId).
+          Rendered below the subfolder cards so the two areas stay
+          visually separate, mirroring the personal-folder layout. */}
+      <div className={styles.projectsSection}>
+        {projectsLoading ? (
+          <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
+        ) : projects.length === 0 ? (
+          null
+        ) : (
+          <RecentProjectsStrip
+            projects={projects}
+            designSystems={designSystems}
+            limit={1000}
+            heading={t('entry.navDrafts')}
+            space="team"
+            onOpen={(id) => onOpenProject?.(id)}
+            onDelete={onDeleteProject}
+            onRename={onRenameProject}
+            hideTitle
+          />
+        )}
       </div>
       {showCreateFolder ? (
         createPortal(

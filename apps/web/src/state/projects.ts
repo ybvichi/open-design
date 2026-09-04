@@ -245,6 +245,8 @@ export async function moveWorkspaceProject(input: {
   projectId: string;
   visibility: ProjectVisibility;
   workspaceContext: WorkspaceCollabContext | null;
+  targetWorkspaceId?: string | null;
+  targetFolderId?: string | null;
 }): Promise<WorkspaceProjectSummary> {
   const context = input.workspaceContext;
   if (!context) throw new Error('Workspace context is required');
@@ -256,7 +258,11 @@ export async function moveWorkspaceProject(input: {
         'Content-Type': 'application/json',
         ...workspaceProjectHeaders(context),
       },
-      body: JSON.stringify({ visibility: input.visibility }),
+      body: JSON.stringify({
+        visibility: input.visibility,
+        ...(input.targetWorkspaceId ? { targetWorkspaceId: input.targetWorkspaceId } : {}),
+        ...(input.targetFolderId ? { targetFolderId: input.targetFolderId } : {}),
+      }),
     },
   );
   if (!resp.ok) {

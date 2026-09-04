@@ -20,6 +20,7 @@ import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-desi
 
 const MOVE_CONFIRM_SKIP_KEY = 'od.projects.moveConfirmSkip';
 import { useT } from '../i18n';
+import { MoveToTeamTreeDialog, type TeamTreeSelection } from './MoveToTeamTreeDialog';
 import {
   fetchProjectFiles,
   fetchProjectFileText,
@@ -566,40 +567,70 @@ externalSearchQuery,
   // #5517 move confirmation: moving a project in/out of the team space asks
   // once, with a persisted 不再提示 opt-out (the demo keeps it per-session;
   // the product remembers the choice).
-  const [moveTarget, setMoveTarget] = useState<{ project: Project; action: 'to-team' | 'to-personal' } | null>(null);
-  const [moveDontRemind, setMoveDontRemind] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem(MOVE_CONFIRM_SKIP_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  function requestMove(project: Project, action: 'to-team' | 'to-personal') {
-    trackCollection(action === 'to-team' ? 'move_to_team' : 'move_to_personal', {
-      project_key: project.id,
-      project_relation: resolveCreator(project.id).ownedBySelf ? 'self' : 'other',
-    });
-    if (moveDontRemind) {
-      void (action === 'to-team' ? handleShareToTeam(project) : handleUnshareFromTeam(project));
-      return;
-    }
-    setMenuOpenId(null);
-    setMoveTarget({ project, action });
+ const [moveTarget, setMoveTarget] = useState<{ project: Project; action: 'to-team' | 'to-personal' } | null>(null);
+ // When set, the tree selector is open for a single-project move to team.
+ const [moveToTeamTarget, setMoveToTeamTarget] = useState<Project | null>(null);
+ // When set, the tree selector is open for a bulk move to team.
+ const [bulkMoveToTeamOpen, setBulkMoveToTeamOpen] = useState(false);
+ const [moveDontRemind, setMoveDontRemind] = useState<boolean>(() => {
+   try {
+     return window.localStorage.getItem(MOVE_CONFIRM_SKIP_KEY) === '1';
+   } catch {
+     return false;
+   }
+ });
+ function requestMove(project: Project, action: 'to-team' | 'to-personal') {
+   trackCollection(action === 'to-team' ? 'move_to_team' : 'move_to_personal', {
+     project_key: project.id,
+     project_relation: resolveCreator(project.id).ownedBySelf ? 'self' : 'other',
+   });
+   // "to-team" always opens the tree selector so the user can pick the
+   // destination team/folder; the old "don't remind" skip only applies to
+   // the "to-personal" confirmation dialog below.
+   if (action === 'to-team') {
+     setMenuOpenId(null);
+     setMoveToTeamTarget(project);
+     return;
+   }
+  if (moveDontRemind) {
+    void handleUnshareFromTeam(project);
+    return;
   }
-  function commitMove() {
-    if (!moveTarget) return;
-    if (moveDontRemind) {
-      try {
-        window.localStorage.setItem(MOVE_CONFIRM_SKIP_KEY, '1');
-      } catch {
-        // best-effort persistence
-      }
-    }
-    const { project, action } = moveTarget;
-    setMoveTarget(null);
-    void (action === 'to-team' ? handleShareToTeam(project) : handleUnshareFromTeam(project));
-  }
-  const actionsAvailable = Boolean(onDelete || onDuplicate || onRename || collaborationAvailable);
+  setMenuOpenId(null);
+  setMoveTarget({ project, action });
+}
+function commitMove() {
+   if (!moveTarget) return;
+   if (moveDontRemind) {
+     try {
+       window.localStorage.setItem(MOVE_CONFIRM_SKIP_KEY, '1');
+     } catch {
+       // best-effort persistence
+     }
+   }
+   const { project, action } = moveTarget;
+   setMoveTarget(null);
+   // "to-team" is handled by the tree selector; commitMove only fires for
+   // the "to-personal" confirmation dialog now.
+   if (action === 'to-personal') void handleUnshareFromTeam(project);
+ }
+ function handleMoveToTeamConfirm(selection: TeamTreeSelection) {
+   const project = moveToTeamTarget;
+   setMoveToTeamTarget(null);
+   if (!project) return;
+   void handleShareToTeam(project, {
+     targetWorkspaceId: selection.workspaceId,
+     targetFolderId: selection.folderId,
+   });
+ }
+ function handleBulkMoveToTeamConfirm(selection: TeamTreeSelection) {
+   setBulkMoveToTeamOpen(false);
+   void commitBulkMove('to-team', {
+     targetWorkspaceId: selection.workspaceId,
+     targetFolderId: selection.folderId,
+   });
+ }
+ const actionsAvailable = Boolean(onDelete || onDuplicate || onRename || collaborationAvailable);
 
   // Bulk-action state for the 多选 bar. Every action below is the batch form of
   // an action the per-card ⋯ menu already offers (move in/out of the team
@@ -1053,17 +1084,22 @@ externalSearchQuery,
 
   // Promote/demote a project through the same workspace move endpoint used by
   // the full project grid so cards and in-file sharing cannot drift.
-  async function handleShareToTeam(project: Project) {
-    const startedAt = performance.now();
-    setShareErrorProjectId(null);
-    setMenuOpenId(project.id);
-    setSharingId(project.id);
-    try {
-      const movedProject = await moveWorkspaceProject({
-        projectId: project.id,
-        visibility: 'team',
-        workspaceContext,
-      });
+ async function handleShareToTeam(
+   project: Project,
+   options?: { targetWorkspaceId?: string; targetFolderId?: string | null },
+ ) {
+   const startedAt = performance.now();
+   setShareErrorProjectId(null);
+   setMenuOpenId(project.id);
+   setSharingId(project.id);
+   try {
+     const movedProject = await moveWorkspaceProject({
+       projectId: project.id,
+       visibility: 'team',
+       workspaceContext,
+       targetWorkspaceId: options?.targetWorkspaceId,
+       targetFolderId: options?.targetFolderId ?? null,
+     });
       onProjectShared?.(movedProject);
       notifyTeamProjectsChanged();
       setMenuOpenId(null);
@@ -1290,33 +1326,47 @@ externalSearchQuery,
     );
   }
 
-  function requestBulkMove(action: 'to-team' | 'to-personal') {
-    if (bulkMutationDisabled) return;
-    trackCollection(action === 'to-team' ? 'bulk_move_to_team' : 'bulk_move_to_personal', {
-      selection_count_bucket: countBucket(selectedCount),
-    });
-    if (moveDontRemind) {
-      void commitBulkMove(action);
-      return;
-    }
-    setBulkMoveAction(action);
-  }
+ function requestBulkMove(action: 'to-team' | 'to-personal') {
+   if (bulkMutationDisabled) return;
+   trackCollection(action === 'to-team' ? 'bulk_move_to_team' : 'bulk_move_to_personal', {
+     selection_count_bucket: countBucket(selectedCount),
+   });
+   // "to-team" opens the tree selector so the user can pick the destination.
+   if (action === 'to-team') {
+     setBulkMoveToTeamOpen(true);
+     return;
+   }
+   if (moveDontRemind) {
+     void commitBulkMove(action);
+     return;
+   }
+   setBulkMoveAction(action);
+ }
 
-  /** Batch form of the per-card 转入/移出团队空间 action: the very same
-   *  `moveWorkspaceProject` call, once per selected project. Failures are
-   *  reported per project and never abort the rest of the batch. */
-  async function commitBulkMove(action: 'to-team' | 'to-personal') {
-    const ids = selectedProjects.map(({ project }) => project.id);
-    const startedAt = performance.now();
-    setBulkMoveAction(null);
-    exitSelectionMode();
-    if (ids.length === 0) return;
-    const visibility = action === 'to-team' ? 'team' : 'personal';
-    const moved = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const project = await moveWorkspaceProject({ projectId: id, visibility, workspaceContext });
-          return { id, project };
+ /** Batch form of the per-card 转入/移出团队空间 action: the very same
+  *  `moveWorkspaceProject` call, once per selected project. Failures are
+  *  reported per project and never abort the rest of the batch. */
+ async function commitBulkMove(
+   action: 'to-team' | 'to-personal',
+   options?: { targetWorkspaceId?: string; targetFolderId?: string | null },
+ ) {
+   const ids = selectedProjects.map(({ project }) => project.id);
+   const startedAt = performance.now();
+   setBulkMoveAction(null);
+   exitSelectionMode();
+   if (ids.length === 0) return;
+   const visibility = action === 'to-team' ? 'team' : 'personal';
+   const moved = await Promise.all(
+     ids.map(async (id) => {
+       try {
+         const project = await moveWorkspaceProject({
+           projectId: id,
+           visibility,
+           workspaceContext,
+           targetWorkspaceId: options?.targetWorkspaceId,
+           targetFolderId: options?.targetFolderId ?? null,
+         });
+         return { id, project };
         } catch (err) {
           if (action === 'to-team') onProjectShareFailed?.(id);
           console.warn('[RecentProjectsStrip] bulk move project failed:', err);
@@ -2192,8 +2242,21 @@ externalSearchQuery,
             </button>
           </DialogFooter>
         </Dialog>
-      ) : null}
-      {bulkDeleteOpen ? (
+     ) : null}
+     {moveToTeamTarget ? (
+       <MoveToTeamTreeDialog
+         onConfirm={handleMoveToTeamConfirm}
+         onCancel={() => setMoveToTeamTarget(null)}
+         busy={sharingId === moveToTeamTarget.id}
+       />
+     ) : null}
+     {bulkMoveToTeamOpen ? (
+       <MoveToTeamTreeDialog
+         onConfirm={handleBulkMoveToTeamConfirm}
+         onCancel={() => setBulkMoveToTeamOpen(false)}
+       />
+     ) : null}
+     {bulkDeleteOpen ? (
         <Dialog
           className="modal-confirm"
           role="alertdialog"

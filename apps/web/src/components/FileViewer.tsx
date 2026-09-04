@@ -100,6 +100,7 @@ import {
 } from '../collab/public-file-publish';
 import { moveWorkspaceProject } from '../state/projects';
 import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
+import { MoveToTeamTreeDialog, type TeamTreeSelection } from './MoveToTeamTreeDialog';
 import type { Dict, Locale } from '../i18n/types';
 import {
   fetchLiveArtifact,
@@ -6825,34 +6826,58 @@ function ReactComponentViewer({
   // Crossing the team-space boundary routes through the shared 转入/移出
   // 团队空间 confirmation (same dialog + 不再提示 skip key as the project
   // grid) instead of silently moving the project.
-  function setWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    setShareAccessMenuOpen(false);
-    if (nextAccess === shareAccess || shareAccessBusy || viewerOnly) return;
-    if (moveConfirmSkipped()) {
-      void commitWorkspaceShareAccess(nextAccess);
-      return;
-    }
-    setShareAccessConfirm(nextAccess);
-  }
+ function setWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+   setShareAccessMenuOpen(false);
+   if (nextAccess === shareAccess || shareAccessBusy || viewerOnly) return;
+   // "to-team" always opens the tree selector so the user can pick the
+   // destination team/folder; "to-personal" keeps the confirmation dialog.
+   if (nextAccess === 'workspace') {
+     setShareAccessConfirm('workspace');
+     return;
+   }
+   if (moveConfirmSkipped()) {
+     void commitWorkspaceShareAccess(nextAccess);
+     return;
+   }
+   setShareAccessConfirm(nextAccess);
+ }
 
-  async function commitWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    setShareAccessBusy(true);
-    try {
-      await moveWorkspaceProject({
-        projectId,
-        visibility: nextAccess === 'workspace' ? 'team' : 'personal',
-        workspaceContext,
-      });
-      setShareAccess(nextAccess);
-      notifyTeamProjectsChanged();
-    } catch (error) {
-      console.warn('[FileViewer] failed to update workspace project sharing', error);
-    } finally {
-      setShareAccessBusy(false);
-    }
-  }
+ async function commitWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+   setShareAccessBusy(true);
+   try {
+     await moveWorkspaceProject({
+       projectId,
+       visibility: nextAccess === 'workspace' ? 'team' : 'personal',
+       workspaceContext,
+     });
+     setShareAccess(nextAccess);
+     notifyTeamProjectsChanged();
+   } catch (error) {
+     console.warn('[FileViewer] failed to update workspace project sharing', error);
+   } finally {
+     setShareAccessBusy(false);
+   }
+ }
+ async function commitMoveToTeam(selection: TeamTreeSelection) {
+   setShareAccessBusy(true);
+   try {
+     await moveWorkspaceProject({
+       projectId,
+       visibility: 'team',
+       workspaceContext,
+       targetWorkspaceId: selection.workspaceId,
+       targetFolderId: selection.folderId,
+     });
+     setShareAccess('workspace');
+     notifyTeamProjectsChanged();
+   } catch (error) {
+     console.warn('[FileViewer] failed to move project to team space', error);
+   } finally {
+     setShareAccessBusy(false);
+   }
+ }
 
-  const exportTitle = file.name.replace(/\.(jsx|tsx)$/i, '') || file.name;
+ const exportTitle = file.name.replace(/\.(jsx|tsx)$/i, '') || file.name;
   const sourceExtension = file.name.toLowerCase().endsWith('.tsx') ? '.tsx' : '.jsx';
 
   useEffect(() => {
@@ -6886,17 +6911,27 @@ function ReactComponentViewer({
 
   return (
     <div className="viewer react-component-viewer">
-      {shareAccessConfirm ? (
-        <MoveToTeamConfirmDialog
-          action={shareAccessConfirm === 'workspace' ? 'to-team' : 'to-personal'}
-          onCancel={() => setShareAccessConfirm(null)}
-          onConfirm={() => {
-            const next = shareAccessConfirm;
-            setShareAccessConfirm(null);
-            if (next) void commitWorkspaceShareAccess(next);
-          }}
-        />
-      ) : null}
+     {shareAccessConfirm ? (
+       shareAccessConfirm === 'workspace' ? (
+         <MoveToTeamTreeDialog
+           onConfirm={(selection) => {
+             setShareAccessConfirm(null);
+             void commitMoveToTeam(selection);
+           }}
+           onCancel={() => setShareAccessConfirm(null)}
+           busy={shareAccessBusy}
+         />
+       ) : (
+         <MoveToTeamConfirmDialog
+           action="to-personal"
+           onCancel={() => setShareAccessConfirm(null)}
+           onConfirm={() => {
+             setShareAccessConfirm(null);
+             void commitWorkspaceShareAccess('private');
+           }}
+         />
+       )
+     ) : null}
       <div className="viewer-toolbar">
         <div className="viewer-toolbar-left">
           <button
@@ -8222,17 +8257,23 @@ const [reviewAddModalOpen, setReviewAddModalOpen] = useState(false);
   }
   // Same shared 转入/移出团队空间 confirmation as the project grid — see the
   // ReactComponentViewer copy above for the rationale.
-  function setWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    setShareAccessMenuOpen(false);
-    if (nextAccess === shareAccess || shareAccessBusy || viewerOnly) return;
-    if (moveConfirmSkipped()) {
-      void commitWorkspaceShareAccess(nextAccess);
-      return;
-    }
-    setShareAccessConfirm(nextAccess);
-  }
+ function setWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+   setShareAccessMenuOpen(false);
+   if (nextAccess === shareAccess || shareAccessBusy || viewerOnly) return;
+   // "to-team" always opens the tree selector so the user can pick the
+   // destination team/folder; "to-personal" keeps the confirmation dialog.
+   if (nextAccess === 'workspace') {
+     setShareAccessConfirm('workspace');
+     return;
+   }
+   if (moveConfirmSkipped()) {
+     void commitWorkspaceShareAccess(nextAccess);
+     return;
+   }
+   setShareAccessConfirm(nextAccess);
+ }
 
-  async function commitWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+ async function commitWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
     setShareAccessBusy(true);
     try {
       await moveWorkspaceProject({
@@ -8254,11 +8295,31 @@ const [reviewAddModalOpen, setReviewAddModalOpen] = useState(false);
           ? t('fileViewer.workspaceShareFailed')
           : t('fileViewer.workspaceUnshareFailed'),
       );
-    } finally {
-      setShareAccessBusy(false);
-    }
-  }
-  const [inTabPresent, setInTabPresent] = useState(false);
+   } finally {
+     setShareAccessBusy(false);
+   }
+ }
+ async function commitMoveToTeam(selection: TeamTreeSelection) {
+   setShareAccessBusy(true);
+   try {
+     await moveWorkspaceProject({
+       projectId,
+       visibility: 'team',
+       workspaceContext,
+       targetWorkspaceId: selection.workspaceId,
+       targetFolderId: selection.folderId,
+     });
+     setShareAccess('workspace');
+     notifyTeamProjectsChanged();
+     setShareGuideToast(t('fileViewer.workspaceShareSuccess'));
+   } catch (error) {
+     console.warn('[FileViewer] failed to move project to team space', error);
+     setShareGuideToast(t('fileViewer.workspaceShareFailed'));
+   } finally {
+     setShareAccessBusy(false);
+   }
+ }
+ const [inTabPresent, setInTabPresent] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const nextPreviewContentWidthCacheKey = `${previewContentWidthCacheBaseKey}:${reloadKey}`;
   // Set to true permanently once `source` has been populated for the first
@@ -18260,17 +18321,27 @@ async function openReviewListModal() {
         />,
         document.body,
       ) : null}
-      {workspaceActive && shareAccessConfirm ? (
-        <MoveToTeamConfirmDialog
-          action={shareAccessConfirm === 'workspace' ? 'to-team' : 'to-personal'}
-          onCancel={() => setShareAccessConfirm(null)}
-          onConfirm={() => {
-            const next = shareAccessConfirm;
-            setShareAccessConfirm(null);
-            if (next) void commitWorkspaceShareAccess(next);
-          }}
-        />
-      ) : null}
+     {workspaceActive && shareAccessConfirm ? (
+       shareAccessConfirm === 'workspace' ? (
+         <MoveToTeamTreeDialog
+           onConfirm={(selection) => {
+             setShareAccessConfirm(null);
+             void commitMoveToTeam(selection);
+           }}
+           onCancel={() => setShareAccessConfirm(null)}
+           busy={shareAccessBusy}
+         />
+       ) : (
+         <MoveToTeamConfirmDialog
+           action="to-personal"
+           onCancel={() => setShareAccessConfirm(null)}
+           onConfirm={() => {
+             setShareAccessConfirm(null);
+             void commitWorkspaceShareAccess('private');
+           }}
+         />
+       )
+     ) : null}
       {workspaceActive && versionRestoredToast && typeof document !== 'undefined' ? createPortal(
         <Toast
           key={versionRestoredToast.id}

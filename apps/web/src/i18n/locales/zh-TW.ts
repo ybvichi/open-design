@@ -1247,6 +1247,10 @@ export const zhTW: Dict = {
   "recentProjects.moveToPersonalDescPost": "。",
   "recentProjects.moveDontRemind": "不再提示",
   "recentProjects.confirmMoveToTeam": "確認轉入",
+
+  "recentProjects.moveToTeamTreeDesc": 'Select a team space or folder to move this project into.',
+  "recentProjects.treeNoFolders": 'No folders',
+  "recentProjects.treeNoTeams": 'No team spaces available',
   "recentProjects.confirmMoveToPersonal": "確認移出",
   "recentProjects.unshareInProgress": "移出中…",
   "recentProjects.moveOutOfTeam": "移出團隊空間",

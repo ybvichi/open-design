@@ -1630,8 +1630,11 @@ export interface Dict {
   'recentProjects.moveToPersonalDescStrong': string;
   'recentProjects.moveToPersonalDescPost': string;
   'recentProjects.moveDontRemind': string;
-  'recentProjects.confirmMoveToTeam': string;
-  'recentProjects.confirmMoveToPersonal': string;
+ 'recentProjects.confirmMoveToTeam': string;
+ 'recentProjects.moveToTeamTreeDesc': string;
+ 'recentProjects.treeNoFolders': string;
+ 'recentProjects.treeNoTeams': string;
+ 'recentProjects.confirmMoveToPersonal': string;
   'recentProjects.unshareInProgress': string;
   'recentProjects.moveOutOfTeam': string;
   'recentProjects.unshareFailed': string;

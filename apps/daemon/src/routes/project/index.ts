@@ -83,9 +83,10 @@ import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
 import {
-  ensureTeamProjectCommentConversations,
-  getFirstProjectConversation,
-  SYNC_KEEPS_UPDATED_AT,
+ ensureTeamProjectCommentConversations,
+ getFirstProjectConversation,
+ SYNC_KEEPS_UPDATED_AT,
+ setProjectFolder,
 } from '../../db.js';
 import {
   BUILT_IN_PROJECT_LOCATION_ID,
@@ -3231,10 +3232,30 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     if (targetVisibility === 'team') return summary.currentUserAccess.canMoveToTeam;
     return summary.currentUserAccess.canMoveToPersonal;
   }
-  async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
-    for (const projectId of projectIds) {
-      if (visibility === 'team') {
-        await collabSync.requestTeamShare(projectId, workspaceProjectPrincipal(ctx));
+ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team', targetWorkspaceId?: string | null) {
+   for (const projectId of projectIds) {
+     if (visibility === 'team') {
+        // When transferring to a different workspace, use the metadata-only
+        // transfer path if the collab runtime supports it. Falls back to
+        // a full publish inside the runtime when the adapter doesn't support
+        // transferToWorkspace.
+       if (targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId) {
+         if (!collabSync.requestTeamTransfer) {
+           throw new Error('cross-workspace transfer is not supported by the current resource transport');
+         }
+         const principal = { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId };
+         await collabSync.requestTeamTransfer(
+            projectId,
+            ctx.workspaceId,
+            targetWorkspaceId,
+            principal,
+          );
+          continue;
+        }
+       const principal = targetWorkspaceId
+         ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId }
+         : workspaceProjectPrincipal(ctx);
+       await collabSync.requestTeamShare(projectId, principal);
       } else {
         await collabSync.requestTeamUnshare(projectId, workspaceProjectPrincipal(ctx));
       }
@@ -3258,18 +3279,24 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     summary: any,
     ctx: WorkspaceProjectContext,
     visibility: 'personal' | 'team',
+    targetWorkspaceId?: string | null,
   ) {
-    return {
-      visibility,
-      createdByWorkspaceMemberId: ownerForTeamShare(summary, ctx, visibility),
-      updatedByWorkspaceMemberId: ctx.workspaceMemberId,
-      resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(id, workspaceProjectPrincipal(ctx)) : null,
-      cloudTombstonedAt: visibility === 'team' ? null : Date.now(),
-      syncState: visibility === 'team' ? 'pending_upload' : 'local_only',
-    };
+    const effectiveWorkspaceId = targetWorkspaceId || ctx.workspaceId;
+  const effectivePrincipal = targetWorkspaceId
+    ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId }
+    : workspaceProjectPrincipal(ctx);
+  return {
+    visibility,
+    workspaceId: effectiveWorkspaceId,
+    createdByWorkspaceMemberId: ownerForTeamShare(summary, ctx, visibility),
+    updatedByWorkspaceMemberId: ctx.workspaceMemberId,
+    resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(id, effectivePrincipal) : null,
+    cloudTombstonedAt: visibility === 'team' ? null : Date.now(),
+    syncState: visibility === 'team' ? 'pending_upload' : 'local_only',
+  };
   }
   function restoreWorkspaceProjectRow(row: any) {
-    updateWorkspaceProject(db, row.workspaceId, row.id, {
+    rebindWorkspaceProject(db, row.id, {
       visibility: row.workspaceVisibility,
       resourceState: row.resourceState,
       createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
@@ -3279,6 +3306,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       syncState: row.syncState ?? 'local_only',
       version: row.workspaceVersion ?? 1,
       updatedAt: row.workspaceUpdatedAt ?? Date.now(),
+      workspaceId: row.workspaceId,
     });
   }
 
@@ -3304,6 +3332,19 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!validVisibility(visibility)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'visibility must be personal or team');
       }
+     // Optional cross-workspace transfer: when targetWorkspaceId is present,
+     // the project moves to the target workspace's team space instead of
+     // the current workspace's. The caller must be a member of the target.
+     const targetWorkspaceId = typeof req.body?.targetWorkspaceId === 'string'
+       ? req.body.targetWorkspaceId.trim()
+       : null;
+     const effectiveWorkspaceId = targetWorkspaceId || ctx.workspaceId;
+     // Optional folder target within the (effective) team workspace. When
+     // present the project is assigned to this folder after the visibility
+     // move; null means the workspace root. Only meaningful for 'team'.
+     const targetFolderId = typeof req.body?.targetFolderId === 'string'
+       ? req.body.targetFolderId.trim() || null
+       : null;
       let project = getProject(db, req.params.projectId);
       if (!project && visibility === 'personal' && ctx.workspaceType === 'team') {
         const materialization = await materializeCatalogOnlyOwnerProject(
@@ -3358,24 +3399,41 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const row = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
       if (!row || !wp) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
       const summary = normalizeWorkspaceProjectRow(row, ctx);
-      if (!workspaceMoveAllowed(summary, visibility, ctx)) {
+      if (!workspaceMoveAllowed(summary, visibility, ctx) && !targetWorkspaceId) {
         return sendApiError(res, 403, 'PROJECT_DELETE_FORBIDDEN', 'project move forbidden');
       }
-      updateWorkspaceProject(db, ctx.workspaceId, project.id, workspaceProjectMovePatch(project.id, summary, ctx, visibility));
+      const movePatch = workspaceProjectMovePatch(project.id, summary, ctx, visibility, targetWorkspaceId);
+      if (targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId) {
+        // Cross-workspace transfer: the row exists in the source workspace,
+        // not the target. Use rebindWorkspaceProject (finds by projectId,
+        // can change workspace_id) instead of updateWorkspaceProject (which
+        // would be a no-op since the row doesn't exist in the target yet).
+        rebindWorkspaceProject(db, project.id, movePatch);
+      } else {
+        updateWorkspaceProject(db, effectiveWorkspaceId, project.id, movePatch);
+      }
       try {
-        await requestTeamVisibility([project.id], ctx, visibility);
+        await requestTeamVisibility([project.id], ctx, visibility, targetWorkspaceId);
       } catch (error) {
         restoreWorkspaceProjectRow(row);
         throw new TeamProjectSyncError(error);
       }
-      if (visibility === 'team') {
-        const ensureCommentAnchor = db.transaction(() => {
-          ensureTeamProjectCommentConversations(db, project.id);
-        });
-        ensureCommentAnchor();
-      }
-      const updatedRow = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
-      res.json({ project: normalizeWorkspaceProjectRow(updatedRow, ctx) });
+     if (visibility === 'team') {
+       const ensureCommentAnchor = db.transaction(() => {
+         ensureTeamProjectCommentConversations(db, project.id);
+       });
+       ensureCommentAnchor();
+     }
+     // Assign the project to the selected folder (or clear it for the
+     // workspace root) after the visibility move has committed. Only applies
+     // to team visibility; a personal move always returns to the root.
+     if (visibility === 'team' && targetFolderId !== undefined) {
+       setProjectFolder(db, effectiveWorkspaceId, project.id, targetFolderId);
+     } else if (visibility === 'personal') {
+       setProjectFolder(db, effectiveWorkspaceId, project.id, null);
+     }
+     const updatedRow = listWorkspaceProjects(db, effectiveWorkspaceId).find((item: any) => item.id === project.id);
+     res.json({ project: normalizeWorkspaceProjectRow(updatedRow, ctx) });
     } catch (err: any) {
       if (isTeamProjectOwnerConflictError(err)) {
         return sendApiError(res, 409, 'TEAM_PROJECT_OWNER_CONFLICT', String(err));

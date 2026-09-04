@@ -33,8 +33,22 @@ module.exports = app => {
   router.post('/hdw/webapi/v1/folder/project/add', controller.api.folder.addProject);
   router.post('/hdw/webapi/v1/folder/project/remove', controller.api.folder.removeProject);
   router.get('/hdw/webapi/v1/folder/project/list', controller.api.folder.listProjects);
-  router.post('/hdw/webapi/v1/folder/project/move', controller.api.folder.moveProject);
-  // // 用户登录
+ router.post('/hdw/webapi/v1/folder/project/move', controller.api.folder.moveProject);
+  // api:resource // ResourceHub — 内容寻址资源存储
+  router.put('/hdw/api/workspaces/:workspaceId/resources/:resourceId/versions', controller.api.resource.publish);
+  router.get('/hdw/api/workspaces/:workspaceId/resources/:resourceId/refs/:ref', controller.api.resource.head);
+  router.post('/hdw/api/workspaces/:workspaceId/resources/:resourceId/materialize', controller.api.resource.materialize);
+  router.del('/hdw/api/workspaces/:workspaceId/resources/:resourceId', controller.api.resource.remove);
+  // api:blob // Blob 上传下载
+  router.put('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.upload);
+  router.get('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.download);
+ // api:team_project // 团队项目目录
+ router.get('/hdw/api/workspaces/:workspaceId/team-projects', controller.api.teamProject.list);
+ router.get('/hdw/api/workspaces/:workspaceId/team-projects/:projectId', controller.api.teamProject.get);
+ router.put('/hdw/api/workspaces/:workspaceId/team-projects/:projectId', controller.api.teamProject.upsert);
+ router.del('/hdw/api/workspaces/:workspaceId/team-projects/:projectId', controller.api.teamProject.remove);
+ router.post('/hdw/api/workspaces/:workspaceId/team-projects/:projectId/transfer', controller.api.teamProject.transfer);
+ // // 用户登录
   // router.post('/webapi/login', controller.api.login.login);
   // // api:export // 导出数据接口
   // router.post('/webapi/v1/export/zip/:dataType', controller.api.export.zip);

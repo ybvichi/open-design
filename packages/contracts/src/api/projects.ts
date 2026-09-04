@@ -656,6 +656,13 @@ export interface WorkspaceProjectsResponse {
 
 export interface MoveWorkspaceProjectRequest {
   visibility: ProjectVisibility;
+  /**
+   * Target workspace for a cross-workspace transfer. When set, the project is
+   * moved to this workspace's team space instead of the current workspace's.
+   * Omitted/null means "transfer within the current workspace" (the original
+   * behavior), preserving backward compatibility.
+   */
+  targetWorkspaceId?: string | null;
 }
 
 export interface BatchDeleteWorkspaceProjectsRequest {
@@ -665,6 +672,7 @@ export interface BatchDeleteWorkspaceProjectsRequest {
 export interface BatchMoveWorkspaceProjectsRequest {
   projectIds: string[];
   visibility: ProjectVisibility;
+  targetWorkspaceId?: string | null;
 }
 
 export interface CreateProjectResponse extends ProjectResponse {

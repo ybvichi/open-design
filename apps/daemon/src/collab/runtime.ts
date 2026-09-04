@@ -27,6 +27,9 @@ import {
   createVelaCliResourceAdapter,
   shouldUseVelaCliResourceTransport,
 } from './vela-cli-resource-adapter.js';
+import { createHdwHttpResourceAdapter } from './hdw-http-resource-adapter.js';
+import { shouldUseHdwHttpResourceTransport } from './hdw-http-team-projects.js';
+import { createHdwCloudClientFromEnv } from '../integrations/hdw-cloud.js';
 import type { WorkspaceContextProvider } from './workspace-context.js';
 import { createWorkspaceContextProviderFromEnv } from './vela-workspace-context.js';
 
@@ -97,6 +100,18 @@ export interface CollabRuntime {
   ): Promise<{ version: number | null; versionId?: string }>;
   /** Move a project out of the team space. */
   requestTeamUnshare(projectId: string, principal?: ResourceHubPrincipal | null): Promise<void>;
+  /**
+   * Transfer a project from one workspace to another. When the adapter
+   * supports `transferToWorkspace`, this is a metadata-only operation on
+   * the resource hub (blobs never move). Falls back to a publish + unpublish
+   * cycle when the adapter doesn't support transfer.
+   */
+  requestTeamTransfer(
+    projectId: string,
+    sourceWorkspaceId: string,
+    targetWorkspaceId: string,
+    principal?: ResourceHubPrincipal | null,
+  ): Promise<{ version: number | null; versionId?: string }>;
   /** Restore a persisted team share into runtime bookkeeping without publishing. */
   rememberTeamShare(
     projectId: string,
@@ -184,6 +199,18 @@ function selectResourcePublishAdapter(
   describeProject: ((projectId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>) | undefined,
 ): ResourcePublishAdapter | null {
   if (!resolveProjectDir) return null;
+  if (shouldUseHdwHttpResourceTransport()) {
+    const hdwClient = createHdwCloudClientFromEnv();
+    if (hdwClient) {
+      return createHdwHttpResourceAdapter({
+        resolveProjectDir,
+        ...(resolvePullDir ? { resolvePullDir } : {}),
+        ...(describeProject ? { describeProject } : {}),
+        hasTeamIdentity: (principal) => principal != null,
+        client: hdwClient,
+      });
+    }
+  }
   if (shouldUseVelaCliResourceTransport()) {
     return createVelaCliResourceAdapter({
       resolveProjectDir,
@@ -859,6 +886,54 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       syncStates.set(projectId, 'local_only');
       sharePrincipals.delete(projectId);
     },
+   async requestTeamTransfer(projectId, sourceWorkspaceId, targetWorkspaceId, principal) {
+     // Resolve a concrete principal — the route always passes one, but
+     // guard the null path so the type contract holds.
+     const effectivePrincipal = principal ?? await getProjectPrincipal(projectId);
+     if (!effectivePrincipal) {
+       throw new Error('requestTeamTransfer requires a principal or an existing team share');
+     }
+     // If the adapter supports metadata-only transfer, use it.
+     if (baseAdapter.transferToWorkspace) {
+       try {
+         const result = await baseAdapter.transferToWorkspace({
+           projectId,
+           reason: 'transfer',
+           sourceWorkspaceId,
+           targetWorkspaceId,
+            principal: effectivePrincipal,
+         });
+         if (result) {
+           // Update runtime bookkeeping for the target workspace.
+            const targetPrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: targetWorkspaceId };
+           rememberTeamShare(projectId, targetPrincipal, 'synced');
+           published.set(scopedProjectKey(projectId, targetPrincipal), result.version);
+           // Clean up source workspace principal if it existed.
+           const sourceKey = scopedProjectKey(projectId, {
+             ...targetPrincipal,
+             teamId: sourceWorkspaceId,
+           });
+           published.delete(sourceKey);
+           syncStates.delete(sourceKey);
+           sharePrincipals.get(projectId)?.delete(sourceWorkspaceId);
+           return {
+             version: result.version,
+             ...(result.versionId ? { versionId: result.versionId } : {}),
+           };
+         }
+       } catch (error) {
+         // Fall through to publish + unpublish fallback.
+          options.onError?.({ projectId, error, principal: effectivePrincipal });
+       }
+     }
+     // Fallback: unpublish from source, then publish to target.
+      const sourcePrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: sourceWorkspaceId };
+      await baseAdapter.unpublish?.({ projectId, principal: sourcePrincipal });
+      await options.teamProjectCatalog?.remove?.(projectId, sourcePrincipal);
+      const targetPrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: targetWorkspaceId };
+     rememberTeamShare(projectId, targetPrincipal, 'pending_upload');
+     return publishNow(projectId, 'transfer', targetPrincipal);
+   },
     projectOwnerMemberId: (projectId, principal) => {
       if (principal) return scopedOwners.get(scopedProjectKey(projectId, principal)) ?? null;
       return owners.get(projectId) ?? null;

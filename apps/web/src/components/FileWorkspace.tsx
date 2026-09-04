@@ -118,6 +118,7 @@ import {
 import { useProjectCollabContext } from '../collab/collab-context';
 import { createTerminal, killTerminal, listPlugins, moveWorkspaceProject } from '../state/projects';
 import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
+import { MoveToTeamTreeDialog, type TeamTreeSelection } from './MoveToTeamTreeDialog';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import {
   DesignBrowserPanel,
@@ -3834,20 +3835,26 @@ export function FileWorkspace({
   };
   // A read-only viewer gets no launcher edit actions (new file, import, etc.).
   const launcherActions = viewerOnly ? [] : buildLauncherActions(launcherContext);
-  // Crossing the team-space boundary routes through the shared 转入/移出
-  // 团队空间 confirmation (same dialog + 不再提示 skip key as the project
-  // grid) instead of silently moving the project.
-  function setProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
-    setProjectShareAccessMenuOpen(false);
-    if (nextAccess === projectShareAccess || projectShareBusy || viewerOnly) return;
-    if (moveConfirmSkipped()) {
-      void commitProjectWorkspaceShareAccess(nextAccess);
-      return;
-    }
-    setProjectShareConfirm(nextAccess);
-  }
+ // Crossing the team-space boundary routes through the shared 转入/移出
+ // 团队空间 confirmation (same dialog + 不再提示 skip key as the project
+ // grid) instead of silently moving the project.
+ function setProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+   setProjectShareAccessMenuOpen(false);
+   if (nextAccess === projectShareAccess || projectShareBusy || viewerOnly) return;
+   // "to-team" always opens the tree selector so the user can pick the
+   // destination team/folder; "to-personal" keeps the confirmation dialog.
+   if (nextAccess === 'workspace') {
+     setProjectShareConfirm('workspace');
+     return;
+   }
+   if (moveConfirmSkipped()) {
+     void commitProjectWorkspaceShareAccess(nextAccess);
+     return;
+   }
+   setProjectShareConfirm(nextAccess);
+ }
 
-  async function commitProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
+ async function commitProjectWorkspaceShareAccess(nextAccess: 'private' | 'workspace') {
     if (projectShareBusy) return;
     setProjectShareBusy(true);
     try {
@@ -3874,12 +3881,40 @@ export function FileWorkspace({
             : t('fileViewer.workspaceUnshareFailed'),
         tone: 'error',
       });
-    } finally {
-      setProjectShareBusy(false);
-    }
-  }
+   } finally {
+     setProjectShareBusy(false);
+   }
+ }
 
-  return (
+ async function commitMoveToTeam(selection: TeamTreeSelection) {
+   if (projectShareBusy) return;
+   setProjectShareBusy(true);
+   try {
+     await moveWorkspaceProject({
+       projectId,
+       visibility: 'team',
+       workspaceContext,
+       targetWorkspaceId: selection.workspaceId,
+       targetFolderId: selection.folderId,
+     });
+     setProjectShareAccess('workspace');
+     notifyTeamProjectsChanged();
+     setLauncherToast({
+       message: t('fileViewer.workspaceShareSuccess'),
+       tone: 'success',
+     });
+   } catch (error) {
+     console.warn('[FileWorkspace] failed to move project to team space', error);
+     setLauncherToast({
+       message: t('fileViewer.workspaceShareFailed'),
+       tone: 'error',
+     });
+   } finally {
+     setProjectShareBusy(false);
+   }
+ }
+
+ return (
     <div
       className={[
         'workspace',
@@ -3888,17 +3923,27 @@ export function FileWorkspace({
       ].filter(Boolean).join(' ')}
       data-testid="file-workspace"
     >
-      {projectShareConfirm ? (
+    {projectShareConfirm ? (
+      projectShareConfirm === 'workspace' ? (
+        <MoveToTeamTreeDialog
+          onConfirm={(selection) => {
+            setProjectShareConfirm(null);
+            void commitMoveToTeam(selection);
+          }}
+          onCancel={() => setProjectShareConfirm(null)}
+          busy={projectShareBusy}
+        />
+      ) : (
         <MoveToTeamConfirmDialog
-          action={projectShareConfirm === 'workspace' ? 'to-team' : 'to-personal'}
+          action="to-personal"
           onCancel={() => setProjectShareConfirm(null)}
           onConfirm={() => {
-            const next = projectShareConfirm;
             setProjectShareConfirm(null);
-            if (next) void commitProjectWorkspaceShareAccess(next);
+            void commitProjectWorkspaceShareAccess('private');
           }}
         />
-      ) : null}
+      )
+    ) : null}
       <SketchEnginePrewarm />
       <div className="ws-tabs-shell">
         {onFocusModeChange && focusMode ? (

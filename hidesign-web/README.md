@@ -1,4 +1,4 @@
-# ai-builder-web2
+# hidesign-web
 
 
 
@@ -13,7 +13,7 @@ see [egg docs][egg] for more detail.
 ```bash
 $ npm i
 $ npm run dev
-$ open http://localhost:7001/
+$ open http://localhost:7002/
 ```
 
 ### Deploy

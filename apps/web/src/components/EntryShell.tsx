@@ -2017,12 +2017,12 @@ export function EntryShell({
            {view === 'workspace-settings' ? (
              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
            ) : null}
-          {view === 'team-space' ? (
-            <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} />
-          ) : null}
-          {view === 'team-folder' ? (
-            <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} />
-          ) : null}
+         {view === 'team-space' ? (
+           <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+        ) : null}
+         {view === 'team-folder' ? (
+            <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+         ) : null}
          {view === 'personal-all' ? (
            <PersonalAllView
              designSystems={designSystems}

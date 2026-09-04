@@ -1033,6 +1033,12 @@ import {
   createVelaCliTeamProjectCatalogClientFromEnv,
   createVelaCliTeamProjectCatalogFromEnv,
 } from './collab/vela-cli-team-projects.js';
+import {
+  createHdwHttpTeamProjectCatalogClientFromEnv,
+  createHdwHttpTeamProjectCatalogFromEnv,
+  shouldUseHdwHttpTeamProjectCatalog,
+} from './collab/hdw-http-team-projects.js';
+import { createHdwCloudClientFromEnv } from './integrations/hdw-cloud.js';
 import { createTeamProjectsChangeEmitter } from './collab/team-projects-change-emitter.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import {
@@ -3673,6 +3679,16 @@ export async function startServer({
   const velaCliTeamProjectCatalog = createVelaCliTeamProjectCatalogFromEnv();
   const velaCliWorkspaceTeamProjectCatalog =
     createVelaCliTeamProjectCatalogClientFromEnv();
+  // hdw HTTP transport: when OD_RESOURCE_TRANSPORT=hdw-http (or
+  // OD_TEAM_PROJECTS_TRANSPORT=hdw-http), use the hdw REST API for both the
+  // team project catalog and the resource publish/pull adapter.
+  const hdwCloudClient = createHdwCloudClientFromEnv(process.env);
+  const hdwTeamProjectCatalog = hdwCloudClient
+    ? createHdwHttpTeamProjectCatalogFromEnv(hdwCloudClient)
+    : null;
+  const hdwWorkspaceTeamProjectCatalog = hdwCloudClient
+    ? createHdwHttpTeamProjectCatalogClientFromEnv(hdwCloudClient)
+    : null;
   // Generic stale-while-revalidate cache (with an `invalidate()` escape hatch)
   // — see collab/swr-cache.ts.
   // Cache the workspace-scoped team catalog behind /api/workspaces/:id/projects
@@ -3680,11 +3696,12 @@ export async function startServer({
   // the verified request principal in both its key and its upstream call, so
   // navigation stays instant without letting an active-workspace switch retarget
   // an in-flight read.
-  const workspaceTeamProjectCatalog = velaCliWorkspaceTeamProjectCatalog
-    ? createScopedVelaTeamProjectCatalogClientCache(
-        velaCliWorkspaceTeamProjectCatalog,
-      )
-    : velaCliWorkspaceTeamProjectCatalog;
+  const activeTeamProjectCatalogClient = hdwWorkspaceTeamProjectCatalog ?? velaCliWorkspaceTeamProjectCatalog;
+  const workspaceTeamProjectCatalog = activeTeamProjectCatalogClient
+    ? (shouldUseHdwHttpTeamProjectCatalog() && hdwWorkspaceTeamProjectCatalog
+      ? hdwWorkspaceTeamProjectCatalog
+      : createScopedVelaTeamProjectCatalogClientCache(activeTeamProjectCatalogClient))
+    : null;
   // Preserve the legacy observation API for compatibility tests and dev
   // tooling. Production data-plane routes never read current/lastKnown; they
   // verify the exact Workspace/member carried by each request.
@@ -3895,7 +3912,9 @@ export async function startServer({
     },
     resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
     describeProject: describeCollabProject,
-    ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
+    ...((hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)
+      ? { teamProjectCatalog: (hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)! }
+      : {}),
     onPublished: ({ projectId, principal }) => {
       persistWorkspaceProjectSyncState(projectId, principal?.teamId, 'synced');
     },
@@ -4024,7 +4043,9 @@ export async function startServer({
   // later project-sharing routes. A missing row is authoritative unshare;
   // transport failure throws so the durable outbox keeps the delivery pending.
   const teamProjectsLister = createTeamProjectsLister({
-    ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
+    ...((hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)
+      ? { teamProjectCatalog: (hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)! }
+      : {}),
   });
 
   // Collab cloud (C-lane §D2.5/§D4): cross-daemon comment sync + member
@@ -4500,7 +4521,7 @@ export async function startServer({
     // substitute the daemon's mutable active Workspace.
     if (!scope?.workspaceId || !scope.viewerMemberId) return null;
     const project = velaCliTeamProjectCatalog
-      ? await velaCliTeamProjectCatalog.get(projectId, scope.workspaceId)
+      ? await (hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)!.get(projectId, scope.workspaceId)
       : (await teamProjectsLister(scope.workspaceId))
           .find((entry) => entry.projectId === projectId) ?? null;
     if (!project) return null;
@@ -8199,12 +8220,22 @@ export async function startServer({
         invalidatePresenceReadCache(projectId);
         return result;
       },
-      requestTeamUnshare: async (projectId, ownerMemberId) => {
-        const result = await collab.requestTeamUnshare(projectId, ownerMemberId);
-        invalidatePresenceReadCache(projectId);
-        return result;
-      },
-      materializeTeamProject: async (projectId, principal) => {
+     requestTeamUnshare: async (projectId, ownerMemberId) => {
+       const result = await collab.requestTeamUnshare(projectId, ownerMemberId);
+       invalidatePresenceReadCache(projectId);
+       return result;
+     },
+     requestTeamTransfer: async (projectId, sourceWorkspaceId, targetWorkspaceId, principal) => {
+       const result = await collab.requestTeamTransfer(
+         projectId,
+         sourceWorkspaceId,
+         targetWorkspaceId,
+         principal ?? undefined,
+       );
+       invalidatePresenceReadCache(projectId);
+       return result;
+     },
+     materializeTeamProject: async (projectId, principal) => {
         const outcome = await collabSyncRoutes.pullSharedProject(projectId, {
           workspaceId: principal.teamId,
           resourceTeamId: principal.teamId,

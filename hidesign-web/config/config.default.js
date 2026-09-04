@@ -32,12 +32,12 @@ module.exports = appInfo => {
 
   config.multipart = {
     // 只允许上传的图片格式
-        whitelist:['.png','.jpg','.jpeg'],
-        // 文件允许大小
-        fileSize: '50mb'
+    whitelist: ['.png', '.jpg', '.jpeg'],
+    // 文件允许大小
+    fileSize: '50mb'
   }
 
-  config.bodyParser={
+  config.bodyParser = {
     jsonLimit: '50mb',
     formLimit: '50mb'
   }
@@ -54,8 +54,8 @@ module.exports = appInfo => {
     maxAge: 0,
   };
 
- // use for cookie sign key, should change to your own and keep security
- config.keys = appInfo.name + '_1755242675950_7921';
+  // use for cookie sign key, should change to your own and keep security
+  config.keys = appInfo.name + '_1755242675950_7921';
 
   // 服务监听端口
   config.cluster = {
@@ -64,18 +64,17 @@ module.exports = appInfo => {
     },
   };
 
- // add your middleware config here
- config.middleware = [];
+  // add your middleware config here
+  config.middleware = [];
 
   // jwt 配置
   config.jwt = {
     secret: 'ybvichi', // 自定义加密字符串，secret 是在服务端的，不要泄露
     enable: true, // 默认是关闭的，如果开启，这会对所有请求进行自动校验
     //match: /^\/webapi\/v1\//, // 需要进行 JWT 校验的请求路径
-   ignore:[
+   ignore: [
      /^\/hdw\//,
-      /^\/$/,
-     
+     /^\/$/,
    ],
     sign: {
       expiresIn: '24h', // 令牌过期时间
@@ -93,12 +92,12 @@ module.exports = appInfo => {
     //   '713C9C311144AF22E6236205F7C451A9', 
     //   '7BB7DAF93274E5A742F3B071794316CF'
     // ], // 从 token 中提取用户身份标识字段，默认从 payload 中提取
-   // managerKeys: [
-   //   '0FA6C5F960CB1CA093590CEAC1347430',
-   //   '3EC38E560C684E6EEC4CBCF4EB819E6B',
-   //   'E3B7692B2421198A801ECA73837810F4'
-   // ]
- };
+    // managerKeys: [
+    //   '0FA6C5F960CB1CA093590CEAC1347430',
+    //   '3EC38E560C684E6EEC4CBCF4EB819E6B',
+    //   'E3B7692B2421198A801ECA73837810F4'
+    // ]
+  };
 
   // 数据库配置
   config.db = {
@@ -109,14 +108,17 @@ module.exports = appInfo => {
     database: 'hidesign',
   };
 
-// add your user config here
- const userConfig = {
-   // myAppName: 'egg',
- };
+  // ResourceHub blob 存储目录
+  config.blobDir = path.join(appInfo.baseDir, 'data', 'blobs');
+
+  // add your user config here
+  const userConfig = {
+    // myAppName: 'egg',
+  };
 
 
- return {
-   ...config,
-   ...userConfig,
- };
+  return {
+    ...config,
+    ...userConfig,
+  };
 };

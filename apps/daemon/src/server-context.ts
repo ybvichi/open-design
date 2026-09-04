@@ -214,10 +214,21 @@ export interface ServerContext {
    * used by the demo surface.
    */
   collabSync: {
-    requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): Promise<{ version: number | null }>;
-    requestTeamUnshare(projectId: string, share?: string | ResourceHubPrincipal): Promise<void>;
-    /**
-     * Pull and atomically register a catalog-only Team project before an
+   requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): Promise<{ version: number | null }>;
+   requestTeamUnshare(projectId: string, share?: string | ResourceHubPrincipal): Promise<void>;
+   /**
+    * Transfer a project from one workspace to another. When the adapter
+    * supports `transferToWorkspace`, this is a metadata-only operation on
+    * the resource hub (blobs never move). Falls back to publish + unpublish.
+    */
+   requestTeamTransfer?(
+     projectId: string,
+     sourceWorkspaceId: string,
+     targetWorkspaceId: string,
+     principal?: ResourceHubPrincipal | null,
+   ): Promise<{ version: number | null }>;
+   /**
+    * Pull and atomically register a catalog-only Team project before an
      * exact-owner mutation needs local state. This preserves a Personal copy
      * before unshare and gives a second-device rename a real row to update.
      */
