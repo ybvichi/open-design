@@ -29,6 +29,17 @@ class RuleOwnershipTest(unittest.TestCase):
     def test_current_rule_ownership_passes(self) -> None:
         self.assertEqual(validate_rule_ownership(ROOT), [])
 
+    def test_skill_keeps_generated_output_in_client_project_root(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        generation_contract = (
+            ROOT / "references" / "generation-contract.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('python3 "<skill-root>/scripts/compile_page.py"', skill)
+        self.assertIn("--out ./output/<page>.html", skill)
+        self.assertIn("不得`cd`到`<skill-root>`", skill)
+        self.assertIn("不得写入`.od-skills/`", generation_contract)
+
     def test_duplicate_exclusive_rule_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             copied = self.copy_skill(Path(directory))
@@ -169,10 +180,14 @@ class RuleOwnershipTest(unittest.TestCase):
             copied = self.copy_skill(Path(directory))
             composition_path = copied / (
                 "design-systems/industry-products/general/products/isc/"
-                "pages/event-search/composition.json"
+                "pages/selection-width-regression/composition.json"
             )
-            document = load_json(composition_path)
-            document["table_columns"]["selection"]["width"] = "48"
+            composition_path.parent.mkdir(parents=True)
+            document = {
+                "table_columns": {
+                    "selection": {"kind": "selection", "width": "48"}
+                }
+            }
             composition_path.write_text(
                 json.dumps(document, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",

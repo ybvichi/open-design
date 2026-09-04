@@ -263,7 +263,7 @@ test('spawnEnvForAgent applies system proxy env to all agent runtimes before bas
   assert.equal(env.HTTP_PROXY, 'http://system-http:7890');
   assert.equal(env.HTTPS_PROXY, 'http://user-env:9000');
   assert.equal(env.ALL_PROXY, 'socks5://system-socks:1080');
-  assert.equal(env.NO_PROXY, '.local,localhost');
+  assert.equal(env.NO_PROXY, '.local,localhost,127.0.0.1,[::1]');
   assert.equal(env.NODE_USE_ENV_PROXY, '1');
   assert.equal(env.PATH, '/usr/bin');
 });
@@ -320,6 +320,25 @@ test('spawnEnvForAgent enables Node env proxy support for inherited lowercase pr
   assert.equal(env.NODE_USE_ENV_PROXY, '1');
   if (process.platform !== 'win32') {
     assert.equal(env.http_proxy, 'http://user-lowercase:9000');
+  }
+});
+
+test('spawnEnvForAgent keeps Codex on the proxy while bypassing local Hi Design services', () => {
+  const env = spawnEnvForAgent(
+    'codex',
+    {
+      HTTPS_PROXY: 'http://company-proxy:8080',
+      NO_PROXY: '.corp.example',
+      PATH: '/usr/bin',
+    },
+    {},
+    {},
+  );
+
+  assert.equal(env.HTTPS_PROXY, 'http://company-proxy:8080');
+  assert.equal(env.NO_PROXY, '.corp.example,localhost,127.0.0.1,[::1]');
+  if (process.platform !== 'win32') {
+    assert.equal(env.no_proxy, '.corp.example,localhost,127.0.0.1,[::1]');
   }
 });
 

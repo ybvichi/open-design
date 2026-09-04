@@ -21,7 +21,9 @@
   "filters": [
     {"key": "deviceName", "label": "设备名称", "kind": "input", "placeholder": "请输入设备名称或编号", "default": ""},
     {"key": "deviceType", "label": "设备类型", "kind": "select", "options": ["全部", "网络摄像机", "NVR", "门禁控制器", "报警主机"], "default": "全部"},
-    {"key": "status", "label": "在线状态", "kind": "select", "options": ["全部", "在线", "离线"], "default": "全部"}
+    {"key": "status", "label": "在线状态", "kind": "select", "options": ["全部", "在线", "离线"], "default": "全部"},
+    {"key": "area", "label": "所属区域", "kind": "input", "placeholder": "请输入所属区域", "default": ""},
+    {"key": "ip", "label": "IP地址", "kind": "input", "placeholder": "请输入IP地址", "default": ""}
   ],
   "toolbar_actions": [
     {"label": "添加", "icon": "h-icon-add"},

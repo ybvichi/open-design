@@ -18,11 +18,16 @@
 export type { CommandInvocation, CommandInvocationRequest } from "./command.js";
 export { createCommandInvocation, createPackageManagerInvocation } from "./command.js";
 
-export type { ResolveSystemProxyEnvOptions, SystemProxyCommandRunner } from "./proxy-env.js";
+export type {
+  ResolveLoginShellProxyEnvOptions,
+  ResolveSystemProxyEnvOptions,
+  SystemProxyCommandRunner,
+} from "./proxy-env.js";
 export {
   mergeProxyAwareEnv,
   parseMacosScutilProxyOutput,
   parseWindowsInternetSettingsProxyOutput,
+  resolveLoginShellProxyEnv,
   resolveSystemProxyEnv,
 } from "./proxy-env.js";
 

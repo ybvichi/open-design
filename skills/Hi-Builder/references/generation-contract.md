@@ -6,6 +6,8 @@
 
 编译器输入必须通过相应Schema和Capability约束，输出为可直接CDN预览的HTML。输入合同的选择读取`references/knowledge-resolution.md`，交付范围读取`references/architecture.md`。
 
+客户端提供的当前工作目录是本次项目根目录，也是所有生成成果物的唯一写入根。Skill root只提供只读契约、知识和脚本：调用Compiler或Validator时必须保持当前目录不变，通过Skill root路径定位脚本，并将PageSpec、HTML及随HTML交付的资源写入项目相对路径。不得写入`.od-skills/`、Skill root或仓库内的Skill源目录。
+
 用户明确要求连同本地图片交付时，可创建同目录资源文件夹并使用相对路径；图片只属于本次HTML交付，不进入设计知识库。
 
 产品回归验收是测试构建，不是每次页面生成的附加产物。验收套件输出到`output/product-tests/<product>/`并复制HTML实际引用的产品静态资源；`output/generation-tests/`只保存TPP页面族生成测试，不能登记成产品业务页面结果。

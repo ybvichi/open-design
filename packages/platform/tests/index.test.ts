@@ -16,6 +16,7 @@ import {
   pathContains,
   readProcessStampFromCommand,
   removePathBestEffort,
+  resolveLoginShellProxyEnv,
   resolveSystemProxyEnv,
   wellKnownUserToolchainBins,
   type ProcessStampContract,
@@ -154,6 +155,78 @@ describe("generic filesystem primitives", () => {
 });
 
 describe("system proxy env resolution", () => {
+  it("adds loopback bypasses when inherited proxy env omits NO_PROXY", () => {
+    const env = mergeProxyAwareEnv("darwin", {
+      HTTP_PROXY: "http://company-proxy:8080",
+      HTTPS_PROXY: "http://company-proxy:8080",
+    });
+
+    expect(env.NO_PROXY).toBe("localhost,127.0.0.1,[::1]");
+    expect(env.no_proxy).toBe("localhost,127.0.0.1,[::1]");
+  });
+
+  it("keeps explicit NO_PROXY entries while adding loopback bypasses", () => {
+    const env = mergeProxyAwareEnv("linux", {
+      HTTP_PROXY: "http://company-proxy:8080",
+      NO_PROXY: ".corp.example,::1",
+    });
+
+    expect(env.NO_PROXY).toBe(".corp.example,[::1],localhost,127.0.0.1");
+    expect(env.no_proxy).toBe(".corp.example,[::1],localhost,127.0.0.1");
+  });
+
+  it("preserves an explicit wildcard NO_PROXY while proxying is enabled", () => {
+    const env = mergeProxyAwareEnv("darwin", {
+      HTTP_PROXY: "http://company-proxy:8080",
+      NO_PROXY: "*,.corp.example",
+    });
+
+    expect(env.NO_PROXY).toBe("*");
+    expect(env.no_proxy).toBe("*");
+  });
+
+  it("reads proxy variables from a POSIX login shell for GUI launches", () => {
+    const env = resolveLoginShellProxyEnv({
+      platform: "darwin",
+      shell: "/bin/zsh",
+      runCommand(command, args) {
+        expect(command).toBe("/bin/zsh");
+        expect(args).toEqual(["-ilc", "command env"]);
+        return [
+          "unrelated shell startup output",
+          "http_proxy=http://company-proxy:8080",
+          "HTTPS_PROXY=http://company-proxy:8443",
+          "NO_PROXY=.corp.example",
+        ].join("\n");
+      },
+    });
+
+    expect(env).toMatchObject({
+      HTTP_PROXY: "http://company-proxy:8080",
+      HTTPS_PROXY: "http://company-proxy:8443",
+      NO_PROXY: ".corp.example,localhost,127.0.0.1,[::1]",
+      NODE_USE_ENV_PROXY: "1",
+      http_proxy: "http://company-proxy:8080",
+      https_proxy: "http://company-proxy:8443",
+      no_proxy: ".corp.example,localhost,127.0.0.1,[::1]",
+    });
+  });
+
+  it("skips login-shell proxy discovery on Windows", () => {
+    let called = false;
+    const env = resolveLoginShellProxyEnv({
+      platform: "win32",
+      shell: "C:\\Windows\\System32\\cmd.exe",
+      runCommand() {
+        called = true;
+        return "HTTP_PROXY=http://unexpected:8080";
+      },
+    });
+
+    expect(env).toEqual({});
+    expect(called).toBe(false);
+  });
+
   it("enables Node env proxy support when merging user proxy variables", () => {
     const env = mergeProxyAwareEnv("darwin", {
       http_proxy: "http://user-proxy:7890",

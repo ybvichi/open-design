@@ -364,7 +364,7 @@ def validate_pattern_html(
             errors.append("常驻表单锚点必须使用HAnchor并绑定表单滚动容器")
     if pattern.get("family") == "hui.tpp.family.table-details-pane":
         for marker in (
-            'class="collection-main"', 'class="table-detail-pane"',
+            'class="collection-main h-layout"', 'class="table-detail-pane"',
             'data-zone="detail.content"',
             'data-component="detail.details-pane"',
             "@row-click=\"selectDetailRow\"",

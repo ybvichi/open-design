@@ -28,7 +28,6 @@ from core import (
     ContractError,
     load_context,
     load_json,
-    resolve_spec,
     resolve_design_system,
     SPEC_RESOLVERS,
     validate_product_tokens,
@@ -43,7 +42,7 @@ from semantic_registry import (
     load_zone_registry,
     validate_semantic_html,
 )
-from validate_page import validate_html, VALIDATORS
+from validate_page import VALIDATORS
 from validate_pattern_page import extract_frozen_json, validate_pattern_html
 from renderer_registry import (
     PAGE_RENDERER_IDS,
@@ -60,15 +59,20 @@ from validate_skill import (
 
 class PipelineTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.spec_path = ROOT / "tests" / "fixtures" / "event-search.default.json"
+        self.spec_path = ROOT / "tests" / "generation" / "device-list-table.json"
         self.spec = load_json(self.spec_path)
-        self.html = compile_page(self.spec)
+        self.spec["row_actions"] = [
+            {"id": "detail", "label": "详情", "icon": "h-icon-details"}
+        ]
+        self.output_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.output_dir.cleanup)
+        self.html_path = Path(self.output_dir.name) / "page.html"
+        self.html = compile_pattern_page(self.spec, self.html_path)
+        self.html_path.write_text(self.html, encoding="utf-8")
 
     def validate_source(self, source: str) -> list[str]:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "page.html"
-            path.write_text(source, encoding="utf-8")
-            return validate_html(self.spec, path)
+        self.html_path.write_text(source, encoding="utf-8")
+        return validate_pattern_html(self.spec, self.html_path)
 
     def test_default_page_passes(self) -> None:
         self.assertEqual(self.validate_source(self.html), [])
@@ -77,9 +81,9 @@ class PipelineTest(unittest.TestCase):
 
     def test_portal_search_binding_is_declared_in_vue_data(self) -> None:
         self.assertIn('v-model="portalKeyword"', self.html)
-        self.assertIn('"portalKeyword": ""', self.html)
+        self.assertIn("portalKeyword: ''", self.html)
 
-    def test_event_search_uses_current_isc_product_shell(self) -> None:
+    def test_hui_pattern_uses_current_isc_product_shell(self) -> None:
         self.assertIn('"product_shell_source": "product:isc"', self.html)
         self.assertIn("问题反馈", self.html)
         self.assertIn("演示指南", self.html)
@@ -95,61 +99,33 @@ class PipelineTest(unittest.TestCase):
         for event_specific in ("filter", "toolbar", "table", "sidebar", "data"):
             self.assertNotIn(event_specific, schema["properties"])
 
-    def test_page_payload_schema_is_resolved_from_capability(self) -> None:
-        context = load_context(self.spec)
-        self.assertEqual(
-            context["payload_schema"]["$id"],
-            "general.isc.event-search.payload.v1",
+    def test_removed_event_search_payload_schema_is_not_resolved(self) -> None:
+        removed = load_json(
+            ROOT / "tests" / "fixtures" / "event-search.default.json"
         )
-        invalid = json.loads(json.dumps(self.spec))
-        invalid["payload"]["options"]["invented"] = {}
         with self.assertRaises(ContractError):
-            compile_page(invalid)
+            load_context(removed)
 
     def test_legacy_page_spec_shape_is_rejected(self) -> None:
         invalid = json.loads(json.dumps(self.spec))
         invalid["schema_version"] = "page-spec.v1"
-        with self.assertRaises(ContractError):
-            compile_page(invalid)
+        with self.assertRaises(PatternPageError):
+            compile_pattern_page(invalid)
 
     def test_renderer_registries_are_aligned_and_page_independent(self) -> None:
         self.assertEqual(set(RENDERERS), set(VALIDATORS))
         self.assertEqual(set(RENDERERS), set(SPEC_RESOLVERS))
-        for page_type in ("event-search", "device-detail"):
-            page_root = (
-                ROOT
-                / "design-systems"
-                / "industry-products"
-                / "general"
-                / "products"
-                / "isc"
-                / "pages"
-                / page_type
-            )
-            page_manifest = load_json(page_root / "page.json")
-            composition = load_json(page_root / page_manifest["composition"])
-            self.assertIn(composition["renderer"], RENDERERS)
-            self.assertNotIn("compiler", composition)
-            self.assertNotIn("defaults", composition)
-            self.assertNotIn("template", composition)
-            template = ROOT / template_for_renderer(composition["renderer"])
-            self.assertTrue(template.is_file())
+        self.assertEqual(RENDERERS, {})
 
-    def test_page_composition_cannot_override_renderer_template(self) -> None:
-        context = load_context(self.spec)
-        composition = dict(
-            context["composition"], template="assets/templates/other.html"
-        )
-        errors = validate_semantic_html(self.html, composition)
-        self.assertTrue(any("不得声明template" in error for error in errors), errors)
-
-    def test_unknown_renderer_is_rejected_before_html_generation(self) -> None:
-        context = load_context(self.spec)
-        context["composition"] = dict(
-            context["composition"], renderer="unknown.renderer"
-        )
+    def test_removed_event_search_composition_is_not_loadable(self) -> None:
+        removed = load_json(ROOT / "tests" / "fixtures" / "event-search.default.json")
         with self.assertRaises(ContractError):
-            resolve_spec(self.spec, context)
+            compile_page(removed)
+
+    def test_removed_device_detail_composition_is_not_loadable(self) -> None:
+        removed = load_json(ROOT / "tests" / "fixtures" / "device-detail.default.json")
+        with self.assertRaises(ContractError):
+            compile_page(removed)
 
     def test_device_detail_content_is_not_smuggled_through_rows(self) -> None:
         spec = load_json(ROOT / "tests" / "fixtures" / "device-detail.default.json")
@@ -186,37 +162,14 @@ class PipelineTest(unittest.TestCase):
             {case["page_type"] for case in suite["cases"]},
             set(product["pages"]),
         )
-        self.assertEqual(
-            {case["id"] for case in suite["cases"]},
-            {
-                "event-search.default",
-                "event-search.extended",
-                "device-detail.default",
-            },
-        )
+        self.assertEqual(suite["cases"], [])
 
     def test_isc_product_acceptance_suite_builds_previewable_outputs(self) -> None:
         suite = load_json(ROOT / "tests" / "product-pages" / "isc" / "cases.json")
         with tempfile.TemporaryDirectory() as directory:
             output_root = Path(directory) / "isc"
             outputs = build_product_acceptance(suite, output_root)
-            self.assertEqual(len(outputs), 3)
-            self.assertTrue(all(path.is_file() for path in outputs))
-            self.assertTrue(
-                (
-                    output_root
-                    / ".."
-                    / "assets"
-                    / "imgs"
-                    / "device-detail-main.png"
-                ).resolve().is_file()
-            )
-            for path in outputs:
-                html = path.read_text(encoding="utf-8")
-                self.assertIn('data-product-tokens="general/isc"', html)
-                self.assertIn('name="d2c-spec-sha256"', html)
-                self.assertIn('<link rel="icon" href="data:,">', html)
-                self.assertNotIn("pattern-page-spec.v2", html)
+            self.assertEqual(outputs, [])
 
     def test_composition_and_fixture_have_single_responsibilities(self) -> None:
         product_root = (
@@ -234,13 +187,10 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(fixture["page_type"], page_type)
             self.assertIsInstance(fixture["values"], dict)
 
-    def test_context_loads_composition_and_fixture_from_manifest(self) -> None:
-        context = load_context(self.spec)
-        self.assertEqual(
-            context["composition"]["id"], "general.isc.page.event-search"
-        )
-        self.assertIn("rows", context["fixture"])
-        self.assertNotIn("recipe", context)
+    def test_context_does_not_load_unregistered_page_files(self) -> None:
+        removed = load_json(ROOT / "tests" / "fixtures" / "event-search.default.json")
+        with self.assertRaises(ContractError):
+            load_context(removed)
 
     def test_runtime_profile_is_exact_and_full_import(self) -> None:
         manifest = load_json(
@@ -329,18 +279,18 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(industry["extends"], common["id"])
         self.assertFalse(set(common["fields"]) & set(industry["fields"]))
 
-    def test_capability_bundle_separates_fields_and_implementation(self) -> None:
+    def test_removed_event_search_capability_is_non_compilable(self) -> None:
         bundle = build_capability_bundle("general", "isc", "event-search")
-        self.assertTrue(bundle["can_compile"])
         self.assertEqual(bundle["schema_version"], "capability-bundle.v1")
-        self.assertIn("event.filter", bundle["allowed_zone_ids"])
-        self.assertIn(
-            "filter.search-form", bundle["allowed_component_pattern_ids"]
+        self.assertFalse(bundle["matched"])
+        self.assertFalse(bundle["can_compile"])
+        self.assertEqual(bundle["allowed_zone_ids"], [])
+        self.assertIsNone(bundle["selection"]["compile_route"])
+        self.assertIsNone(bundle["selection"]["renderer"])
+        self.assertEqual(
+            bundle["knowledge_gaps"],
+            ["product-page-composition-or-hui-renderer"],
         )
-        fields = {item["id"]: item for item in bundle["business_fields"]}
-        self.assertEqual(fields["area"]["semantic_id"], "common.location")
-        self.assertEqual(fields["area"]["source_scope"], "HUI")
-        self.assertNotIn("theme_overrides", json.dumps(bundle))
 
     def test_fallback_bundle_reports_non_compilable_knowledge_gap(self) -> None:
         bundle = build_capability_bundle(
@@ -405,20 +355,21 @@ class PipelineTest(unittest.TestCase):
             copied_templates = copied_root / "assets" / "templates"
             copied_templates.parent.mkdir(parents=True)
             shutil.copytree(ROOT / "assets" / "templates", copied_templates)
-            event_template = copied_templates / "event-search.html"
-            changed = event_template.read_text(encoding="utf-8")
-            changed = changed.replace(
+            page_start = copied_templates / "HUI" / "shells" / "page-start.html"
+            changed = page_start.read_text(encoding="utf-8").replace(
                 "__HUI_CSS__",
                 "https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/"
                 "public/webresources/libs/hui.css",
                 1,
             )
-            changed = changed.replace(
-                "{ config: PAGE_CONFIG }",
+            page_start.write_text(changed, encoding="utf-8")
+            page_end = copied_templates / "HUI" / "shells" / "page-end.html"
+            changed = page_end.read_text(encoding="utf-8").replace(
+                "config: PAGE_CONFIG",
                 "cloneRuntimeValue(PAGE_CONFIG)",
                 1,
             )
-            event_template.write_text(changed, encoding="utf-8")
+            page_end.write_text(changed, encoding="utf-8")
             errors = validate_generation_templates(copied_root)
             self.assertTrue(any("不得复制Manifest资源URL" in error for error in errors), errors)
             self.assertTrue(any("重新混合配置与预览数据" in error for error in errors), errors)
@@ -459,9 +410,8 @@ class PipelineTest(unittest.TestCase):
 
     def test_icon_v2_cdn_resource_and_registration_pass(self) -> None:
         changed = self.html.replace(
-            '<div class="event-search-filter" data-component="filter.search-form">',
-            '<div class="event-search-filter" data-component="filter.search-form">'
-            '<h-icon><add></add></h-icon>',
+            'data-component="filter.search-form">',
+            'data-component="filter.search-form"><h-icon><add></add></h-icon>',
             1,
         )
         resource = (
@@ -515,128 +465,44 @@ class PipelineTest(unittest.TestCase):
             errors,
         )
 
-    def test_device_detail_compiles_with_hui_components(self) -> None:
-        spec = load_json(
+    def test_removed_device_detail_fixture_cannot_compile(self) -> None:
+        removed = load_json(
             ROOT / "tests" / "fixtures" / "device-detail.default.json"
         )
-        html = compile_page(spec)
-        self.assertIn(
-            '<div class="event-tabs-actions__tabs" data-component="navigation.tabs">',
-            html,
-        )
-        self.assertIn('data-zone="device.details"', html)
-        self.assertIn('data-component="navigation.tabs"', html)
-        self.assertIn('data-component="toolbar.action-toolbar"', html)
-        self.assertEqual(html.count("设备编号"), 1)
-        self.assertIn('v-for="item in deviceInfo"', html)
-        self.assertIn('v-for="item in metrics"', html)
-        self.assertNotIn("D2C:DEVICE_INFO_ROWS", html)
-        self.assertNotIn("D2C:METRIC_ROWS", html)
-        self.assertIn('data-component="collection.thumbnail-strip"', html)
-        self.assertNotIn("data-origin", html)
-        self.assertIn('v-for="(thumb, index) in thumbnails"', html)
-        self.assertIn('class="event-image-viewer__media-image"', html)
-        self.assertIn('../assets/imgs/device-detail-main.png', html)
-        self.assertIn('../assets/imgs/device-detail-thumbnail.png', html)
-        self.assertNotIn('event-image-viewer__media-placeholder', html)
-        self.assertNotIn('event-image-viewer__stage-nav', html)
-        self.assertNotIn('event-image-viewer__zoom', html)
-        self.assertIn("max-width: none !important;", html)
-        self.assertIn("text-decoration: none !important;", html)
-        self.assertIn(".el-tabs__nav-wrap::after { display: none !important; }", html)
-        self.assertIn("--d2c-device-tab-content-height: 55px;", html)
-        self.assertNotIn('<el-descriptions', html)
-        self.assertNotIn('<select', html)
-        self.assertNotIn('<textarea', html)
-        self.assertNotIn('event-info-panel__select-icon', html)
-        self.assertNotIn(
-            '<i class="event-info-panel__select-icon h-icon-angle-down-sm"></i>',
-            html,
-        )
-        self.assertNotIn('../../assets/fonts/h-icon/h-icon.css', html)
-        for legacy_icon in (
-            'h-icon-angle-down-sm',
-            'h-icon-angle-left',
-            'h-icon-angle-right',
-            'h-icon-angle-right-sm',
-            'h-icon-list',
-            'h-icon-more-verti',
-            'h-icon-shield',
-            'h-icon-vca-playback',
-        ):
-            self.assertNotIn(legacy_icon, html)
-        self.assertIn('h-icon-angle_down_sm', html)
-        self.assertIn('h-icon-angle_left', html)
-        self.assertIn('h-icon-angle_right', html)
-        self.assertIn('h-icon-angle_right_sm', html)
-        self.assertNotIn('h-icon-info-list', html)
-        self.assertNotIn('h-icon-monitor-setting', html)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "device-detail.html"
-            path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_html(spec, path), [])
+        with self.assertRaises(ContractError):
+            compile_page(removed)
 
-    def test_device_detail_static_fixture_rows_are_rejected(self) -> None:
-        spec = load_json(
-            ROOT / "tests" / "fixtures" / "device-detail.default.json"
-        )
-        html = compile_page(spec).replace(
-            'v-for="item in deviceInfo"',
-            'data-static-fixture="deviceInfo"',
-            1,
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "device-detail.html"
-            path.write_text(html, encoding="utf-8")
-            errors = validate_html(spec, path)
-        self.assertTrue(
-            any("fixture集合必须由唯一响应式循环渲染" in error for error in errors),
-            errors,
-        )
+    def test_removed_device_detail_has_no_compile_route(self) -> None:
+        bundle = build_capability_bundle("general", "isc", "device-detail")
+        self.assertFalse(bundle["matched"])
+        self.assertFalse(bundle["can_compile"])
+        self.assertIsNone(bundle["selection"]["compile_route"])
 
-    def test_row_action_cannot_regress_to_text(self) -> None:
-        changed = self.html.replace(
-            'data-row-action="detail" type="link"',
-            'data-row-action="detail" type="text"',
-            1,
-        )
-        errors = self.validate_source(changed)
-        self.assertTrue(
-            any("表格行操作必须是link按钮: detail" in error for error in errors),
-            errors,
-        )
+    def test_pattern_row_actions_are_driven_by_page_config(self) -> None:
+        self.assertIn('v-for="action in config.row_actions"', self.html)
+        self.assertIn('"id": "detail"', self.html)
 
-    def test_row_action_cannot_be_removed(self) -> None:
-        changed = self.html.replace('data-row-action="detail"', 'data-removed-action="detail"', 1)
-        errors = self.validate_source(changed)
-        self.assertTrue(
-            any("表格行操作实例不唯一: detail" in error for error in errors),
-            errors,
-        )
+    def test_pattern_row_actions_use_the_registered_hui_renderer(self) -> None:
+        self.assertIn('@click.stop="rowAction(action, scope.row)"', self.html)
+        self.assertIn('type="text" size="mini"', self.html)
 
     def test_spec_rejects_visual_px(self) -> None:
         invalid = json.loads(json.dumps(self.spec, ensure_ascii=False))
         invalid["gap"] = "16px"
-        with self.assertRaises(ContractError):
-            compile_page(invalid)
+        with self.assertRaises(PatternPageError):
+            compile_pattern_page(invalid)
 
-    def test_known_extension_compiles(self) -> None:
-        spec = load_json(
+    def test_removed_event_search_extension_cannot_compile(self) -> None:
+        removed = load_json(
             ROOT / "tests" / "fixtures" / "event-search.extended.json"
         )
-        html = compile_page(spec)
-        self.assertIn('data-zone="summary.metrics"', html)
-        self.assertNotIn("data-origin", html)
-        self.assertIn("重点设备事件检索", html)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "page.html"
-            path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_html(spec, path), [])
+        with self.assertRaises(ContractError):
+            compile_page(removed)
 
-    def test_exact_product_page_wins_over_hui_fallback(self) -> None:
+    def test_removed_event_search_does_not_win_over_hui_fallback(self) -> None:
         resolution = resolve_design_system("general", "isc", "event-search")
-        self.assertTrue(resolution["matched"])
-        self.assertEqual(resolution["resolution_level"], "product-page")
+        self.assertFalse(resolution["matched"])
+        self.assertEqual(resolution["resolution_level"], "hui-fallback")
         self.assertEqual(
             resolution["hui_page_pattern"]["contract"]["id"],
             "hui.page-pattern.list-search",
@@ -1297,32 +1163,32 @@ class PipelineTest(unittest.TestCase):
         }
         for name, expected_pattern in expected_patterns.items():
             spec = load_json(ROOT / "tests" / "generation" / f"{name}.json")
-            html = compile_test(spec)
-            self.assertIn(expected_pattern, html)
-            self.assertIn("hui.umd.js", html)
-            self.assertNotIn("vuex.min.js", html)
-            self.assertIn("const PAGE_CONFIG =", html)
-            self.assertIn("const PREVIEW_FIXTURES =", html)
-            self.assertIn("config: PAGE_CONFIG", html)
-            self.assertIn("loadPreviewFixtures: function ()", html)
-            self.assertEqual(extract_frozen_json(html, "PREVIEW_FIXTURES"), spec["preview"])
-            self.assertNotIn("preview", extract_frozen_json(html, "PAGE_CONFIG"))
-            self.assertIn("Object.prototype.hasOwnProperty.call(vm.$data, key)", html)
-            self.assertIn("key !== 'config'", html)
-            self.assertNotIn("cloneRuntimeValue(PAGE_CONFIG)", html)
-            self.assertNotIn("this.spec =", html)
-            self.assertNotIn("__PAGE_SPEC__", html)
-            self.assertNotIn(
-                ".portal-side-item { padding-right: var(--h-space-md) !important; }",
-                html,
-            )
-            if spec["page_kind"] != "table":
-                self.assertNotIn(
-                    "--d2c-renderer-page-actions-padding: 0px 24px", html
-                )
             with tempfile.TemporaryDirectory() as directory:
                 html_path = Path(directory) / f"{name}.html"
+                html = compile_test(spec, html_path)
                 html_path.write_text(html, encoding="utf-8")
+                self.assertIn(expected_pattern, html)
+                self.assertIn("hui.umd.js", html)
+                self.assertNotIn("vuex.min.js", html)
+                self.assertIn("const PAGE_CONFIG =", html)
+                self.assertIn("const PREVIEW_FIXTURES =", html)
+                self.assertIn("config: PAGE_CONFIG", html)
+                self.assertIn("loadPreviewFixtures: function ()", html)
+                self.assertEqual(extract_frozen_json(html, "PREVIEW_FIXTURES"), spec["preview"])
+                self.assertNotIn("preview", extract_frozen_json(html, "PAGE_CONFIG"))
+                self.assertIn("Object.prototype.hasOwnProperty.call(vm.$data, key)", html)
+                self.assertIn("key !== 'config'", html)
+                self.assertNotIn("cloneRuntimeValue(PAGE_CONFIG)", html)
+                self.assertNotIn("this.spec =", html)
+                self.assertNotIn("__PAGE_SPEC__", html)
+                self.assertNotIn(
+                    ".portal-side-item { padding-right: var(--h-space-md) !important; }",
+                    html,
+                )
+                if spec["page_kind"] != "table":
+                    self.assertNotIn(
+                        "--d2c-renderer-page-actions-padding: 0px 24px", html
+                    )
                 self.assertEqual(validate_pattern_html(spec, html_path), [])
             if name == "device-permission-form":
                 self.assertIn("--d2c-page-form-width: 1264px", html)
@@ -1342,7 +1208,7 @@ class PipelineTest(unittest.TestCase):
                 self.assertIn("hui.tpp.page.card.text", html)
                 self.assertIn("<el-tabs", html)
                 self.assertIn('data-component="navigation.tabs"', html)
-                self.assertIn('"card_tab_style": "linear"', html)
+                self.assertIn('"card_tab_style": "card"', html)
                 self.assertIn('"media_column_gap": "2px"', html)
                 self.assertIn('"title_status_gap": "8px"', html)
                 self.assertNotIn('"row_height"', html)
@@ -1404,13 +1270,10 @@ class PipelineTest(unittest.TestCase):
             ROOT / "tests" / "generation" / "device-list-table.json"
         )
         self.assertEqual(spec["schema_version"], "pattern-page-spec.v2")
-        html = compile_pattern_page(spec)
+        html = compile_pattern_page(spec, self.html_path)
+        self.html_path.write_text(html, encoding="utf-8")
         self.assertIn('"renderer": "hui.tpp.table"', html)
-        self.assertIn(
-            '"product_logo": "../assets/imgs/hik-product-logos/'
-            'logo_综合安防管理平台iSecure_Center.svg"',
-            html,
-        )
+        self.assertIn("logo_综合安防管理平台iSecure_Center.svg", html)
         self.assertIn("data-d2c-product-brand", html)
         self.assertNotIn("portal-logo-mark", html)
         self.assertIn("--d2c-portal-brand-menu-offset: 80px", html)
@@ -1432,10 +1295,7 @@ class PipelineTest(unittest.TestCase):
             ".query-filter__form .el-form-item { margin-bottom: 16px; }",
             html,
         )
-        with tempfile.TemporaryDirectory() as directory:
-            html_path = Path(directory) / "page.html"
-            html_path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_pattern_html(spec, html_path), [])
+        self.assertEqual(validate_pattern_html(spec, self.html_path), [])
 
     def test_pattern_page_rejects_legacy_or_unrouted_preview_data(self) -> None:
         spec = load_json(
@@ -1475,7 +1335,8 @@ class PipelineTest(unittest.TestCase):
         self.assertNotIn("page-breadcrumb__separator", html)
         self.assertIn('v-for="section in visibleFormSections"', html)
         self.assertIn(
-            'v-if="!isWorkOrderForm && visibleFormSections.length"', html
+            'v-if="isAnchoredForm && !isWorkOrderForm && visibleFormSections.length"',
+            html,
         )
         self.assertIn(
             '<h-anchor :affix="true" container=".permission-form-scroll">', html
@@ -1565,13 +1426,13 @@ class PipelineTest(unittest.TestCase):
                 ],
             }
         ]
-        html = compile_pattern_page(spec)
+        html = compile_pattern_page(spec, self.html_path)
+        self.html_path.write_text(html, encoding="utf-8")
         self.assertIn('"pattern_family": "hui.tpp.family.table-details-pane"', html)
         self.assertIn("--d2c-page-table-details-width: 431px", html)
         self.assertIn('class="table-detail-pane"', html)
         self.assertIn('data-component="detail.details-pane"', html)
         self.assertIn('@row-click="selectDetailRow"', html)
-        self.assertIn('class="collection-filter-divider"', html)
         self.assertIn("table-detail-pane.has-master-divider::before", html)
         self.assertIn('"token": "--h-color-border-tertiary"', html)
         self.assertIn("--d2c-page-table-details-tabs-content-padding: 8px 0px", html)
@@ -1586,11 +1447,11 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("--d2c-renderer-page-actions-margin: 0px", html)
         self.assertIn("--d2c-renderer-page-actions-padding: 0px 24px", html)
         self.assertIn("--d2c-renderer-page-actions-border: none", html)
-        self.assertIn("padding: var(--d2c-renderer-page-actions-padding, 0);", html)
-        with tempfile.TemporaryDirectory() as directory:
-            html_path = Path(directory) / "details-pane.html"
-            html_path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_pattern_html(spec, html_path), [])
+        self.assertIn(
+            "padding: var(--d2c-renderer-page-actions-padding, 0 24px);",
+            html,
+        )
+        self.assertEqual(validate_pattern_html(spec, self.html_path), [])
 
     def test_renderer_registry_covers_both_pipelines(self) -> None:
         self.assertEqual(set(RENDERERS), PAGE_RENDERER_IDS)
@@ -1608,10 +1469,8 @@ class PipelineTest(unittest.TestCase):
                 for contract in RENDERER_CONTRACTS.values()
             )
         )
-        self.assertEqual(
-            template_for_renderer("hui.list-search"),
-            "assets/templates/event-search.html",
-        )
+        with self.assertRaises(ValueError):
+            template_for_renderer("hui.list-search")
         self.assertEqual(
             template_for_renderer("hui.tpp.card"),
             "assets/templates/HUI/renderers/card.html",
@@ -1696,12 +1555,13 @@ class PipelineTest(unittest.TestCase):
         )
         spec["industry"] = "unmatched-industry"
         spec["product"] = "unmatched-product"
-        html = compile_pattern_page(spec)
+        html = compile_pattern_page(spec, self.html_path)
+        self.html_path.write_text(html, encoding="utf-8")
         self.assertIn('"renderer_source": "HUI"', html)
         self.assertIn('"product_shell_source": "HUI"', html)
         self.assertIn('"level": "hui-fallback"', html)
         self.assertIn("hui-tpp-shell product-context", html)
-        self.assertIn('"product_logo": "../assets/imgs/hui-logo.png"', html)
+        self.assertIn("hui-logo.png", html)
         self.assertIn(".tpp-h-layout__nav a.is-active", html)
         self.assertIn("font-size: 16px", html)
         self.assertIn("width: 112px", html)
@@ -1724,37 +1584,29 @@ class PipelineTest(unittest.TestCase):
         self.assertNotIn("huiShellMenuGroups", html)
         self.assertNotIn('class="portal-main-menu"', html)
         self.assertNotIn('class="portal-app-sidebar"', html)
-        with tempfile.TemporaryDirectory() as directory:
-            html_path = Path(directory) / "hui-fallback-form.html"
-            html_path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_pattern_html(spec, html_path), [])
+        self.assertEqual(validate_pattern_html(spec, self.html_path), [])
 
-            invalid_html = html.replace(
-                "{{ item.label }}</el-nav-item>",
-                '<i :class="item.icon"></i>{{ item.label }}</el-nav-item>',
-                1,
-            )
-            html_path.write_text(invalid_html, encoding="utf-8")
-            self.assertIn(
-                "HUI叶子菜单不得手工渲染图标；一级分组图标必须通过el-subnav的icon API输出",
-                validate_pattern_html(spec, html_path),
-            )
+        invalid_html = html.replace(
+            "{{ item.label }}</el-nav-item>",
+            '<i :class="item.icon"></i>{{ item.label }}</el-nav-item>',
+            1,
+        )
+        self.html_path.write_text(invalid_html, encoding="utf-8")
+        self.assertIn(
+            "HUI叶子菜单不得手工渲染图标；一级分组图标必须通过el-subnav的icon API输出",
+            validate_pattern_html(spec, self.html_path),
+        )
 
     def test_pvia_profile_uses_product_logo_with_hui_shell(self) -> None:
         spec = load_json(
             ROOT / "tests" / "generation" / "pvia-face-alarm-regular-high-low.json"
         )
-        html = compile_pattern_page(spec)
+        html = compile_pattern_page(spec, self.html_path)
+        self.html_path.write_text(html, encoding="utf-8")
         self.assertIn('"product_shell_source": "HUI"', html)
         self.assertIn("hui-tpp-shell product-context", html)
-        self.assertIn(
-            '"product_logo": "../assets/imgs/hik-product-logos/logo_视频图像综合应用平台Infovision_PVIA.svg"',
-            html,
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            html_path = Path(directory) / "pvia-face-alarm.html"
-            html_path.write_text(html, encoding="utf-8")
-            self.assertEqual(validate_pattern_html(spec, html_path), [])
+        self.assertIn("logo_视频图像综合应用平台Infovision_PVIA.svg", html)
+        self.assertEqual(validate_pattern_html(spec, self.html_path), [])
 
     def test_pattern_page_requires_explicit_product_context(self) -> None:
         spec = load_json(

@@ -26,9 +26,11 @@ def validate_suite(suite: dict[str, Any]) -> None:
         raise ContractError(
             "产品验收套件schema_version必须是product-acceptance-suite.v1"
         )
-    for key in ("industry", "product", "output_root", "cases"):
+    for key in ("industry", "product", "output_root"):
         if not suite.get(key):
             raise ContractError(f"产品验收套件缺少字段: {key}")
+    if "cases" not in suite:
+        raise ContractError("产品验收套件缺少字段: cases")
     cases = suite["cases"]
     if not isinstance(cases, list):
         raise ContractError("产品验收套件cases必须是数组")
@@ -59,6 +61,8 @@ def build_product_acceptance(
         if output_root is not None
         else resolve_project_path(suite["output_root"], "output_root")
     )
+    if not suite["cases"]:
+        return []
     target_root.mkdir(parents=True, exist_ok=True)
 
     asset_target = target_root.parent / "assets" / "imgs"

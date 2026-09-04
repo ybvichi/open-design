@@ -126,7 +126,7 @@ describe('packaged child Vite+ environment forwarding', () => {
       all_proxy: 'socks5://127.0.0.1:1081',
       http_proxy: 'http://127.0.0.1:7891',
       https_proxy: 'http://127.0.0.1:7891',
-      no_proxy: 'localhost,127.0.0.1,::1',
+      no_proxy: '.corp.example',
     });
 
     expect(env).toMatchObject({
@@ -135,14 +135,14 @@ describe('packaged child Vite+ environment forwarding', () => {
       HTTP_PROXY: 'http://127.0.0.1:7891',
       HTTPS_PROXY: 'http://127.0.0.1:7891',
       NODE_USE_ENV_PROXY: '1',
-      NO_PROXY: 'localhost,127.0.0.1,::1',
+      NO_PROXY: '.corp.example,localhost,127.0.0.1,[::1]',
     });
     if (process.platform !== 'win32') {
       expect(env).toMatchObject({
         all_proxy: 'socks5://127.0.0.1:1081',
         http_proxy: 'http://127.0.0.1:7891',
         https_proxy: 'http://127.0.0.1:7891',
-        no_proxy: 'localhost,127.0.0.1,::1',
+        no_proxy: '.corp.example,localhost,127.0.0.1,[::1]',
       });
     }
     expect(env.RANDOM_INTERNAL_FLAG).toBeUndefined();
@@ -168,7 +168,7 @@ describe('packaged child Vite+ environment forwarding', () => {
       HTTP_PROXY: 'http://system-proxy:8080',
       HTTPS_PROXY: 'http://system-proxy:8443',
       ALL_PROXY: 'socks5://system-proxy:1080',
-      NO_PROXY: '.local,localhost',
+      NO_PROXY: '.local,localhost,127.0.0.1,[::1]',
       NODE_USE_ENV_PROXY: '1',
     });
   });
@@ -229,6 +229,30 @@ describe('packaged child Vite+ environment forwarding', () => {
     expect(env.HTTP_PROXY).toBeUndefined();
     expect(env.HTTPS_PROXY).toBeUndefined();
     expect(env.NODE_USE_ENV_PROXY).toBeUndefined();
+  });
+
+  it('still injects login-shell proxy env into the packaged daemon base env', () => {
+    const env = resolvePackagedChildBaseEnv(
+      {
+        HOME: '/Users/tester',
+      },
+      true,
+      {
+        HTTP_PROXY: 'http://system-proxy:8080',
+      },
+      false,
+      {
+        HTTPS_PROXY: 'http://shell-proxy:8443',
+      },
+    );
+
+    expect(env).toMatchObject({
+      HOME: '/Users/tester',
+      HTTPS_PROXY: 'http://shell-proxy:8443',
+      NO_PROXY: 'localhost,127.0.0.1,[::1]',
+      NODE_USE_ENV_PROXY: '1',
+    });
+    expect(env.HTTP_PROXY).toBeUndefined();
   });
 
   it('adds custom VP_HOME/bin to the packaged PATH builder', () => {

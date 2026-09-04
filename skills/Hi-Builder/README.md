@@ -196,7 +196,7 @@ Hi-Builder/
 python3 scripts/resolve_capabilities.py \
   --industry general \
   --product isc \
-  --page-type event-search
+  --page-type manual-filter-table
 
 # 以结构化PageIntent唯一选择TPP Variant并返回可编译能力包
 python3 scripts/resolve_capabilities.py \
@@ -208,15 +208,15 @@ python3 scripts/resolve_capabilities.py \
 python3 scripts/resolve_tpp_intent.py \
   --intent tests/fixtures/tpp-page-intent-manual-filter.json
 
-# 编译产品业务页面
-python3 scripts/compile_page.py \
-  --spec tests/fixtures/event-search.default.json \
-  --out output/device-monitor-event-search.html
+# 编译HUI Pattern页面
+python3 scripts/compile_pattern_page.py \
+  --spec tests/generation/device-list-table.json \
+  --out output/device-list-table.html
 
-# 校验产品业务页面
-python3 scripts/validate_page.py \
-  --spec tests/fixtures/event-search.default.json \
-  --html output/device-monitor-event-search.html
+# 校验HUI Pattern页面
+python3 scripts/validate_pattern_page.py \
+  --spec tests/generation/device-list-table.json \
+  --html output/device-list-table.html
 
 # 编译并校验一个典型页面族
 python3 scripts/compile_pattern_page.py \

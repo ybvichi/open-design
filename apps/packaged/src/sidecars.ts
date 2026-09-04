@@ -25,6 +25,7 @@ import {
   createProcessStampArgs,
   isProcessAlive,
   mergeProxyAwareEnv,
+  resolveLoginShellProxyEnv,
   resolveSystemProxyEnv,
   stopProcesses,
   waitForProcessExit,
@@ -465,6 +466,7 @@ export function resolvePackagedChildBaseEnv(
   includeProviderSecrets = false,
   systemProxyEnv: NodeJS.ProcessEnv = resolveSystemProxyEnv(),
   includeSystemProxyEnv = true,
+  loginShellProxyEnv: NodeJS.ProcessEnv = {},
 ): NodeJS.ProcessEnv {
   const forwardedEnv: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(env)) {
@@ -473,8 +475,8 @@ export function resolvePackagedChildBaseEnv(
     }
   }
   return includeSystemProxyEnv
-    ? mergeProxyAwareEnv(process.platform, systemProxyEnv, forwardedEnv)
-    : mergeProxyAwareEnv(process.platform, forwardedEnv);
+    ? mergeProxyAwareEnv(process.platform, systemProxyEnv, loginShellProxyEnv, forwardedEnv)
+    : mergeProxyAwareEnv(process.platform, loginShellProxyEnv, forwardedEnv);
 }
 
 function createPackagedDaemonManagedPathEnv(
@@ -583,6 +585,7 @@ async function spawnSidecarChild(options: {
   electronNodeCommand: string | null;
   entryPath: string;
   env: NodeJS.ProcessEnv;
+  loginShellProxyEnv: NodeJS.ProcessEnv;
   nodeCommand: string | null;
   paths: PackagedNamespacePaths;
   runtime: SidecarRuntimeContext<SidecarStamp>;
@@ -615,6 +618,7 @@ async function spawnSidecarChild(options: {
         options.app === APP_KEYS.DAEMON,
         resolveSystemProxyEnv(),
         options.app !== APP_KEYS.DAEMON,
+        options.loginShellProxyEnv,
       ),
       ...options.env,
       NODE_ENV: "production",
@@ -725,6 +729,12 @@ export async function startPackagedSidecars(
   await mkdir(paths.electronSessionDataRoot, { recursive: true });
 
   const children: ManagedSidecarChild[] = [];
+  // Finder/Dock launches do not source `.zshrc`. Resolve the small proxy-only
+  // subset once per packaged startup so the daemon, web sidecar, and local
+  // agent CLIs inherit the same proxy that works in the user's terminal.
+  const loginShellProxyEnv = options.requireDesktopAuth
+    ? resolveLoginShellProxyEnv({ env: process.env })
+    : {};
 
   const daemonSidecarEntry =
     options.daemonSidecarEntry ?? resolveSidecarEntry("@open-design/daemon", "sidecar");
@@ -767,6 +777,7 @@ export async function startPackagedSidecars(
         posthogHost: options.posthogHost,
       }),
       electronNodeCommand: options.electronNodeCommand,
+      loginShellProxyEnv,
       nodeCommand: options.nodeCommand,
       paths,
       runtime,
@@ -814,6 +825,7 @@ export async function startPackagedSidecars(
         OD_HOST: "0.0.0.0",
       },
       electronNodeCommand: options.electronNodeCommand,
+      loginShellProxyEnv,
       nodeCommand: options.nodeCommand,
       paths,
       runtime,

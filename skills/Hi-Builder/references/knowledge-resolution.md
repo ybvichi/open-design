@@ -52,8 +52,8 @@ Resolver面向AI输出精简Capability Bundle，而不是原始知识文件集�
   "selection": {
     "industry": "general",
     "product": "isc",
-    "page_intent": "event-search",
-    "page_pattern": "hui.page-pattern.list-search"
+    "page_intent": "manual-filter-table",
+    "page_pattern": "hui.tpp.family.table-manual-filter"
   },
   "allowed_zone_ids": [],
   "allowed_component_pattern_ids": [],

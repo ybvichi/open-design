@@ -28,11 +28,13 @@ AI只负责需求理解和PageSpec选择；不得直接推测HUI属性、资源�
 
 <!-- rule-owner:skill-workflow -->
 
+执行以下工作流时，当前目录必须始终保持为客户端提供的项目根目录。`<skill-root>`表示提示开头给出的Skill root；只通过它读取契约和调用脚本，不得`cd`到`<skill-root>`。PageSpec、HTML和随HTML交付的资源都使用以`./`开头的项目相对路径，具体输出边界遵循`references/generation-contract.md`。
+
 1. 从需求识别`industry`、`product`、明确出现的产品版本和页面类型；用户说“ISC新版本”“ISC 3.0”或“ISC 3.0.0”时统一归一为`product=isc`、`product_version=3.0.0`，自动使用`isc-3.0.0`框架。HUI兜底时再一次性归一为`schemas/tpp-page-intent.schema.json`定义的`PageIntent`，包含语义族和已确认特征，不确定特征不填。
 2. 读取`references/knowledge-resolution.md`并解析能力：
 
 ```bash
-python3 scripts/resolve_capabilities.py \
+python3 "<skill-root>/scripts/resolve_capabilities.py" \
   --industry <industry> \
   --product <product> \
   --product-version <明确指定时的版本> \
@@ -42,10 +44,10 @@ python3 scripts/resolve_capabilities.py \
 HUI兜底的结构化入口为：
 
 ```bash
-python3 scripts/resolve_capabilities.py \
+python3 "<skill-root>/scripts/resolve_capabilities.py" \
   --industry <industry> \
   --product <product> \
-  --intent <tpp-page-intent.json>
+  --intent ./<tpp-page-intent.json>
 ```
 
 3. 读取`selection.compile_route`和`selection.input_contract`：产品路由生成产品页面合同；HUI兜底必须使用Resolver返回的唯一`selection.pattern_contract`，不得由AI从候选数组随意默认。零候选是知识缺口；多候选时补充诊断列出的区分特征后重新解析。表格自然语言归一仍遵循`mappings/table.json`的`selection_strategy`。Pattern PageSpec中的模拟业务值必须全部写入`preview`，页面结构、字段定义、选项和动作留在配置层；不得在PageSpec中写CSS值、HUI属性、资源URL或未登记扩展。
@@ -53,17 +55,17 @@ python3 scripts/resolve_capabilities.py \
 5. `compile_route=product-composition`使用产品页面编译入口：
 
 ```bash
-python3 scripts/compile_page.py \
-  --spec <page-spec.json> \
-  --out output/<page>.html
+python3 "<skill-root>/scripts/compile_page.py" \
+  --spec ./<page-spec.json> \
+  --out ./output/<page>.html
 ```
 
 6. `compile_route=hui-pattern-fallback`使用页面族入口；不得因为产品缺少页面Composition而改用产品Renderer：
 
 ```bash
-python3 scripts/compile_pattern_page.py \
-  --spec <pattern-page-spec.json> \
-  --out output/<page>.html
+python3 "<skill-root>/scripts/compile_pattern_page.py" \
+  --spec ./<pattern-page-spec.json> \
+  --out ./output/<page>.html
 ```
 
 `compile_generation_test.py`只用于旧自动化兼容转发，不作为新调用入口。
@@ -71,15 +73,15 @@ python3 scripts/compile_pattern_page.py \
 7. 执行对应静态验收：
 
 ```bash
-python3 scripts/validate_page.py \
-  --spec <page-spec.json> \
-  --html output/<page>.html
+python3 "<skill-root>/scripts/validate_page.py" \
+  --spec ./<page-spec.json> \
+  --html ./output/<page>.html
 ```
 
 ```bash
-python3 scripts/validate_pattern_page.py \
-  --spec <pattern-page-spec.json> \
-  --html output/<page>.html
+python3 "<skill-root>/scripts/validate_pattern_page.py" \
+  --spec ./<pattern-page-spec.json> \
+  --html ./output/<page>.html
 ```
 
 8. 在浏览器中打开结果，检查运行时错误、资源请求、关键交互和目标产品页面`golden.json`声明的几何状态。

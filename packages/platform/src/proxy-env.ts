@@ -19,6 +19,11 @@ export type ResolveSystemProxyEnvOptions = {
   runCommand?: SystemProxyCommandRunner;
 };
 
+export type ResolveLoginShellProxyEnvOptions = ResolveSystemProxyEnvOptions & {
+  env?: NodeJS.ProcessEnv;
+  shell?: string;
+};
+
 const CANONICAL_PROXY_ENV_KEYS = new Map<string, "ALL_PROXY" | "HTTP_PROXY" | "HTTPS_PROXY" | "NODE_USE_ENV_PROXY" | "NO_PROXY">([
   ["all_proxy", "ALL_PROXY"],
   ["http_proxy", "HTTP_PROXY"],
@@ -69,8 +74,9 @@ function setCanonicalProxyEnvValue(
 /**
  * Merge multiple env sources into one proxy-consistent environment. Proxy
  * variables are collapsed to their canonical spelling (preferring lowercase
- * inputs), non-proxy keys pass through, and `NODE_USE_ENV_PROXY=1` is set when
- * a proxy endpoint is present but the flag is not.
+ * inputs), non-proxy keys pass through, loopback bypasses are always present,
+ * and `NODE_USE_ENV_PROXY=1` is set when a proxy endpoint is present but the
+ * flag is not.
  *
  * @param platform - Target platform, controlling lowercase-alias emission.
  * @param sources - Env sources merged left-to-right (later sources win).
@@ -103,8 +109,12 @@ export function mergeProxyAwareEnv(
       setCanonicalProxyEnvValue(merged, canonicalKey, entry.value, platform);
     }
   }
-  if (hasProxyEndpointEnv(merged) && !hasCanonicalProxyEnv(merged, "NODE_USE_ENV_PROXY")) {
-    merged.NODE_USE_ENV_PROXY = "1";
+  if (hasProxyEndpointEnv(merged)) {
+    if (!hasCanonicalProxyEnv(merged, "NODE_USE_ENV_PROXY")) {
+      merged.NODE_USE_ENV_PROXY = "1";
+    }
+    const noProxy = buildLoopbackNoProxyValue(merged.NO_PROXY ?? merged.no_proxy);
+    if (noProxy) setCanonicalProxyEnvValue(merged, "NO_PROXY", noProxy, platform);
   }
   return merged;
 }
@@ -170,6 +180,17 @@ function preserveWildcardNoProxyValue(noProxy: string | null | undefined): strin
   return noProxy?.split(",").some((token) => token.trim() === "*") ? "*" : undefined;
 }
 
+/** @internal Preserve user bypasses while ensuring local services never traverse a configured proxy. */
+function buildLoopbackNoProxyValue(noProxy: string | null | undefined): string | null {
+  return preserveWildcardNoProxyValue(noProxy) ??
+    buildNoProxyValue([
+      ...(noProxy?.split(/[\s,]+/) ?? []),
+      "localhost",
+      "127.0.0.1",
+      "[::1]",
+    ]);
+}
+
 /** @internal Ensure a proxy URL has a scheme, defaulting to the supplied scheme when only an authority is given. */
 function normalizeProxyUrl(raw: string, scheme: string): string | null {
   const trimmed = raw.trim();
@@ -223,15 +244,7 @@ function finalizeSystemProxyEnv(
   platform: NodeJS.Platform,
 ): NodeJS.ProcessEnv {
   const hasProxy = Boolean(values.httpProxy || values.httpsProxy || values.allProxy);
-  const noProxy = hasProxy
-    ? preserveWildcardNoProxyValue(values.noProxy) ??
-      buildNoProxyValue([
-        ...(values.noProxy ? values.noProxy.split(",") : []),
-        "localhost",
-        "127.0.0.1",
-        "[::1]",
-      ])
-    : null;
+  const noProxy = hasProxy ? buildLoopbackNoProxyValue(values.noProxy) : null;
   const env: NodeJS.ProcessEnv = {};
   if (values.httpProxy) addProxyEnvValue(env, "HTTP_PROXY", values.httpProxy, platform);
   if (values.httpsProxy) addProxyEnvValue(env, "HTTPS_PROXY", values.httpsProxy, platform);
@@ -408,4 +421,40 @@ export function resolveSystemProxyEnv(options: ResolveSystemProxyEnvOptions = {}
     return {};
   }
   return {};
+}
+
+/**
+ * Read exported proxy variables from the user's POSIX login shell. Desktop
+ * launchers such as Finder do not source shell startup files, so a proxy that
+ * exists only in `.zshrc` would otherwise be absent from packaged sidecars and
+ * the CLIs they spawn. Only the five supported proxy keys are returned.
+ *
+ * This is intentionally a packaged-startup fallback rather than part of
+ * `resolveSystemProxyEnv`: callers use the latter for live per-request system
+ * proxy refreshes and must not launch an interactive shell for every request.
+ */
+export function resolveLoginShellProxyEnv(
+  options: ResolveLoginShellProxyEnvOptions = {},
+): NodeJS.ProcessEnv {
+  const platform = options.platform ?? process.platform;
+  if (platform === "win32") return {};
+  const env = options.env ?? process.env;
+  const shell = options.shell?.trim() || env.SHELL?.trim() ||
+    (platform === "darwin" ? "/bin/zsh" : "/bin/sh");
+  if (!shell) return {};
+
+  const runCommand = options.runCommand ?? defaultSystemProxyCommandRunner;
+  try {
+    const parsed: NodeJS.ProcessEnv = {};
+    for (const line of runCommand(shell, ["-ilc", "command env"]).split(/\r?\n/)) {
+      const separator = line.indexOf("=");
+      if (separator <= 0) continue;
+      const key = line.slice(0, separator);
+      if (!canonicalProxyEnvKey(key)) continue;
+      parsed[key] = line.slice(separator + 1);
+    }
+    return mergeProxyAwareEnv(platform, parsed);
+  } catch {
+    return {};
+  }
 }
