@@ -3,9 +3,10 @@
 // reuses its CSS module so the surface stays visually consistent across
 // scope pages. Folder CRUD operates on the local SQLite `folders` table
 // via `/api/folders` instead of the HDW proxy.
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
+import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import { navigate } from '../router';
 import { Icon, type IconName } from './Icon';
 import { FolderCardMenu } from './FolderCardMenu';
@@ -37,7 +38,7 @@ interface PersonalFolderItem {
   folderName: string;
   projectCount: number;
   subfolderCount: number;
-  subfolderPreview: string[];
+  subfolderPreview: Array<{ name: string; kind: 'folder' | 'project' }>;
   createdAt: string;
 }
 
@@ -58,17 +59,21 @@ function PersonalProjectsPanel({
   showCreateGroup,
   onShowCreateGroupChange,
   designSystems,
- onOpenProject,
- onDeleteProject,
-onRenameProject,
+  onOpenProject,
+  onDeleteProject,
+  onDuplicateProject,
+  onRenameProject,
+  controlsPortalTarget,
 }: {
- workspaceId: string | null;
- showCreateGroup: boolean;
- onShowCreateGroupChange: (v: boolean) => void;
- designSystems: DesignSystemSummary[];
- onOpenProject: (id: string) => void;
- onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
- onRenameProject: (id: string, name: string) => void;
+  workspaceId: string | null;
+  showCreateGroup: boolean;
+  onShowCreateGroupChange: (v: boolean) => void;
+  designSystems: DesignSystemSummary[];
+  onOpenProject: (id: string) => void;
+  onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
+  onRenameProject: (id: string, name: string) => void;
+  controlsPortalTarget?: HTMLElement | null;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<PersonalFolderItem[]>([]);
@@ -78,12 +83,17 @@ onRenameProject,
   const [newGroupName, setNewGroupName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<PersonalFolderItem | null>(null);
-  const [removing, setRemoving] = useState(false);
+ const [removeTarget, setRemoveTarget] = useState<PersonalFolderItem | null>(null);
+ const [removing, setRemoving] = useState(false);
 
-  // Fetch root-level folders from the local SQLite folders table, and
-  // refresh when a create/delete dispatches the `personal:folders-updated`
-  // event.
+  const [renameFolderTarget, setRenameFolderTarget] = useState<PersonalFolderItem | null>(null);
+  const [renameFolderInput, setRenameFolderInput] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState(false);
+  const renameFolderTitleId = useId();
+
+ // Fetch root-level folders from the local SQLite folders table, and
+ // refresh when a create/delete dispatches the `personal:folders-updated`
+ // event.
   useEffect(() => {
     if (!workspaceId) { setFolders([]); return; }
     let cancelled = false;
@@ -103,9 +113,14 @@ onRenameProject,
           folderName: f.folder_name || f.name || '',
           projectCount: Number(f.project_count) || 0,
           subfolderCount: Number(f.subfolder_count) || 0,
-          subfolderPreview: Array.isArray(f.subfolder_preview) ? f.subfolder_preview : [],
+          subfolderPreview: Array.isArray(f.subfolder_preview)
+            ? f.subfolder_preview.map((p: any) =>
+                typeof p === 'string'
+                  ? { name: p, kind: 'folder' as const }
+                  : { name: p.name || '', kind: (p.kind === 'project' ? 'project' : 'folder') as 'folder' | 'project' })
+            : [],
           createdAt: f.created_at || '',
-        })));
+        })))
       } catch {
         if (!cancelled) setFolders([]);
       } finally {
@@ -212,14 +227,54 @@ onRenameProject,
     }
   }
 
- function handleFolderClick(folder: PersonalFolderItem) {
-   if (!workspaceId) return;
-   navigate({
-     kind: 'home',
-     view: 'personal-folder',
-     folderId: folder.folderId,
-   });
- }
+function handleFolderClick(folder: PersonalFolderItem) {
+  if (!workspaceId) return;
+  navigate({
+    kind: 'home',
+    view: 'personal-folder',
+    folderId: folder.folderId,
+  });
+}
+
+  function startFolderRename(folder: PersonalFolderItem) {
+    setRenameFolderInput(folder.folderName);
+    setRenameFolderTarget(folder);
+  }
+
+  function cancelFolderRename() {
+    setRenameFolderTarget(null);
+    setRenameFolderInput('');
+  }
+
+  async function commitFolderRename() {
+    if (!renameFolderTarget || !workspaceId) return;
+    const trimmed = renameFolderInput.trim();
+    if (!trimmed || trimmed === renameFolderTarget.folderName) {
+      cancelFolderRename();
+      return;
+    }
+    setRenamingFolder(true);
+    try {
+      const res = await fetch(
+        `/api/folders/${encodeURIComponent(renameFolderTarget.folderId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_name: trimmed }),
+        },
+      );
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setFolders((prev) => prev.map((f) => f.folderId === renameFolderTarget.folderId ? { ...f, folderName: trimmed } : f));
+        window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRenamingFolder(false);
+      cancelFolderRename();
+    }
+  }
 
   if (!workspaceId) {
     return (
@@ -246,21 +301,29 @@ onRenameProject,
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder); } }}
             title={folder.folderName}
           >
-            <FolderCardMenu
-              onDelete={() => setRemoveTarget(folder)}
-              deleteLabel={t('teamSpace.deleteGroup')}
-            />
+          <FolderCardMenu
+            onRename={() => startFolderRename(folder)}
+            renameLabel={t('common.rename')}
+            onDelete={() => setRemoveTarget(folder)}
+            deleteLabel={t('teamSpace.deleteGroup')}
+          />
             <div className={styles.folderCardGrid}>
               {Array.from({ length: 4 }, (_, i) => {
-                const name = folder.subfolderPreview[i];
+                const item = folder.subfolderPreview[i];
+                if (!item) {
+                  return <div key={i} className={styles.gridCellEmpty} />;
+                }
+                if (item.kind === 'project') {
+                  return (
+                    <div key={i} className={`${styles.gridCell} ${styles.gridCellProject}`} title={item.name} />
+                  );
+                }
                 return (
-                  <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                    {name ? (
-                      <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
-                        <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                        <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                      </svg>
-                    ) : null}
+                  <div key={i} className={styles.gridCell} title={item.name}>
+                    <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                      <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                      <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                    </svg>
                   </div>
                 );
               })}
@@ -270,10 +333,10 @@ onRenameProject,
                 <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
                   <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
                   <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                </svg>
-                <span className={styles.folderName}>{folder.folderName}</span>
-              </div>
-              <div className={styles.folderCardMeta}>
+              </svg>
+               <span className={styles.folderName}>{folder.folderName}</span>
+            </div>
+             <div className={styles.folderCardMeta}>
                 <div className={styles.folderCounts}>
                   <span className={styles.folderCount}>
                     {t('teamSpace.subFolderCount', { n: folder.subfolderCount })}
@@ -296,17 +359,24 @@ onRenameProject,
        ) : projects.length === 0 ? (
          null
        ) : (
-         <RecentProjectsStrip
-           projects={projects}
-           designSystems={designSystems}
-           limit={1000}
-           heading={t('entry.navDrafts')}
-           space="drafts"
-           onOpen={(id) => onOpenProject(id)}
-           onDelete={onDeleteProject}
-          onRename={onRenameProject}
-          hideTitle
-        />
+        <RecentProjectsStrip
+          projects={projects}
+          designSystems={designSystems}
+          limit={1000}
+          heading={t('entry.navDrafts')}
+          space="drafts"
+         onOpen={(id) => onOpenProject(id)}
+         onDelete={onDeleteProject}
+         onDuplicate={onDuplicateProject}
+        onRename={(id, name) => {
+          setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+          onRenameProject?.(id, name);
+        }}
+         hideTitle
+          currentWorkspaceId={workspaceId}
+          currentFolderId={null}
+          controlsPortalTarget={controlsPortalTarget}
+       />
         )}
       </div>
       {showCreateGroup ? (
@@ -355,32 +425,71 @@ onRenameProject,
                 </button>
               </div>
             </div>
-          </div>,
-          document.body,
-        )
+         </div>,
+         document.body,
+       )
+     ) : null}
+      {renameFolderTarget ? (
+        <Dialog
+          as="form"
+          className="modal-rename"
+          onClose={cancelFolderRename}
+          closeOnEscape
+          ariaLabelledBy={renameFolderTitleId}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void commitFolderRename();
+          }}
+        >
+          <DialogTitle id={renameFolderTitleId}>{t('designs.renameTitle')}</DialogTitle>
+          <label>
+            {t('designs.renamePrompt', { name: renameFolderTarget.folderName })}
+            <input
+              type="text"
+              value={renameFolderInput}
+              autoFocus
+              onChange={(e) => setRenameFolderInput(e.target.value)}
+            />
+          </label>
+          <DialogFooter className="row">
+            <button type="button" onClick={cancelFolderRename}>
+              {t('designs.renameCancel')}
+            </button>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!renameFolderInput.trim() || renameFolderInput.trim() === renameFolderTarget.folderName || renamingFolder}
+            >
+              {t('designs.renameSave')}
+            </button>
+          </DialogFooter>
+        </Dialog>
       ) : null}
-    </div>
-  );
+   </div>
+ );
 }
 
 export function PersonalAllView({
   designSystems = [],
   onOpenProject,
   onDeleteProject,
+  onDuplicateProject,
   onRenameProject,
 }: {
   designSystems?: DesignSystemSummary[];
   onOpenProject: (id: string) => void;
   onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
   onRenameProject: (id: string, name: string) => void;
 }) {
   const t = useT();
  const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
 
  // Resolve the personal workspace ID from the workspace directory.
-  // The personal workspace is the "一人团队" default team — the directory
+  // The personal workspace is the "个人空间" default team — the directory
   // item with isDefaultTeam === true.
   useEffect(() => {
     let cancelled = false;
@@ -416,32 +525,43 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
             {subtitle}
           </span>
         </div>
-      {activeTab === 'projects' && workspaceId ? (
         <div className={styles.headerActions}>
-         <button
-           type="button"
-           className={styles.inviteBtn}
-           onClick={() => {
-             localStorage.removeItem(FOLDER_CONTEXT_KEY);
-             navigate({ kind: 'home', view: 'home' });
-           }}
-         >
-           <Icon name="plus" size={15} aria-hidden />
-           <span>{t('entry.navNewProject')}</span>
-         </button>
-            <button
-              type="button"
-              className={styles.inviteBtn}
-              onClick={() => setShowCreateGroup(true)}
-            >
-              <Icon name="plus" size={15} aria-hidden />
-              <span>{t('teamSpace.newSubFolder')}</span>
-            </button>
-          </div>
-        ) : null}
+          {activeTab === 'projects' && workspaceId ? (
+            <>
+              <button
+                type="button"
+                className={styles.inviteBtn}
+                onClick={() => {
+                  localStorage.removeItem(FOLDER_CONTEXT_KEY);
+                  navigate({ kind: 'home', view: 'home' });
+                }}
+              >
+                <Icon name="plus" size={15} aria-hidden />
+                <span>{t('entry.navNewProject')}</span>
+              </button>
+              <button
+                type="button"
+                className={styles.inviteBtn}
+                onClick={() => setShowCreateGroup(true)}
+              >
+                <Icon name="plus" size={15} aria-hidden />
+                <span>{t('teamSpace.newSubFolder')}</span>
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className={styles.refreshBtn}
+            title={t('recentProjects.refresh')}
+            aria-label={t('recentProjects.refresh')}
+            onClick={() => window.dispatchEvent(new CustomEvent('personal:folders-updated'))}
+          >
+            <Icon name="refresh" size={16} aria-hidden />
+          </button>
+        </div>
       </header>
 
-     <div className={styles.typeTabs} role="tablist">
+     <div ref={setTypeTabsEl} className={styles.typeTabs} role="tablist">
        {TABS.map((tab) => (
          <button
            key={tab.id}
@@ -460,13 +580,15 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
      <div className={styles.content} role="tabpanel">
         {activeTab === 'projects' ? (
         <PersonalProjectsPanel
+          controlsPortalTarget={typeTabsEl}
           workspaceId={workspaceId}
           showCreateGroup={showCreateGroup}
           onShowCreateGroupChange={setShowCreateGroup}
           designSystems={designSystems}
-          onOpenProject={onOpenProject}
-          onDeleteProject={onDeleteProject}
-          onRenameProject={onRenameProject}
+         onOpenProject={onOpenProject}
+         onDeleteProject={onDeleteProject}
+         onDuplicateProject={onDuplicateProject}
+         onRenameProject={onRenameProject}
         />
         ) : (
           <PlaceholderPanel

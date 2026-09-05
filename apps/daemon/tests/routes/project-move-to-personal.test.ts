@@ -62,6 +62,8 @@ const NO_SEED_FALLBACK = async () => ({ changed: false });
 // The reporter's real ids from recvqfNnRETNtM, kept verbatim.
 const TEAM_WORKSPACE_ID = 'i05lx8ufnrrhloo8qxrpetwt';
 const OWNER_MEMBER_ID = 'eu7o99459dcojtv2osoprr5k';
+const PERSONAL_WORKSPACE_ID = 'personal-ws-id';
+const PERSONAL_MEMBER_ID = 'personal-member-id';
 
 const DESIGN_MD_INPUT = `---
 name: Heritage
@@ -258,8 +260,48 @@ describe('project move to personal on an unbound (never-locally-shared) project'
         refreshTeamProjectMetadata: noop,
         invalidateTeamProjectCatalog: noop,
       },
-      verifyWorkspaceRequestAuthority: overrides.verifyWorkspaceRequestAuthority,
-      teamProjectCatalog: overrides.teamProjectCatalog,
+     verifyWorkspaceRequestAuthority: overrides.verifyWorkspaceRequestAuthority,
+     teamProjectCatalog: overrides.teamProjectCatalog,
+     fetchWorkspaceDirectory: async () => ({
+       ok: true as const,
+       items: [
+         {
+           workspaceId: TEAM_WORKSPACE_ID,
+           workspaceMemberId: OWNER_MEMBER_ID,
+           workspaceType: 'team',
+           workspaceName: 'Heritage Team',
+           role: 'owner',
+           memberStatus: 'active',
+           lifecycleState: 'active',
+           resourceTeamId: TEAM_WORKSPACE_ID,
+           permissions: {
+             canManageBilling: true,
+             canManageMembers: true,
+             canInviteMembers: true,
+             canShareProjects: true,
+             canWriteSyncedFiles: true,
+           },
+         },
+         {
+           workspaceId: PERSONAL_WORKSPACE_ID,
+           workspaceMemberId: PERSONAL_MEMBER_ID,
+           workspaceType: 'personal',
+           workspaceName: 'My Workspace',
+           role: 'owner',
+           memberStatus: 'active',
+           lifecycleState: 'active',
+           isDefaultTeam: true,
+           resourceTeamId: PERSONAL_WORKSPACE_ID,
+           permissions: {
+             canManageBilling: true,
+             canManageMembers: true,
+             canInviteMembers: true,
+             canShareProjects: true,
+             canWriteSyncedFiles: true,
+           },
+         },
+       ],
+     }),
     } as unknown as Parameters<typeof registerProjectRoutes>[1];
   }
 
@@ -470,16 +512,18 @@ describe('project move to personal on an unbound (never-locally-shared) project'
         id: projectId,
         name: 'Catalog-only owner project',
       });
-      expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
-        workspaceId: TEAM_WORKSPACE_ID,
-        visibility: 'personal',
-      });
-    } finally {
-      await close(routeServer.server);
-    }
-  });
+     expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
+        workspaceId: PERSONAL_WORKSPACE_ID,
+       visibility: 'personal',
+        createdByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+        updatedByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+     });
+   } finally {
+     await close(routeServer.server);
+   }
+ });
 
-  it('materializes and renames an exact-owner Team catalog project on a fresh daemon', async () => {
+ it('materializes and renames an exact-owner Team catalog project on a fresh daemon', async () => {
     const projectId = `catalog-only-owner-rename-${Date.now()}`;
     const resourceId = `project-${projectId}`;
     const teamProjectCatalog = {
@@ -878,11 +922,16 @@ describe('project move to personal on an unbound (never-locally-shared) project'
           resourceHubResourceId: null,
         });
 
-        const row = getWorkspaceProjectByProjectId(db, result.projectId);
-        expect(row).toMatchObject({ workspaceId: TEAM_WORKSPACE_ID, visibility: 'personal' });
-      } finally {
-        await close(routeServer.server);
-      }
+       const row = getWorkspaceProjectByProjectId(db, result.projectId);
+        expect(row).toMatchObject({
+          workspaceId: PERSONAL_WORKSPACE_ID,
+          visibility: 'personal',
+          createdByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+          updatedByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+        });
+     } finally {
+       await close(routeServer.server);
+     }
     },
   );
 
@@ -957,16 +1006,18 @@ describe('project move to personal on an unbound (never-locally-shared) project'
       const retried = await move();
       expect(retried.status).toBe(200);
       expect(requestTeamUnshare).toHaveBeenCalledTimes(2);
-      expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
-        workspaceId: TEAM_WORKSPACE_ID,
-        visibility: 'personal',
-      });
-    } finally {
-      await close(routeServer.server);
-    }
-  });
+     expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
+        workspaceId: PERSONAL_WORKSPACE_ID,
+       visibility: 'personal',
+        createdByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+        updatedByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+     });
+   } finally {
+     await close(routeServer.server);
+   }
+ });
 
-  it('403s PROJECT_DELETE_FORBIDDEN for the same orphan project when the fix is bypassed (documents the pre-fix failure)', async () => {
+ it('403s PROJECT_DELETE_FORBIDDEN for the same orphan project when the fix is bypassed (documents the pre-fix failure)', async () => {
     // Same setup as above, but WITHOUT a teamProjectCatalog wired up — the
     // exact condition `reconcileUnboundProjectBeforeMove` early-returns on
     // (`if (!teamProjectCatalog) return;`). This is what production looked
@@ -1060,13 +1111,19 @@ describe('project move to personal on an unbound (never-locally-shared) project'
       );
       const body = await resp.json() as any;
       expect(resp.status, `expected 200, got ${resp.status}: ${JSON.stringify(body)}`).toBe(200);
-      expect(body.project).toMatchObject({ id: projectId, visibility: 'personal' });
-    } finally {
-      await close(routeServer.server);
-    }
-  });
+     expect(body.project).toMatchObject({ id: projectId, visibility: 'personal' });
+      expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
+        workspaceId: PERSONAL_WORKSPACE_ID,
+        visibility: 'personal',
+        createdByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+        updatedByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+      });
+   } finally {
+     await close(routeServer.server);
+   }
+ });
 
-  it('does not let a non-creator member consume the catalog recovery witness', async () => {
+ it('does not let a non-creator member consume the catalog recovery witness', async () => {
     const projectId = `orphan-non-creator-${Date.now()}`;
     insertProject(db, {
       id: projectId,
@@ -1187,15 +1244,21 @@ describe('project move to personal on an unbound (never-locally-shared) project'
           body: JSON.stringify({ visibility: 'personal' }),
         },
       );
-      expect(creator.status).toBe(200);
-      expect(requestTeamUnshare).toHaveBeenCalledTimes(1);
-      expect(teamProjectCatalog.list).not.toHaveBeenCalled();
-    } finally {
-      await close(routeServer.server);
-    }
-  });
+     expect(creator.status).toBe(200);
+     expect(requestTeamUnshare).toHaveBeenCalledTimes(1);
+     expect(teamProjectCatalog.list).not.toHaveBeenCalled();
+      expect(getWorkspaceProjectByProjectId(db, projectId)).toMatchObject({
+        workspaceId: PERSONAL_WORKSPACE_ID,
+        visibility: 'personal',
+        createdByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+        updatedByWorkspaceMemberId: PERSONAL_MEMBER_ID,
+      });
+   } finally {
+     await close(routeServer.server);
+   }
+ });
 
-  it('keeps an owner rename visible while the team catalog still has the previous title', async () => {
+ it('keeps an owner rename visible while the team catalog still has the previous title', async () => {
     const projectId = `owner-rename-stale-catalog-${Date.now()}`;
     const resourceId = `project-${projectId}`;
     insertProject(db, {

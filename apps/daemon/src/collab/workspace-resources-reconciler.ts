@@ -3,18 +3,30 @@
 // skill resources — the generic-table counterpart of
 // `workspace-projects-reconciler.ts` for `workspace_projects`.
 //
-// The gap this closes: `syncSharedTeamDesignSystem` / `syncSharedTeamSkill`
-// (server.ts) already handle DIRECTION 1 — a resource the hub still confirms
-// as shared gets materialized + bound `visibility: 'team'` — every time a
-// kind's `/team` listing is read. Nothing handles DIRECTION 2: a resource a
-// workspace has ALREADY bound `visibility: 'team'` that the hub no longer
-// lists at all (the owner unshared it, or this member's access was revoked).
-// Before this module, that local row simply sat there forever, unexamined —
-// the puller's copy vanished from the Team scope (the hub stopped listing
-// it) without ever being told to leave "team" state, so it also never
-// qualified to reappear anywhere else. This module is what would eventually
-// need to run to converge that row, the same way
-// `reconcileWorkspaceProjectsWithRemote` converges `workspace_projects`.
+// Two directions, mirroring `workspace-projects-reconciler.ts`:
+//
+// DIRECTION 1 — ownership correction: `syncSharedTeamDesignSystem` /
+// `syncSharedTeamSkill` / `syncSharedTeamPlugin` (server.ts) already
+// materialize + bind a resource the hub confirms as shared every time a
+// kind's `/team` listing is read. But the `createdByWorkspaceMemberId`
+// they stamp comes from the request's resolved workspace context — and
+// that context can carry a STALE member id (the concrete bug: a personal
+// workspace's member id was written into a team workspace's resource
+// binding because the context resolver picked the wrong membership
+// directory entry). The sync functions never re-examine an already-bound
+// row's ownership, so the wrong member id sits there forever. This
+// module's Direction 1 corrects that drift: when the remote hub still
+// confirms a resource as shared, and the local row's
+// `createdByWorkspaceMemberId` disagrees with the current
+// `workspaceMemberId`, the rebind action overwrites it.
+//
+// DIRECTION 2 — retirement: a resource a workspace has ALREADY bound
+// `visibility: 'team'` that the hub no longer lists at all (the owner
+// unshared it, or this member's access was revoked). Before this module,
+// that local row simply sat there forever, unexamined — the puller's copy
+// vanished from the Team scope (the hub stopped listing it) without ever
+// being told to leave "team" state, so it also never qualified to
+// reappear anywhere else.
 //
 // Retraction semantic (spec decision, workspace-team continuous-sync 优先级3):
 // deliberately NOT "demote to personal" (project's `workspace_projects` model
@@ -57,17 +69,22 @@ export interface LocalTeamResourceBinding {
   workspaceId: string;
   visibility: 'personal' | 'team';
   resourceState: string | null;
+  createdByWorkspaceMemberId: string | null;
+  resourceHubResourceId: string | null;
 }
 
 /** What the remote hub says is currently shared — the subset
  *  `TeamResourceShareService.sharedResources()` (team-resource-share.ts)
  *  actually carries that the planner needs: the LOCAL resource id (already
  *  decoded by `parseSharedResourceRecords`, matching `workspace_resources.
- *  resource_id` directly). */
+ *  resource_id` directly), plus the hub-side `ownerMemberId` and
+ *  `hubResourceId` the planner needs for ownership correction. */
 export interface RemoteTeamResourceRef {
   resourceId: string;
   versionId?: string;
   version?: number;
+  ownerMemberId?: string;
+  hubResourceId?: string;
 }
 
 /** Tracks the last authoritative listing independently by Workspace and kind. */
@@ -104,25 +121,43 @@ export type WorkspaceResourceReconcileAction = {
   kind: 'retire';
   resourceId: string;
   workspaceId: string;
+} | {
+  kind: 'rebind';
+  resourceId: string;
+  patch: WorkspaceResourceBindPatch;
 };
+
+export interface WorkspaceResourceBindPatch {
+  workspaceId: string;
+  visibility: 'team';
+  resourceState: 'active';
+  createdByWorkspaceMemberId: string;
+  updatedByWorkspaceMemberId: string;
+  resourceHubResourceId: string | null;
+  cloudTombstonedAt: null;
+  syncState: 'synced';
+}
 
 /**
  * Pure planner: given what the resource hub currently lists as shared and
  * what this daemon's OWN `workspace_resources` rows (already active-team-
  * filtered by the caller) claim for the workspace, decide which local rows
- * are stale and need retiring. No I/O — the orchestrator below
+ * disagree and how to fix them. No I/O — the orchestrator below
  * (`reconcileWorkspaceResourcesWithRemote`) is the only caller that touches
  * the database, which is what keeps this function directly unit-testable.
  *
- * Only one direction: a local row the remote listing no longer confirms.
- * The other direction (remote confirms a resource this daemon has not yet
- * materialized/bound) is already handled by `syncSharedTeamDesignSystem` /
- * `syncSharedTeamSkill` every time a kind's `/team` listing is read — adding
- * a second "confirm" action here would just duplicate that pull-and-bind
- * logic under a different name.
+ * Direction 1: remote confirms the resource is still shared — correct
+ * ownership drift. A teammate's pulled mirror should carry the CURRENT
+ * member's id as `createdByWorkspaceMemberId` (they created this local
+ * binding), not whatever stale member id was resolved when the binding
+ * was first written. The hub's `hubResourceId` is also corrected if it
+ * has drifted, since the hub is the authoritative source.
+ *
+ * Direction 2: a local Team row the remote listing no longer confirms.
  */
 export function planWorkspaceResourceReconciliation(input: {
   workspaceId: string;
+  workspaceMemberId: string;
   remoteResources: readonly RemoteTeamResourceRef[];
   /** Every row this daemon currently has bound `visibility: 'team'` AND
    *  `resourceState` other than `'deleted'` for `workspaceId` — see
@@ -130,10 +165,46 @@ export function planWorkspaceResourceReconciliation(input: {
    *  function relies on the caller to apply. */
   localActiveTeamRows: readonly LocalTeamResourceBinding[];
 }): WorkspaceResourceReconcileAction[] {
-  const remoteIds = new Set(input.remoteResources.map((r) => r.resourceId));
+  const { workspaceId, workspaceMemberId, remoteResources, localActiveTeamRows } = input;
   const actions: WorkspaceResourceReconcileAction[] = [];
-  for (const local of input.localActiveTeamRows) {
-    if (local.workspaceId !== input.workspaceId) continue;
+
+  // Direction 1: remote confirms the resource is still shared — correct
+  // ownership drift on the local binding row.
+  const localByResourceId = new Map<string, LocalTeamResourceBinding>();
+  for (const local of localActiveTeamRows) {
+    if (local.workspaceId === workspaceId) {
+      localByResourceId.set(local.resourceId, local);
+    }
+  }
+  for (const remote of remoteResources) {
+    const local = localByResourceId.get(remote.resourceId);
+    if (!local) continue;
+    const wantCreatedBy = workspaceMemberId;
+    const wantHubResourceId = remote.hubResourceId ?? local.resourceHubResourceId;
+    const alreadyCorrect =
+      local.createdByWorkspaceMemberId === wantCreatedBy &&
+      local.resourceHubResourceId === wantHubResourceId;
+    if (alreadyCorrect) continue;
+    actions.push({
+      kind: 'rebind',
+      resourceId: remote.resourceId,
+      patch: {
+        workspaceId,
+        visibility: 'team',
+        resourceState: 'active',
+        createdByWorkspaceMemberId: wantCreatedBy,
+        updatedByWorkspaceMemberId: workspaceMemberId,
+        resourceHubResourceId: wantHubResourceId,
+        cloudTombstonedAt: null,
+        syncState: 'synced',
+      },
+    });
+  }
+
+  // Direction 2: a local Team row the remote listing no longer confirms.
+  const remoteIds = new Set(remoteResources.map((r) => r.resourceId));
+  for (const local of localActiveTeamRows) {
+    if (local.workspaceId !== workspaceId) continue;
     if (remoteIds.has(local.resourceId)) continue;
     actions.push({ kind: 'retire', resourceId: local.resourceId, workspaceId: local.workspaceId });
   }
@@ -147,8 +218,8 @@ export interface WorkspaceResourcesReconcilerDeps {
    *  `reconcileWorkspaceProjectsWithRemote`'s `getWorkspaceIdentity` does — a
    *  context that can still ADDRESS a resource hub partition is not proof
    *  this member is still IN the team. */
-  getWorkspaceIdentity: () => Promise<{ workspaceId: string } | null>;
-  /** This kind's `TeamResourceShareService.sharedResources()` — the exact
+  getWorkspaceIdentity: () => Promise<{ workspaceId: string; workspaceMemberId: string } | null>;
+ /** This kind's `TeamResourceShareService.sharedResources()` — the exact
    *  same hub read `/api/workspace/<kind>/team` already serves (through its
    *  own SWR cache), so this reconciler never opens a second transport. */
   listRemoteTeamResources: () => Promise<readonly RemoteTeamResourceRef[]>;
@@ -162,15 +233,21 @@ export interface WorkspaceResourcesReconcilerDeps {
    *  `visibility` untouched. See this module's header comment for why that
    *  is the correct action and not a demote-to-personal. */
   applyRetire: (workspaceId: string, resourceId: string) => void;
+  /** Write a 'rebind' action: correct `createdByWorkspaceMemberId` and
+   *  `resourceHubResourceId` on an existing local binding row that the
+   *  remote hub still confirms as shared. */
+  applyRebind: (resourceId: string, patch: WorkspaceResourceBindPatch) => void;
   onError?: (error: unknown) => void;
 }
 
 export interface WorkspaceResourcesReconcileResult {
   /** Number of retire actions successfully persisted. */
   retired: number;
+  /** Number of rebind (ownership correction) actions successfully persisted. */
+  rebound: number;
 }
 
-const NO_OP_RESULT: WorkspaceResourcesReconcileResult = { retired: 0 };
+const NO_OP_RESULT: WorkspaceResourcesReconcileResult = { retired: 0, rebound: 0 };
 
 /**
  * Run one reconciliation pass for one resource kind: read the remote shared
@@ -201,21 +278,28 @@ export async function reconcileWorkspaceResourcesWithRemote(
   const localActiveTeamRows = deps.listLocalActiveTeamRows(identity.workspaceId);
   const actions = planWorkspaceResourceReconciliation({
     workspaceId: identity.workspaceId,
+    workspaceMemberId: identity.workspaceMemberId,
     remoteResources,
     localActiveTeamRows,
   });
 
   let retired = 0;
+  let rebound = 0;
   for (const action of actions) {
     try {
-      deps.applyRetire(action.workspaceId, action.resourceId);
-      retired += 1;
+      if (action.kind === 'retire') {
+        deps.applyRetire(action.workspaceId, action.resourceId);
+        retired += 1;
+      } else {
+        deps.applyRebind(action.resourceId, action.patch);
+        rebound += 1;
+      }
     } catch (error) {
       deps.onError?.(error);
     }
   }
 
-  return { retired };
+  return { retired, rebound };
 }
 
 const TEAM_RESOURCE_KINDS: readonly WorkspaceTeamResourceKind[] = [
@@ -313,6 +397,7 @@ export function createWorkspaceTeamResourceEventCoordinator<TScope>(
       const previousSignature = signatures.get(key);
       const shouldEmit = input.reason === 'push'
         || reconciliation.retired > 0
+        || reconciliation.rebound > 0
         || (previousSignature === undefined
           ? resources.length > 0
           : previousSignature !== nextSignature);

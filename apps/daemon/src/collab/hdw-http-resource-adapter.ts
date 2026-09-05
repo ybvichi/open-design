@@ -258,6 +258,7 @@ export function createHdwHttpResourceAdapter(
         return {
           version: result.version,
           ...(result.versionId ? { versionId: result.versionId } : {}),
+          ...(result.targetOwnerMemberId ? { targetOwnerMemberId: result.targetOwnerMemberId } : {}),
         };
       }, null);
     },

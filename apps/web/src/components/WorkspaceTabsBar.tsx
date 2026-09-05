@@ -1091,7 +1091,25 @@ export function WorkspaceTabsBar({
     pendingScopeRouteRef.current = buildPath(route) === nextPath
       ? null
       : { scopeKey: identityScopeKey, path: nextPath };
-    navigate(nextRoute);
+  // A workspace context switch must never bounce the user away from their
+  // current route. The context switches underneath and only the tab bar
+  // state updates. Scope views (personal-all, team-space, team-folder,
+  // personal-folder, shared-with-me) keep the pending route ref set so
+  // syncStateToRoute doesn't fold the outgoing workspace's URL into the
+  // incoming snapshot. For every other route — including non-scope home
+  // views like /community, /marketplace, /settings — clear the pending
+  // route so syncStateToRoute can immediately reconcile the tab bar to
+  // match the current route.
+  const isScopeViewRoute = route.kind === 'home' && (
+    route.view === 'personal-all'
+    || route.view === 'team-space'
+    || route.view === 'team-folder'
+    || route.view === 'personal-folder'
+    || route.view === 'shared-with-me'
+  );
+  if (!isScopeViewRoute) {
+    pendingScopeRouteRef.current = null;
+  }
   }, [
     activeProjectWorkspaceId,
     identityScopeKey,

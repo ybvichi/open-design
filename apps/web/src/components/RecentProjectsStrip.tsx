@@ -16,6 +16,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 
 const MOVE_CONFIRM_SKIP_KEY = 'od.projects.moveConfirmSkip';
@@ -151,6 +152,19 @@ interface Props {
  *  of its internal search state (used with hideHeader to move search to the
  *  parent view's header). */
 externalSearchQuery?: string;
+/** The workspace ID the current view belongs to. Used to compute the
+ *  disabled tree node when moving within the same workspace (so the
+ *  current folder/root cannot be selected as its own destination). */
+currentWorkspaceId?: string | null;
+/** The folder ID the current view is inside, or null/undefined for the
+ *  workspace root. Used together with currentWorkspaceId to disable the
+ *  current location in the move-to tree dialog. */
+currentFolderId?: string | null;
+/** When provided, the controls (search, filters, sort, view toggle) are
+ *  portaled into this element instead of rendering inside the strip's
+ *  own header. Used by full-page views (personal-all, team) to place
+ *  controls inline with the type tabs row. */
+controlsPortalTarget?: HTMLElement | null;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
@@ -360,6 +374,9 @@ export function RecentProjectsStrip({
 isActive = true,
 hideTitle = false,
 externalSearchQuery,
+currentWorkspaceId,
+currentFolderId,
+controlsPortalTarget,
 }: Props) {
   const t = useT();
   const analytics = useAnalytics();
@@ -503,33 +520,78 @@ externalSearchQuery,
   // 全部项目 / 草稿 partition reads the very same predicate, so the badge and the
   // card's grid can no longer disagree.
   const isShared = isSharedProject ?? NOTHING_SHARED;
-  // The card's "{creator}创建" line. Self-owned projects use the account identity
-  // instead of the literal "我 / Me" (whose first letter previously produced the
-  // misleading M avatar). Other owners still resolve through the team directory.
-  const resolveCreator = (projectId: string): {
+  // Deterministic background colour for the owner avatar circle, derived
+  // from the member id so the same person always gets the same hue.
+  function ownerAvatarColor(memberId: string | null): string {
+    if (!memberId) return '#1a1917';
+    const palette = [
+      '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
+      '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6',
+      '#06b6d4', '#0ea5e9', '#3b82f6', '#a855f7', '#d946ef',
+    ];
+    let hash = 0;
+    for (let i = 0; i < memberId.length; i++) {
+      hash = ((hash << 5) - hash + memberId.charCodeAt(i)) | 0;
+    }
+    return palette[Math.abs(hash) % palette.length] ?? '#1a1917';
+  }
+  // The card owner avatar: first character of the owner display name with a
+  // deterministic background colour. The member roster (useTeamMembers),
+  // already loaded on team views, resolves the member id to a display name.
+  const resolveCreator = (project: Project): {
     name: string;
     initial: string;
     avatarUrl: string | null;
     ownedBySelf: boolean;
+    canMutate: boolean;
+    memberId: string | null;
   } => {
-    const ownerMemberId = projectOwnerMemberIds?.get(projectId) ?? null;
-    if (ownerMemberId === selfMemberId || (!ownerMemberId && !isShared(projectId))) {
-      const name = workspaceContext?.displayName?.trim() || t('recentProjects.selfCreator');
+    // In the personal space (default team) the user is the sole member
+    // and owner, so every project is theirs — show "我" and grant full
+    // operations without a member-ID match.
+    if (workspaceContext?.isDefaultTeam) {
+      return {
+        name: t('recentProjects.selfCreator'),
+        initial: Array.from(t('recentProjects.selfCreator'))[0] ?? 'M',
+        avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
+        ownedBySelf: true,
+        canMutate: true,
+        memberId: selfMemberId,
+      };
+    }
+    // Admins can rename, delete, duplicate, and move team projects to other
+    // teams, but only the project owner can move it back to personal space.
+    const isAdmin = workspaceContext?.role === 'admin';
+    // Team view: strict ownership — only mark as self-owned when the
+    // project's createdByWorkspaceMemberId actually matches the current
+    // user's workspace member ID. The optimistic owner map (team catalog
+    // + recent-move witnesses) is a secondary source for team-visibility
+    // projects. No fallback assumption — an unattributed project is
+    // "unknown creator", not "mine".
+    const ownerMemberId = project.createdByWorkspaceMemberId
+      ?? projectOwnerMemberIds?.get(project.id)
+      ?? null;
+    if (ownerMemberId && ownerMemberId === selfMemberId) {
+      const name = workspaceContext?.displayName?.trim()
+        || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
+        || t('recentProjects.teamMemberCreator');
       const initial = Array.from(name.trim())[0]?.toUpperCase() ?? 'M';
       return {
         name,
         initial,
         avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
         ownedBySelf: true,
+        canMutate: true,
+        memberId: ownerMemberId,
       };
     }
-    const name = resolveMember(ownerMemberId)?.displayName ?? t('recentProjects.teamMemberCreator');
+    const name = (ownerMemberId && resolveMember(ownerMemberId)?.displayName) ?? t('recentProjects.teamMemberCreator');
     const initial = (Array.from(name.trim())[0] ?? 'T').toUpperCase();
-    return { name, initial, avatarUrl: null, ownedBySelf: false };
+    return { name, initial, avatarUrl: null, ownedBySelf: false, canMutate: isAdmin, memberId: ownerMemberId ?? null };
   };
   const visibleProjects = useMemo(
     () => sortedProjects
-      .map((project) => ({ project, creator: resolveCreator(project.id) }))
+     .map((project) => ({ project, creator: resolveCreator(project) }))
       .filter(({ project, creator }) => {
         const ownerMatches =
           !showOwnerFilter ||
@@ -570,9 +632,21 @@ externalSearchQuery,
  const [moveTarget, setMoveTarget] = useState<{ project: Project; action: 'to-team' | 'to-personal' } | null>(null);
  // When set, the tree selector is open for a single-project move to team.
  const [moveToTeamTarget, setMoveToTeamTarget] = useState<Project | null>(null);
- // When set, the tree selector is open for a bulk move to team.
- const [bulkMoveToTeamOpen, setBulkMoveToTeamOpen] = useState(false);
- const [moveDontRemind, setMoveDontRemind] = useState<boolean>(() => {
+ // Tree dialog mode for the current move: 'tabbed' in team space, 'personal-folders'
+ // for personal-space folder moves, 'team' for the legacy move-to-team flow.
+ const [moveToTreeMode, setMoveToTreeMode] = useState<'team' | 'personal-folders' | 'tabbed'>('tabbed');
+const [bulkMoveToTreeMode, setBulkMoveToTreeMode] = useState<'team' | 'personal-folders' | 'tabbed'>('tabbed');
+// When set, the tree selector is open for a bulk move to team.
+const [bulkMoveToTeamOpen, setBulkMoveToTeamOpen] = useState(false);
+// Disabled tree-node keys for the move-to dialog. When moving within the
+// same workspace (personal-folders mode), the current folder/root is
+// disabled so a project cannot be moved into its own current location.
+const disabledKeys = useMemo(() => {
+  if (!currentWorkspaceId) return undefined;
+  const key = `${currentWorkspaceId}:${currentFolderId ?? 'root'}`;
+  return new Set([key]);
+}, [currentWorkspaceId, currentFolderId]);
+const [moveDontRemind, setMoveDontRemind] = useState<boolean>(() => {
    try {
      return window.localStorage.getItem(MOVE_CONFIRM_SKIP_KEY) === '1';
    } catch {
@@ -582,15 +656,16 @@ externalSearchQuery,
  function requestMove(project: Project, action: 'to-team' | 'to-personal') {
    trackCollection(action === 'to-team' ? 'move_to_team' : 'move_to_personal', {
      project_key: project.id,
-     project_relation: resolveCreator(project.id).ownedBySelf ? 'self' : 'other',
+     project_relation: resolveCreator(project).ownedBySelf ? 'self' : 'other',
    });
    // "to-team" always opens the tree selector so the user can pick the
    // destination team/folder; the old "don't remind" skip only applies to
    // the "to-personal" confirmation dialog below.
-   if (action === 'to-team') {
-     setMenuOpenId(null);
-     setMoveToTeamTarget(project);
-     return;
+    if (action === 'to-team') {
+      setMenuOpenId(null);
+      setMoveToTreeMode(space === 'team' ? 'tabbed' : 'team');
+      setMoveToTeamTarget(project);
+      return;
    }
   if (moveDontRemind) {
     void handleUnshareFromTeam(project);
@@ -599,6 +674,15 @@ externalSearchQuery,
   setMenuOpenId(null);
   setMoveTarget({ project, action });
 }
+function requestMoveToFolder(project: Project) {
+    trackCollection('move_to_folder', {
+      project_key: project.id,
+      project_relation: resolveCreator(project).ownedBySelf ? 'self' : 'other',
+    });
+    setMenuOpenId(null);
+    setMoveToTreeMode('personal-folders');
+    setMoveToTeamTarget(project);
+  }
 function commitMove() {
    if (!moveTarget) return;
    if (moveDontRemind) {
@@ -618,14 +702,22 @@ function commitMove() {
    const project = moveToTeamTarget;
    setMoveToTeamTarget(null);
    if (!project) return;
-   void handleShareToTeam(project, {
-     targetWorkspaceId: selection.workspaceId,
-     targetFolderId: selection.folderId,
-   });
+   if (selection.isDefaultTeam) {
+     void handleUnshareFromTeam(project, {
+       targetWorkspaceId: selection.workspaceId,
+       targetFolderId: selection.folderId,
+     });
+   } else {
+     void handleShareToTeam(project, {
+       targetWorkspaceId: selection.workspaceId,
+       targetFolderId: selection.folderId,
+     });
+   }
  }
  function handleBulkMoveToTeamConfirm(selection: TeamTreeSelection) {
    setBulkMoveToTeamOpen(false);
-   void commitBulkMove('to-team', {
+   const action = selection.isDefaultTeam ? 'to-personal' : 'to-team';
+   void commitBulkMove(action, {
      targetWorkspaceId: selection.workspaceId,
      targetFolderId: selection.folderId,
    });
@@ -637,16 +729,17 @@ function commitMove() {
   // space, delete); nothing new is exposed here that a single card cannot do.
   const selectedProjects = visibleProjects.filter(({ project }) => selectedProjectIds.has(project.id));
   const selectedCount = selectedProjectIds.size;
-  // Same gate as the per-card menu: only your own projects can be moved or
-  // deleted, so a selection containing someone else's shared project disables
-  // the mutations instead of half-applying them.
-  const selectionHasForeignProject = selectedProjects.some(({ creator }) => !creator.ownedBySelf);
+ // Same gate as the per-card menu: only your own projects can be moved or
+ // deleted, so a selection containing someone else's shared project disables
+ // the mutations instead of half-applying them.
+  const selectionHasForeignProject = selectedProjects.some(({ creator }) => !creator.canMutate);
   const bulkMutationDisabled = selectedCount === 0 || selectionHasForeignProject;
   const bulkMutationTitle = selectionHasForeignProject
     ? t('recentProjects.ownOnlyMutation')
     : selectedProjects.map(({ project }) => project.name).join('、') || undefined;
   const canBulkMoveToTeam = collaborationAvailable && space !== 'team';
   const canBulkMoveToPersonal = collaborationAvailable && space !== 'drafts';
+  const canBulkMove = collaborationAvailable && space === 'team';
 
   useEffect(() => {
     setSelectedProjectIds((current) => {
@@ -1044,17 +1137,17 @@ function commitMove() {
     return null;
   }
 
-  function startRename(project: Project) {
-    const creator = resolveCreator(project.id);
-    if (!creator.ownedBySelf) return;
-    trackCollection('rename', {
-      project_key: project.id,
-      project_relation: 'self',
-    });
-    setMenuOpenId(null);
-    setRenameTarget({ id: project.id, original: project.name });
-    setRenameInput(project.name);
-  }
+function startRename(project: Project) {
+  const creator = resolveCreator(project);
+   if (!creator.canMutate) return;
+   trackCollection('rename', {
+     project_key: project.id,
+     project_relation: 'self',
+   });
+   setMenuOpenId(null);
+   setRenameTarget({ id: project.id, original: project.name });
+   setRenameInput(project.name);
+ }
 
   function cancelRename() {
     setRenameTarget(null);
@@ -1070,17 +1163,17 @@ function commitMove() {
     cancelRename();
   }
 
-  function requestDelete(project: Project) {
-    const creator = resolveCreator(project.id);
-    if (!creator.ownedBySelf) return;
-    trackCollection('delete', {
-      project_key: project.id,
-      project_relation: 'self',
-    });
-    setMenuOpenId(null);
-    setDeleteFailed(false);
-    setConfirmTarget(project);
-  }
+function requestDelete(project: Project) {
+  const creator = resolveCreator(project);
+   if (!creator.canMutate) return;
+   trackCollection('delete', {
+     project_key: project.id,
+     project_relation: 'self',
+   });
+   setMenuOpenId(null);
+   setDeleteFailed(false);
+   setConfirmTarget(project);
+ }
 
   // Promote/demote a project through the same workspace move endpoint used by
   // the full project grid so cards and in-file sharing cannot drift.
@@ -1100,13 +1193,24 @@ function commitMove() {
        targetWorkspaceId: options?.targetWorkspaceId,
        targetFolderId: options?.targetFolderId ?? null,
      });
-      onProjectShared?.(movedProject);
-      notifyTeamProjectsChanged();
-      setMenuOpenId(null);
-      trackWorkspaceProjectActionResult(analytics.track, {
-        page_name: analyticsPage,
-        area: 'project_collection',
-        action: 'move_to_team',
+     onProjectShared?.(movedProject);
+     notifyTeamProjectsChanged();
+     window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+     window.dispatchEvent(
+       new CustomEvent('hdw:folders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+     window.dispatchEvent(
+       new CustomEvent('hdw:subfolders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+     setMenuOpenId(null);
+     trackWorkspaceProjectActionResult(analytics.track, {
+       page_name: analyticsPage,
+       area: 'project_collection',
+       action: 'move_to_team',
         result: 'success',
         requested_count: 1,
         succeeded_count: 1,
@@ -1141,7 +1245,10 @@ function commitMove() {
     }
   }
 
-  async function handleUnshareFromTeam(project: Project) {
+  async function handleUnshareFromTeam(
+    project: Project,
+    options?: { targetWorkspaceId?: string; targetFolderId?: string | null },
+  ) {
     const startedAt = performance.now();
     setShareErrorProjectId(null);
     setMenuOpenId(project.id);
@@ -1151,13 +1258,26 @@ function commitMove() {
         projectId: project.id,
         visibility: 'personal',
         workspaceContext,
+        targetWorkspaceId: options?.targetWorkspaceId,
+        targetFolderId: options?.targetFolderId ?? null,
       });
-      onProjectUnshared?.(project.id);
-      notifyTeamProjectsChanged();
-      setMenuOpenId(null);
-      trackWorkspaceProjectActionResult(analytics.track, {
-        page_name: analyticsPage,
-        area: 'project_collection',
+     onProjectUnshared?.(project.id);
+     notifyTeamProjectsChanged();
+     window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+     window.dispatchEvent(
+       new CustomEvent('hdw:folders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+     window.dispatchEvent(
+       new CustomEvent('hdw:subfolders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+     setMenuOpenId(null);
+     trackWorkspaceProjectActionResult(analytics.track, {
+       page_name: analyticsPage,
+       area: 'project_collection',
         action: 'move_to_personal',
         result: 'success',
         requested_count: 1,
@@ -1194,9 +1314,9 @@ function commitMove() {
     // recvqaRqM0dv2x above) — kept here too so the handler itself can never
     // fire the doomed-to-403 request, matching startRename/requestDelete's
     // own defense-in-depth check.
-    const creator = resolveCreator(project.id);
-    if (!creator.ownedBySelf) return;
-    trackCollection('duplicate', {
+  const creator = resolveCreator(project);
+  if (!creator.canMutate) return;
+  trackCollection('duplicate', {
       project_key: project.id,
       project_relation: 'self',
     });
@@ -1333,8 +1453,9 @@ function commitMove() {
    });
    // "to-team" opens the tree selector so the user can pick the destination.
    if (action === 'to-team') {
-     setBulkMoveToTeamOpen(true);
-     return;
+      setBulkMoveToTreeMode(space === 'team' ? 'tabbed' : 'team');
+      setBulkMoveToTeamOpen(true);
+      return;
    }
    if (moveDontRemind) {
      void commitBulkMove(action);
@@ -1342,6 +1463,14 @@ function commitMove() {
    }
    setBulkMoveAction(action);
  }
+  function requestBulkMoveToFolder() {
+    if (bulkMutationDisabled) return;
+    trackCollection('bulk_move_to_folder', {
+      selection_count_bucket: countBucket(selectedCount),
+    });
+    setBulkMoveToTreeMode('personal-folders');
+    setBulkMoveToTeamOpen(true);
+  }
 
  /** Batch form of the per-card 转入/移出团队空间 action: the very same
   *  `moveWorkspaceProject` call, once per selected project. Failures are
@@ -1381,8 +1510,21 @@ function commitMove() {
       if (action === 'to-team') onProjectShared?.(result.project);
       else onProjectUnshared?.(result.id);
     }
-    if (succeeded.length > 0) notifyTeamProjectsChanged();
-    const failedCount = ids.length - succeeded.length;
+   if (succeeded.length > 0) notifyTeamProjectsChanged();
+   if (succeeded.length > 0) {
+     window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+     window.dispatchEvent(
+       new CustomEvent('hdw:folders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+     window.dispatchEvent(
+       new CustomEvent('hdw:subfolders-updated', {
+         detail: { teamId: workspaceContext?.workspaceId },
+       }),
+     );
+   }
+   const failedCount = ids.length - succeeded.length;
     trackWorkspaceProjectActionResult(analytics.track, {
       page_name: analyticsPage,
       area: 'project_collection',
@@ -1430,20 +1572,9 @@ function commitMove() {
     });
   }
 
-  return (
-    <section className="recent-projects" data-testid="recent-projects-strip">
-      {fullPageGrid ? (
-      <header className="recent-projects__head">
-          {hideTitle ? null : (
-            <div className="recent-projects__title-block">
-              <h2 className="recent-projects__heading">{heading ?? t('recentProjects.title')}</h2>
-              {description ? (
-                <p className="recent-projects__description">{description}</p>
-              ) : null}
-            </div>
-          )}
+  const controlsEl = (
          <div className="recent-projects__controls">
-           {space === 'team' &&
+           {/* {space === 'team' &&
            canAccessInviteFlow &&
            inviteTarget.kind !== 'unavailable' ? (
              <button
@@ -1460,7 +1591,7 @@ function commitMove() {
              >
                <Icon name="share" size={15} /> {t('recentProjects.inviteTeammates')}
              </button>
-          ) : null}
+          ) : null} */}
           {externalSearchQuery === undefined ? (
           <div className="recent-projects__search">
             <Icon name="search" size={14} />
@@ -1638,9 +1769,28 @@ function commitMove() {
                   <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
                 </svg>
               </button>
-            </div>
-          </div>
-        </header>
+           </div>
+         </div>
+  );
+
+  return (
+    <section className="recent-projects" data-testid="recent-projects-strip">
+      {fullPageGrid ? (
+        controlsPortalTarget && hideTitle ? (
+          createPortal(controlsEl, controlsPortalTarget)
+        ) : (
+          <header className="recent-projects__head">
+            {hideTitle ? null : (
+              <div className="recent-projects__title-block">
+                <h2 className="recent-projects__heading">{heading ?? t('recentProjects.title')}</h2>
+                {description ? (
+                  <p className="recent-projects__description">{description}</p>
+                ) : null}
+              </div>
+            )}
+            {controlsEl}
+          </header>
+        )
       ) : (
         <header className="recent-projects__head">
           <h2 className="recent-projects__title">{t('recentProjects.title')}</h2>
@@ -1667,6 +1817,26 @@ function commitMove() {
             {t('designs.selectedCount', { n: selectedCount })}
           </span>
           <div className="recent-projects__bulkbar-actions">
+            {canBulkMove ? (
+              <button
+                type="button"
+                disabled={bulkMutationDisabled}
+                title={bulkMutationTitle}
+                onClick={() => requestBulkMove('to-team')}
+              >
+                <Icon name="import" size={14} /> {t('recentProjects.moveTo')}
+              </button>
+            ) : null}
+            {space === 'drafts' ? (
+              <button
+                type="button"
+                disabled={bulkMutationDisabled}
+                title={bulkMutationTitle}
+                onClick={() => requestBulkMoveToFolder()}
+              >
+                <Icon name="folder" size={14} /> {t('recentProjects.moveTo')}
+              </button>
+            ) : null}
             {canBulkMoveToTeam ? (
               <button
                 type="button"
@@ -1738,7 +1908,7 @@ function commitMove() {
               status === 'incomplete');
           const shared = isShared(project.id);
           const selected = selectedProjectIds.has(project.id);
-          const readonlyShared = shared && !creator.ownedBySelf;
+          const readonlyShared = shared && !creator.canMutate;
           const opening = openingProjectId === project.id;
           return (
             <div
@@ -1924,7 +2094,12 @@ function commitMove() {
                   </div>
                   <div className="recent-projects__card-footer">
                     <div className="recent-projects__card-time">
-                      <span className="recent-projects__card-owner" aria-hidden>
+                      <span
+                        className="recent-projects__card-owner"
+                        title={creator.name}
+                        style={{ backgroundColor: ownerAvatarColor(creator.memberId) }}
+                        aria-hidden
+                      >
                         {creator.initial}
                         {creator.avatarUrl ? (
                           <img
@@ -1937,7 +2112,6 @@ function commitMove() {
                           />
                         ) : null}
                       </span>
-                      <span>{t('recentProjects.creatorLine', { name: creator.name })}</span>
                       <span className="recent-projects__card-sep" aria-hidden>·</span>
                       {relativeTime(project.updatedAt, t)}
                     </div>
@@ -1982,47 +2156,75 @@ function commitMove() {
                       role="menu"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      {onRename ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={!creator.ownedBySelf}
-                          title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
-                          onClick={() => startRename(project)}
-                        >
-                          <Icon name="pencil" size={12} />
-                          <span>{t('designs.menuRename')}</span>
-                        </button>
-                      ) : null}
-                      {/* recvqaRqM0dv2x: duplicating a team-shared project you
-                          did not create is meaningless (the daemon's
-                          canDuplicate mirrors canMutate — privileged-or-
-                          selfCreated only, see enforceWorkspaceProjectMutation)
-                          and always 403s. This item was missing the same
-                          ownedBySelf gate Rename/Delete already carry, so it
-                          stayed enabled on a foreign card and looked like a
-                          dead click when pressed. */}
-                      {onDuplicate ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={!creator.ownedBySelf}
-                          title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
-                          onClick={() => requestDuplicate(project)}
-                        >
-                          <Icon name="copy" size={12} />
-                          <span>{t('designs.menuDuplicate')}</span>
-                        </button>
-                      ) : null}
-                      {/* recvq5fpqrXzV1: this menu item moves a project's
-                          visibility WITHIN the current workspace, which is
-                          meaningless (and the daemon 403s it) when the current
-                          workspace has no team plane to share into at all — a
-                          personal-only workspace. `collaborationAvailable` is
-                          the same gate the bulk toolbar's move actions
-                          already use (canBulkMoveToTeam/canBulkMoveToPersonal
-                          above); this per-card item was missing it. */}
-                      {collaborationAvailable && (shared && creator.ownedBySelf ? (
+                     {onRename ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         disabled={!creator.canMutate}
+                         title={creator.canMutate ? undefined : t('recentProjects.ownOnlyMutation')}
+                         onClick={() => startRename(project)}
+                       >
+                         <Icon name="pencil" size={12} />
+                         <span>{t('designs.menuRename')}</span>
+                       </button>
+                     ) : null}
+                     {/* recvqaRqM0dv2x: duplicating a team-shared project you
+                         did not create is meaningless (the daemon's
+                         canDuplicate mirrors canMutate — privileged-or-
+                         selfCreated only, see enforceWorkspaceProjectMutation)
+                         and always 403s. This item was missing the same
+                         ownedBySelf gate Rename/Delete already carry, so it
+                         stayed enabled on a foreign card and looked like a
+                         dead click when pressed. */}
+                     {onDuplicate ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         disabled={!creator.canMutate}
+                         title={creator.canMutate ? undefined : t('recentProjects.ownOnlyMutation')}
+                         onClick={() => requestDuplicate(project)}
+                       >
+                         <Icon name="copy" size={12} />
+                         <span>{t('designs.menuDuplicate')}</span>
+                       </button>
+                     ) : null}
+                     {/* Personal space: move to a folder within the personal workspace. */}
+                     {space === 'drafts' ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         disabled={sharingId === project.id || unsharingId === project.id || !creator.canMutate}
+                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         onClick={() => requestMoveToFolder(project)}
+                       >
+                         <Icon name="folder" size={12} />
+                         <span>{t('recentProjects.moveTo')}</span>
+                       </button>
+                     ) : null}
+                     {/* recvq5fpqrXzV1: this menu item moves a project's
+                         visibility WITHIN the current workspace, which is
+                         meaningless (and the daemon 403s it) when the current
+                         workspace has no team plane to share into at all — a
+                         personal-only workspace. `collaborationAvailable` is
+                         the same gate the bulk toolbar's move actions
+                         already use (canBulkMoveToTeam/canBulkMoveToPersonal
+                         above); this per-card item was missing it. */}
+                     {collaborationAvailable && space === 'team' ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         disabled={sharingId === project.id || unsharingId === project.id || !creator.canMutate}
+                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         onClick={() => requestMove(project, 'to-team')}
+                       >
+                         <Icon name="share" size={12} />
+                         <span>
+                           {sharingId === project.id || unsharingId === project.id
+                             ? t('recentProjects.shareInProgress')
+                             : t('recentProjects.moveTo')}
+                         </span>
+                       </button>
+                     ) : collaborationAvailable && (shared && creator.ownedBySelf ? (
                         <button
                           type="button"
                           role="menuitem"
@@ -2036,24 +2238,24 @@ function commitMove() {
                               : t('recentProjects.moveOutOfTeam')}
                           </span>
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={sharingId === project.id || shared || !creator.ownedBySelf}
-                          title={!creator.ownedBySelf ? t('recentProjects.ownOnlyMutation') : undefined}
-                          onClick={() => requestMove(project, 'to-team')}
-                        >
-                          <Icon name="share" size={12} />
-                          <span>
-                            {sharingId === project.id
-                              ? t('recentProjects.shareInProgress')
-                              : shared
-                                ? t('recentProjects.sharedInTeam')
-                                : t('recentProjects.moveToTeam')}
-                          </span>
-                        </button>
-                      ))}
+                     ) : (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         disabled={sharingId === project.id || shared || !creator.canMutate}
+                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         onClick={() => requestMove(project, 'to-team')}
+                       >
+                         <Icon name="share" size={12} />
+                         <span>
+                           {sharingId === project.id
+                             ? t('recentProjects.shareInProgress')
+                             : shared
+                               ? t('recentProjects.sharedInTeam')
+                               : t('recentProjects.moveToTeam')}
+                         </span>
+                       </button>
+                     ))}
                       {shareErrorProjectId === project.id ? (
                         <div className="recent-projects__card-menu-error" role="alert">
                           {t(
@@ -2065,19 +2267,19 @@ function commitMove() {
                           )}
                         </div>
                       ) : null}
-                      {onDelete ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="danger"
-                          disabled={!creator.ownedBySelf}
-                          title={creator.ownedBySelf ? undefined : t('recentProjects.ownOnlyMutation')}
-                          onClick={() => requestDelete(project)}
-                        >
-                          <Icon name="close" size={12} />
-                          <span>{t('designs.menuDelete')}</span>
-                        </button>
-                      ) : null}
+                     {onDelete ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         className="danger"
+                         disabled={!creator.canMutate}
+                         title={creator.canMutate ? undefined : t('recentProjects.ownOnlyMutation')}
+                         onClick={() => requestDelete(project)}
+                       >
+                         <Icon name="close" size={12} />
+                         <span>{t('designs.menuDelete')}</span>
+                       </button>
+                     ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -2243,19 +2445,27 @@ function commitMove() {
           </DialogFooter>
         </Dialog>
      ) : null}
-     {moveToTeamTarget ? (
-       <MoveToTeamTreeDialog
-         onConfirm={handleMoveToTeamConfirm}
-         onCancel={() => setMoveToTeamTarget(null)}
-         busy={sharingId === moveToTeamTarget.id}
-       />
-     ) : null}
-     {bulkMoveToTeamOpen ? (
-       <MoveToTeamTreeDialog
-         onConfirm={handleBulkMoveToTeamConfirm}
-         onCancel={() => setBulkMoveToTeamOpen(false)}
-       />
-     ) : null}
+   {moveToTeamTarget ? (
+     <MoveToTeamTreeDialog
+       onConfirm={handleMoveToTeamConfirm}
+       onCancel={() => setMoveToTeamTarget(null)}
+       busy={sharingId === moveToTeamTarget.id}
+        mode={moveToTreeMode}
+       currentWorkspaceId={workspaceContext?.workspaceId ?? null}
+       disabledKeys={moveToTreeMode === 'personal-folders' ? disabledKeys : undefined}
+       canMoveToPersonal={resolveCreator(moveToTeamTarget).ownedBySelf}
+     />
+   ) : null}
+   {bulkMoveToTeamOpen ? (
+     <MoveToTeamTreeDialog
+       onConfirm={handleBulkMoveToTeamConfirm}
+       onCancel={() => setBulkMoveToTeamOpen(false)}
+        mode={bulkMoveToTreeMode}
+       currentWorkspaceId={workspaceContext?.workspaceId ?? null}
+       disabledKeys={bulkMoveToTreeMode === 'personal-folders' ? disabledKeys : undefined}
+       canMoveToPersonal={!selectedProjects.some(({ creator }) => !creator.ownedBySelf)}
+     />
+   ) : null}
      {bulkDeleteOpen ? (
         <Dialog
           className="modal-confirm"

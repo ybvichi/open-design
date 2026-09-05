@@ -221,12 +221,12 @@ export interface ServerContext {
     * supports `transferToWorkspace`, this is a metadata-only operation on
     * the resource hub (blobs never move). Falls back to publish + unpublish.
     */
-   requestTeamTransfer?(
-     projectId: string,
-     sourceWorkspaceId: string,
-     targetWorkspaceId: string,
-     principal?: ResourceHubPrincipal | null,
-   ): Promise<{ version: number | null }>;
+  requestTeamTransfer?(
+    projectId: string,
+    sourceWorkspaceId: string,
+    targetWorkspaceId: string,
+    principal?: ResourceHubPrincipal | null,
+  ): Promise<{ version: number | null; versionId?: string; targetOwnerMemberId?: string }>;
    /**
     * Pull and atomically register a catalog-only Team project before an
      * exact-owner mutation needs local state. This preserves a Personal copy

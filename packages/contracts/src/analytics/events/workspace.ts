@@ -103,10 +103,12 @@ export interface ProjectCollectionClickProps extends TrackingWorkspaceDimensions
     | 'duplicate'
     | 'move_to_team'
     | 'move_to_personal'
+    | 'move_to_folder'
     | 'delete'
     | 'multi_select_toggle'
     | 'bulk_move_to_team'
     | 'bulk_move_to_personal'
+    | 'bulk_move_to_folder'
     | 'bulk_delete'
     | 'filter'
     | 'sort'
@@ -175,10 +177,12 @@ export interface WorkspaceProjectActionResultProps extends TrackingWorkspaceDime
     | 'duplicate'
     | 'move_to_team'
     | 'move_to_personal'
+    | 'move_to_folder'
     | 'delete'
     | 'bulk_move_to_team'
     | 'bulk_move_to_personal'
-    | 'bulk_delete';
+    | 'bulk_move_to_folder'
+    | 'bulk_delete'
   result: 'success' | 'partial_success' | 'failed';
   requested_count: number;
   succeeded_count: number;

@@ -111,7 +111,7 @@ export interface CollabRuntime {
     sourceWorkspaceId: string,
     targetWorkspaceId: string,
     principal?: ResourceHubPrincipal | null,
-  ): Promise<{ version: number | null; versionId?: string }>;
+  ): Promise<{ version: number | null; versionId?: string; targetOwnerMemberId?: string }>;
   /** Restore a persisted team share into runtime bookkeeping without publishing. */
   rememberTeamShare(
     projectId: string,
@@ -903,31 +903,44 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
            targetWorkspaceId,
             principal: effectivePrincipal,
          });
-         if (result) {
+        if (result) {
            // Update runtime bookkeeping for the target workspace.
-            const targetPrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: targetWorkspaceId };
-           rememberTeamShare(projectId, targetPrincipal, 'synced');
-           published.set(scopedProjectKey(projectId, targetPrincipal), result.version);
+           // Use the target workspace's member ID (resolved by the hdw
+           // server) for the target principal, not the source workspace's.
+           const targetMemberId = result.targetOwnerMemberId ?? effectivePrincipal.memberId;
+           const targetPrincipal: ResourceHubPrincipal = {
+             ...effectivePrincipal,
+             teamId: targetWorkspaceId,
+             memberId: targetMemberId,
+           };
+          rememberTeamShare(projectId, targetPrincipal, 'synced');
+          published.set(scopedProjectKey(projectId, targetPrincipal), result.version);
            // Clean up source workspace principal if it existed.
+           // Use source memberId (from effectivePrincipal) for the source key.
            const sourceKey = scopedProjectKey(projectId, {
-             ...targetPrincipal,
+             ...effectivePrincipal,
              teamId: sourceWorkspaceId,
            });
-           published.delete(sourceKey);
-           syncStates.delete(sourceKey);
-           sharePrincipals.get(projectId)?.delete(sourceWorkspaceId);
-           return {
-             version: result.version,
-             ...(result.versionId ? { versionId: result.versionId } : {}),
-           };
+          published.delete(sourceKey);
+          syncStates.delete(sourceKey);
+          sharePrincipals.get(projectId)?.delete(sourceWorkspaceId);
+          return {
+            version: result.version,
+            ...(result.versionId ? { versionId: result.versionId } : {}),
+            ...(result.targetOwnerMemberId ? { targetOwnerMemberId: result.targetOwnerMemberId } : {}),
+          };
          }
        } catch (error) {
          // Fall through to publish + unpublish fallback.
           options.onError?.({ projectId, error, principal: effectivePrincipal });
        }
      }
-     // Fallback: unpublish from source, then publish to target.
-      const sourcePrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: sourceWorkspaceId };
+    // Fallback: unpublish from source, then publish to target.
+    // NOTE: This fallback path does not resolve the target workspace's
+    // member ID — the publish uses the source workspace's memberId as
+    // ownerMemberId. This path is only reached when the adapter does not
+    // support transferToWorkspace (not the case for the hdw adapter).
+     const sourcePrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: sourceWorkspaceId };
       await baseAdapter.unpublish?.({ projectId, principal: sourcePrincipal });
       await options.teamProjectCatalog?.remove?.(projectId, sourcePrincipal);
       const targetPrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: targetWorkspaceId };

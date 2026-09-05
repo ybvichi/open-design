@@ -29,7 +29,7 @@ interface PersonalFolderItem {
   folderName: string;
   projectCount: number;
   subfolderCount: number;
-  subfolderPreview: string[];
+  subfolderPreview: Array<{ name: string; kind: 'folder' | 'project' }>;
   createdAt: string;
 }
 
@@ -56,7 +56,7 @@ const [showCreateFolder, setShowCreateFolder] = useState(false);
 
  // Resolve the personal workspace ID from the workspace directory.
  // Resolve the personal workspace ID from the workspace directory.
-  // The personal workspace is the "一人团队" default team.
+  // The personal workspace is the "个人空间" default team.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -229,9 +229,14 @@ onRenameProject,
           folderName: f.folder_name || f.name || '',
           projectCount: Number(f.project_count) || 0,
           subfolderCount: Number(f.subfolder_count) || 0,
-          subfolderPreview: Array.isArray(f.subfolder_preview) ? f.subfolder_preview : [],
+          subfolderPreview: Array.isArray(f.subfolder_preview)
+            ? f.subfolder_preview.map((p: any) =>
+                typeof p === 'string'
+                  ? { name: p, kind: 'folder' as const }
+                  : { name: p.name || '', kind: (p.kind === 'project' ? 'project' : 'folder') as 'folder' | 'project' })
+            : [],
           createdAt: f.created_at || '',
-        })));
+        })))
       } catch {
         if (!cancelled) setFolders([]);
       } finally {
@@ -403,15 +408,21 @@ onRenameProject,
             />
             <div className={styles.folderCardGrid}>
               {Array.from({ length: 4 }, (_, i) => {
-                const name = folder.subfolderPreview[i];
+                const item = folder.subfolderPreview[i];
+                if (!item) {
+                  return <div key={i} className={styles.gridCellEmpty} />;
+                }
+                if (item.kind === 'project') {
+                  return (
+                    <div key={i} className={`${styles.gridCell} ${styles.gridCellProject}`} title={item.name} />
+                  );
+                }
                 return (
-                  <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                    {name ? (
-                      <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
-                        <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                        <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                      </svg>
-                    ) : null}
+                  <div key={i} className={styles.gridCell} title={item.name}>
+                    <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                      <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                      <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                    </svg>
                   </div>
                 );
               })}
@@ -448,17 +459,22 @@ onRenameProject,
        ) : projects.length === 0 ? (
          null
        ) : (
-         <RecentProjectsStrip
-           projects={projects}
-           designSystems={designSystems}
-           limit={1000}
-           heading={t('entry.navDrafts')}
-           space="drafts"
-           onOpen={(id) => onOpenProject?.(id)}
-           onDelete={onDeleteProject}
-          onRename={onRenameProject}
-          hideTitle
-        />
+        <RecentProjectsStrip
+          projects={projects}
+          designSystems={designSystems}
+          limit={1000}
+          heading={t('entry.navDrafts')}
+          space="drafts"
+          onOpen={(id) => onOpenProject?.(id)}
+          onDelete={onDeleteProject}
+         onRename={(id, name) => {
+           setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+           onRenameProject?.(id, name);
+         }}
+         hideTitle
+          currentWorkspaceId={workspaceId}
+          currentFolderId={folderId ?? null}
+       />
         )}
       </div>
       {showCreateFolder ? (

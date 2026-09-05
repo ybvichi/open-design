@@ -38,6 +38,7 @@
   align-items: center;
   gap: 2px;
   height: 34px;
+  padding-left: 14px;
   border-radius: 8px;
   transition: background-color 120ms var(--ease-out);
 }
@@ -54,10 +55,10 @@
   appearance: none;
   border: none;
   background: transparent;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 16px;
   height: 30px;
   padding: 0;
   cursor: pointer;
@@ -66,6 +67,15 @@
 }
 .expandBtn:hover {
   background: transparent !important;
+}
+
+/* Show expand button and hide folder icon on teamRow hover. */
+.teamRow:hover .expandBtn {
+  display: flex;
+}
+
+.teamRow:has(.expandBtn):hover .teamIcon {
+  display: none;
 }
 
 .expandBtnHidden {

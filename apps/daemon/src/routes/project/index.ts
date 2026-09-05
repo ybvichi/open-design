@@ -82,6 +82,7 @@ import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
+import { getDefaultTeamId, getTeamMemberId } from '../../ids.js';
 import {
  ensureTeamProjectCommentConversations,
  getFirstProjectConversation,
@@ -406,32 +407,34 @@ function projectAccess(
     canShareLocal,
     disabledReason: baseDisabledReason,
   } = workspaceResourceAccess(wp, ctx);
-  // Team-shared projects are single-writer resources: Workspace governance
-  // may manage the Team, but only the member recorded as this project's
-  // creator may mutate or unshare it. Keep the read model aligned with the
-  // authoritative route gate; otherwise owner/admin callers are advertised
-  // actions that direct project routes reject, while the workspace move route
-  // (which consumes these flags) can still unshare someone else's project.
-  // Personal/unshared projects retain the existing privileged-or-creator rule.
-  const canMutate =
-    privilegedOrCreatorCanMutate
-    && (wp.visibility !== 'team' || selfCreated);
-  const disabledReason =
-    baseDisabledReason
-    ?? (!canMutate ? 'permission_denied' : undefined);
-  return {
-    canOpen: !frozen && ctx.memberStatus === 'active',
-    canRename: canMutate,
-    canDelete: canMutate,
-    canDuplicate: canMutate,
-    // Never offer a share the workspace cannot host: the affordance is the
-    // entry point that produced the impossible rows in the first place.
-    canMoveToTeam:
-      canShareLocal &&
-      ctx.canShareProjects &&
-      wp.visibility === 'personal' &&
-      teamShareRefusalFor(ctx, workspaceTypes) === null,
-    canMoveToPersonal: canMutate && ctx.canShareProjects && wp.visibility === 'team',
+ // Team-shared projects are single-writer resources: Workspace governance
+ // may manage the Team. Admins may rename, delete, duplicate, and move team
+ // projects to other teams, but only the member recorded as this project's
+ // creator may move it back to personal space. Keep the read model aligned
+ // with the authoritative route gate; otherwise owner/admin callers are
+ // advertised actions that direct project routes reject, while the workspace
+ // move route (which consumes these flags) can still unshare someone else's
+ // project. Personal/unshared projects retain the existing privileged-or-creator rule.
+ const canMutate =
+   privilegedOrCreatorCanMutate
+   && (wp.visibility !== 'team' || selfCreated || ctx.role === 'admin');
+ const disabledReason =
+   baseDisabledReason
+   ?? (!canMutate ? 'permission_denied' : undefined);
+ return {
+   canOpen: !frozen && ctx.memberStatus === 'active',
+   canRename: canMutate,
+   canDelete: canMutate,
+   canDuplicate: canMutate,
+   // Never offer a share the workspace cannot host: the affordance is the
+   // entry point that produced the impossible rows in the first place.
+   canMoveToTeam:
+     canShareLocal &&
+     ctx.canShareProjects &&
+     wp.visibility === 'personal' &&
+     teamShareRefusalFor(ctx, workspaceTypes) === null,
+   // Only the project owner can move to personal — admins cannot.
+   canMoveToPersonal: canMutate && ctx.canShareProjects && wp.visibility === 'team' && selfCreated,
     canExport: !frozen && ctx.memberStatus === 'active',
     canSendTo: !frozen && ctx.memberStatus === 'active',
     canRestoreVersion: canMutate,
@@ -2049,26 +2052,27 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // Carried on the nested project too, so a client that unwraps the summary
       // into a plain Project keeps the binding instead of dropping it.
       workspaceId: row.workspaceId ?? null,
+      createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
     };
     const resourceState = isWorkspaceLocked(ctx) && row.workspaceVisibility === 'team'
       ? 'frozen'
       : row.resourceState;
-    const wp = {
-      visibility: row.workspaceVisibility,
-      resourceState,
-      createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
-    };
-    return {
-      id: project.id,
-      name: project.name,
-      workspaceId: row.workspaceId,
-      visibility: row.workspaceVisibility,
-      resourceState,
-      createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
-      updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
-      resourceHubResourceId: row.resourceHubResourceId ?? null,
-      cloudTombstonedAt: row.cloudTombstonedAt ?? null,
-      currentUserAccess: projectAccess(wp, ctx, workspaceTypes),
+   const wp = {
+     visibility: row.workspaceVisibility,
+     resourceState,
+     createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
+   };
+   return {
+     id: project.id,
+     name: project.name,
+     workspaceId: row.workspaceId,
+     visibility: row.workspaceVisibility,
+     resourceState,
+     createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
+     updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
+     resourceHubResourceId: row.resourceHubResourceId ?? null,
+     cloudTombstonedAt: row.cloudTombstonedAt ?? null,
+     currentUserAccess: projectAccess(wp, ctx, workspaceTypes),
       syncState: row.syncState ?? 'local_only',
       ...(row.syncState === 'pending_upload'
         ? { pendingSyncIntent: pendingSyncIntent(project.id, row.workspaceId, row.workspaceVisibility) }
@@ -2091,40 +2095,61 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? parsed : Date.now();
   }
-  function accessForRemoteTeamProject(remote: VelaTeamProjectRecord, ctx: WorkspaceProjectContext) {
-    const frozen = remote.access.frozen || isWorkspaceLocked(ctx);
-    const canView = remote.access.canView && !frozen && ctx.memberStatus === 'active';
-    // `remote.access.canEdit` alone is not enough to grant local mutation: it
-    // can be true for reasons that do not make THIS member the owner (a team
-    // admin's blanket edit grant, a generic per-project flag, etc.), and
-    // treating "can view something I don't own yet" as "adopt it and make it
-    // mine" is exactly the ownership-invention the adoption red line above
-    // forbids — a member discovering a teammate's shared project must stay
-    // read-only regardless of canEdit. Require this member to BE the project's
-    // owner too; only then is honoring canEdit "this member's own project,
-    // whose local row is stale" rather than "assign ownership to a reader".
-    const isOwner = remote.ownerMemberId === ctx.workspaceMemberId;
-    const canMutate = canView && remote.access.canEdit && isOwner;
-    const disabledReason = frozen
-      ? isWorkspaceLocked(ctx)
-        ? 'workspace_locked'
-        : 'resource_frozen'
-      : canView
-        ? undefined
-        : 'permission_denied';
-    return {
-      canOpen: canView,
-      canRename: canMutate,
-      canDelete: canMutate,
-      canDuplicate: canMutate,
-      canMoveToTeam: false,
-      canMoveToPersonal: false,
-      canExport: canView,
-      canSendTo: canView,
-      canRestoreVersion: canMutate,
-      ...(disabledReason ? { disabledReason } : {}),
-    };
-  }
+ function accessForRemoteTeamProject(remote: VelaTeamProjectRecord, ctx: WorkspaceProjectContext) {
+   return accessForRemoteTeamProjectWithOwner(remote, ctx, remote.ownerMemberId);
+ }
+ /**
+  * Same as accessForRemoteTeamProject but accepts an explicit ownerMemberId,
+  * so catalogEnrichedLocalTeamProjectSummary can pass the remote catalog's
+  * ownerMemberId. Ownership is determined by matching the current user's
+  * workspace member ID OR the user's default-team (personal space) member ID,
+  * since a cross-workspace transfer leaves the remote catalog's ownerMemberId
+  * stale (still carrying the personal-space member ID).
+  */
+ function accessForRemoteTeamProjectWithOwner(
+   remote: VelaTeamProjectRecord,
+   ctx: WorkspaceProjectContext,
+   ownerMemberId: string,
+ ) {
+   const frozen = remote.access.frozen || isWorkspaceLocked(ctx);
+   const canView = remote.access.canView && !frozen && ctx.memberStatus === 'active';
+  // The remote catalog's ownerMemberId can be stale after a cross-workspace
+  // transfer — it still carries the personal-space member ID. The same user
+  // has different member IDs across workspaces, so check if ownerMemberId
+  // matches EITHER the current workspace's member ID OR the user's
+  // default-team (personal space) member ID. If either matches, this member
+  // is the project's owner. Do NOT require remote.access.canEdit — the HDW
+  // catalog's canEdit can also be stale; ownership is authoritative.
+  const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+  const isOwner = ownerMemberId === ctx.workspaceMemberId
+    || (defaultMemberId != null && ownerMemberId === defaultMemberId);
+  // Admins can rename, delete, and move team projects to other teams, but
+  // only the project owner can move it back to personal space.
+  const isAdmin = ctx.role === 'admin';
+  const canMutate = canView && (isOwner || isAdmin);
+ const disabledReason = frozen
+     ? isWorkspaceLocked(ctx)
+       ? 'workspace_locked'
+       : 'resource_frozen'
+     : canView
+       ? undefined
+       : 'permission_denied';
+   return {
+     canOpen: canView,
+     canRename: canMutate,
+     canDelete: canMutate,
+     canDuplicate: canMutate,
+     // Remote catalog records are always team-shared, so an owner can move
+     // back to personal but never needs a "move to team" affordance.
+     canMoveToTeam: false,
+     // Only the project owner can move to personal — admins cannot.
+     canMoveToPersonal: canView && isOwner && ctx.canShareProjects,
+     canExport: canView,
+     canSendTo: canView,
+     canRestoreVersion: canMutate,
+     ...(disabledReason ? { disabledReason } : {}),
+   };
+ }
   function remoteTeamProjectSummary(
     remote: VelaTeamProjectRecord,
     ctx: WorkspaceProjectContext,
@@ -2132,46 +2157,56 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     const createdAt = msFromIso(remote.createdAt);
     const updatedAt = msFromIso(remote.updatedAt);
     const syncState: ProjectSyncState = velaProjectSyncStateToProject(remote.syncState);
-    const resourceState = remote.access.frozen || isWorkspaceLocked(ctx) ? 'frozen' : 'active';
-    const name = remote.displayName?.trim() || remote.projectId;
-    // A catalog-only summary has no local project directory yet. Reuse the
-    // existing placeholder metadata contract so clients do not issue local
-    // file/cover reads that can only 404 before the first explicit pull. The
-    // materialized local row replaces this projection (and clears the stamp)
-    // once real hub content lands.
-    const metadata = { sharedProjectPlaceholderAt: updatedAt };
-    const project = {
-      id: remote.projectId,
-      name,
-      workspaceId: ctx.workspaceId,
-      skillId: null,
-      designSystemId: null,
-      metadata,
-      createdAt,
-      updatedAt,
-    };
-    return {
-      // Summary identity is the resource-hub id so two catalog entries that
-      // share the same projectId stay distinct in the list (unique React key /
-      // owner-scoped lookup by resource id). The web opens the card via the
-      // nested `project.id` below, so the real projectId is preserved there.
-      id: remote.resourceId,
-      name,
-      workspaceId: ctx.workspaceId,
-      visibility: 'team',
-      resourceState,
-      createdByWorkspaceMemberId: remote.ownerMemberId,
-      updatedByWorkspaceMemberId: remote.ownerMemberId,
-      resourceHubResourceId: remote.resourceId,
-      cloudTombstonedAt: null,
-      currentUserAccess: accessForRemoteTeamProject(remote, ctx),
-      syncState,
-      createdAt,
-      updatedAt,
-      metadata,
-      project,
-    };
-  }
+  const resourceState = remote.access.frozen || isWorkspaceLocked(ctx) ? 'frozen' : 'active';
+  const name = remote.displayName?.trim() || remote.projectId;
+  // Same cross-workspace override as catalogEnrichedLocalTeamProjectSummary:
+  // if the remote ownerMemberId still carries the personal-space (default
+  // team) member ID, substitute the current workspace's member ID so the
+  // frontend's ownedBySelf check (createdByWorkspaceMemberId === selfMemberId)
+  // resolves correctly after a transfer.
+  const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+  const effectiveOwnerId =
+    defaultMemberId && remote.ownerMemberId === defaultMemberId
+      ? ctx.workspaceMemberId
+      : remote.ownerMemberId;
+  // A catalog-only summary has no local project directory yet. Reuse the
+  // existing placeholder metadata contract so clients do not issue local
+  // file/cover reads that can only 404 before the first explicit pull. The
+  // materialized local row replaces this projection (and clears the stamp)
+  // once real hub content lands.
+  const metadata = { sharedProjectPlaceholderAt: updatedAt };
+  const project = {
+    id: remote.projectId,
+    name,
+    workspaceId: ctx.workspaceId,
+    skillId: null,
+    designSystemId: null,
+    metadata,
+    createdAt,
+    updatedAt,
+  };
+  return {
+    // Summary identity is the resource-hub id so two catalog entries that
+    // share the same projectId stay distinct in the list (unique React key /
+    // owner-scoped lookup by resource id). The web opens the card via the
+    // nested `project.id` below, so the real projectId is preserved there.
+    id: remote.resourceId,
+    name,
+    workspaceId: ctx.workspaceId,
+    visibility: 'team',
+    resourceState,
+    createdByWorkspaceMemberId: effectiveOwnerId,
+    updatedByWorkspaceMemberId: effectiveOwnerId,
+    resourceHubResourceId: remote.resourceId,
+    cloudTombstonedAt: null,
+    currentUserAccess: accessForRemoteTeamProject(remote, ctx),
+    syncState,
+    createdAt,
+    updatedAt,
+    metadata,
+    project,
+  };
+ }
   /**
    * Catalog identities this member has just moved back to "personal".
    *
@@ -2244,7 +2279,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     // Ownership match required, same reasoning as accessForRemoteTeamProject
     // above: never rebind a row to make a reader look like this project's
     // creator just because B's generic canEdit happens to read true for them.
-    const isOwner = remote.ownerMemberId === ctx.workspaceMemberId;
+    // The same user has different member IDs across workspaces, so also
+    // check against the default-team (personal space) member ID — after a
+    // cross-workspace move the remote catalog's ownerMemberId still carries
+    // the personal space's member ID, which won't match ctx.workspaceMemberId.
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    const isOwner = remote.ownerMemberId === ctx.workspaceMemberId
+      || (defaultMemberId != null && remote.ownerMemberId === defaultMemberId);
     const persistedCreatorMemberId = isOwner ? ctx.workspaceMemberId : null;
     const canEdit = remote.access.canEdit && remote.access.canView && !remote.access.frozen && isOwner;
     const expectedResourceState = remote.access.frozen ? 'frozen' : 'active';
@@ -2368,18 +2409,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         && item.projectId === projectId
         && item.access.canView,
     );
-    if (!remote) return 'none';
-    const creator = remote.ownerMemberId === ctx.workspaceMemberId;
-    if (!creator || remote.access.frozen || !remote.access.canEdit) return 'denied';
-    ensureWorkspaceProject(db, {
-      projectId,
-      workspaceId: ctx.workspaceId,
-      visibility: 'team',
-      resourceState: remote.access.frozen ? 'frozen' : 'active',
-      createdByWorkspaceMemberId: remote.ownerMemberId ?? null,
-      updatedByWorkspaceMemberId: ctx.workspaceMemberId,
-      resourceHubResourceId: remote.resourceId,
-      cloudTombstonedAt: null,
+   if (!remote) return 'none';
+    // Same cross-workspace override: the remote ownerMemberId can still
+    // carry the personal-space member ID after a transfer.
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    const effectiveOwnerId =
+      defaultMemberId && remote.ownerMemberId === defaultMemberId
+        ? ctx.workspaceMemberId
+        : remote.ownerMemberId;
+    const creator = effectiveOwnerId === ctx.workspaceMemberId;
+   if (!creator || remote.access.frozen || !remote.access.canEdit) return 'denied';
+   ensureWorkspaceProject(db, {
+     projectId,
+     workspaceId: ctx.workspaceId,
+     visibility: 'team',
+     resourceState: remote.access.frozen ? 'frozen' : 'active',
+      createdByWorkspaceMemberId: effectiveOwnerId ?? null,
+      updatedByWorkspaceMemberId: effectiveOwnerId,
+     resourceHubResourceId: remote.resourceId,
+     cloudTombstonedAt: null,
       syncState: 'synced',
     });
     return 'creator';
@@ -2447,32 +2495,76 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     }
     return 'materialized';
   }
-  function catalogEnrichedLocalTeamProjectSummary(
-    summary: any,
-    remote: VelaTeamProjectRecord,
-    ctx: WorkspaceProjectContext,
-  ) {
-    const localProjectName = summary?.project?.name;
-    const localOwnerName =
-      remote.ownerMemberId === ctx.workspaceMemberId
-      && typeof localProjectName === 'string'
-        ? localProjectName.trim()
-        : '';
-    const name = localOwnerName || remote.displayName?.trim();
-    const frozen = remote.access.frozen || isWorkspaceLocked(ctx);
-    return {
-      ...summary,
-      ...(name ? { name } : {}),
-      createdByWorkspaceMemberId: remote.ownerMemberId,
-      resourceState: frozen ? 'frozen' : 'active',
-      currentUserAccess: accessForRemoteTeamProject(remote, ctx),
-      syncState: velaProjectSyncStateToProject(remote.syncState),
-      project: {
-        ...summary.project,
-        ...(name ? { name } : {}),
-      },
-    };
-  }
+ function catalogEnrichedLocalTeamProjectSummary(
+   summary: any,
+   remote: VelaTeamProjectRecord,
+   ctx: WorkspaceProjectContext,
+ ) {
+  const localProjectName = summary?.project?.name;
+  // The HDW cloud catalog's ownerMemberId is the authoritative owner
+  // identity. After a cross-workspace transfer it can still carry the
+  // personal-space (default team) member ID. The same user has different
+  // member IDs across workspaces, so if the remote ownerMemberId matches
+  // the default-team member ID, substitute the current workspace's member
+  // ID. This is the value the frontend compares against selfMemberId to
+  // determine ownedBySelf / canMutate — a stale local DB value must not
+  // shadow the corrected remote identity.
+  const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+  const effectiveRemoteOwnerId =
+    defaultMemberId && remote.ownerMemberId === defaultMemberId
+      ? ctx.workspaceMemberId
+      : remote.ownerMemberId;
+  // Prefer the corrected remote owner ID; fall back to the local DB only
+  // when the remote catalog has no owner at all.
+  const localOwnerMemberId =
+    effectiveRemoteOwnerId
+    ?? summary?.createdByWorkspaceMemberId
+    ?? summary?.updatedByWorkspaceMemberId
+    ?? remote.ownerMemberId;
+  const localOwnerName =
+    (localOwnerMemberId === ctx.workspaceMemberId
+      || localOwnerMemberId === getTeamMemberId(getDefaultTeamId()))
+    && typeof localProjectName === 'string'
+      ? localProjectName.trim()
+      : '';
+  const name = localOwnerName || remote.displayName?.trim();
+  const frozen = remote.access.frozen || isWorkspaceLocked(ctx);
+  // Compute remote access using the REMOTE catalog's ownerMemberId. The
+  // access function checks if this matches the current workspace member ID
+  // OR the default-team (personal space) member ID, so a stale remote value
+  // after a cross-workspace transfer still resolves correctly.
+  const remoteAccess = accessForRemoteTeamProjectWithOwner(remote, ctx, remote.ownerMemberId);
+  const localAccess = summary?.currentUserAccess ?? {};
+  return {
+    ...summary,
+    ...(name ? { name } : {}),
+    createdByWorkspaceMemberId: localOwnerMemberId,
+    updatedByWorkspaceMemberId: localOwnerMemberId,
+    resourceState: frozen ? 'frozen' : 'active',
+     currentUserAccess: {
+       ...localAccess,
+       ...remoteAccess,
+       // The remote catalog canEdit can be stale after a cross-workspace
+       // transfer, so do NOT let remoteAccess override localAccess for
+       // mutation flags. Take the union: if the local DB says the current
+       // member is the owner (canRename: true), that stands even if the
+       // remote catalog has not caught up (canEdit: false).
+       canRename: localAccess.canRename || remoteAccess.canRename,
+       canDelete: localAccess.canDelete || remoteAccess.canDelete,
+       canDuplicate: localAccess.canDuplicate || remoteAccess.canDuplicate,
+       canRestoreVersion: localAccess.canRestoreVersion || remoteAccess.canRestoreVersion,
+       // Preserve local move affordances that depend on the local row's
+       // visibility, which the remote record does not carry.
+       canMoveToTeam: localAccess.canMoveToTeam ?? remoteAccess.canMoveToTeam ?? false,
+       canMoveToPersonal: localAccess.canMoveToPersonal ?? remoteAccess.canMoveToPersonal ?? false,
+     },
+     syncState: velaProjectSyncStateToProject(remote.syncState),
+     project: {
+       ...summary.project,
+       ...(name ? { name } : {}),
+     },
+   };
+ }
   async function listRemoteTeamProjectSummaries(localRows: any[], ctx: WorkspaceProjectContext) {
     if (!teamProjectCatalog) {
       return {
@@ -2494,11 +2586,11 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       throw new TeamProjectCatalogListError(error);
     }
     const seenResourceIds = new Set<string>();
-    const visibleProjects = remoteProjects
-      .filter((project) => project.workspaceId === ctx.workspaceId)
-      .filter((project) => project.access.canView)
-      .filter((project) => !remoteTeamProjectWasUnsharedLocally(project, tombstoned, ctx));
-    for (const project of visibleProjects) {
+   const visibleProjects = remoteProjects
+     .filter((project) => project.workspaceId === ctx.workspaceId)
+     .filter((project) => project.access.canView)
+     .filter((project) => !remoteTeamProjectWasUnsharedLocally(project, tombstoned, ctx));
+  for (const project of visibleProjects) {
       try {
         const exactRow = localRowByExactRemoteIdentity.get(`${project.resourceId}\0${project.projectId}`);
         reconcileLocalRowWithRemoteTeamAccess(project, ctx, exactRow);
@@ -3227,31 +3319,55 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     summary: any,
     targetVisibility: 'personal' | 'team',
     ctx: WorkspaceProjectContext,
+    targetWorkspaceId?: string | null,
   ): boolean {
     if (workspaceMoveRetryAllowed(summary, ctx, targetVisibility)) return true;
+    const isCrossWorkspace = !!targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId;
+    // Cross-workspace moves carry stricter ownership rules than same-workspace
+    // moves: the same user has different member IDs across workspaces, so a
+    // cross-workspace transfer is a re-homing of the project, not just a
+    // visibility flip. Only the project creator may move a project back to
+    // their personal space; only workspace owner/admin may move a project to
+    // another team workspace. Non-creators are never allowed to re-home a
+    // project they do not own.
+    if (isCrossWorkspace) {
+      const privileged = ctx.role === 'owner' || ctx.role === 'admin';
+      const selfCreated = summary.createdByWorkspaceMemberId != null
+        && summary.createdByWorkspaceMemberId === ctx.workspaceMemberId;
+      if (targetVisibility === 'personal') {
+        // Moving back to personal space: only the project creator may do this.
+        return selfCreated && ctx.canShareProjects && ctx.memberStatus === 'active';
+      }
+      // Cross-workspace move to a team: only workspace owner/admin may do this.
+      return privileged && ctx.canShareProjects && ctx.memberStatus === 'active';
+    }
     if (targetVisibility === 'team') return summary.currentUserAccess.canMoveToTeam;
     return summary.currentUserAccess.canMoveToPersonal;
   }
- async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team', targetWorkspaceId?: string | null) {
-   for (const projectId of projectIds) {
-     if (visibility === 'team') {
-        // When transferring to a different workspace, use the metadata-only
-        // transfer path if the collab runtime supports it. Falls back to
-        // a full publish inside the runtime when the adapter doesn't support
-        // transferToWorkspace.
-       if (targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId) {
-         if (!collabSync.requestTeamTransfer) {
-           throw new Error('cross-workspace transfer is not supported by the current resource transport');
-         }
-         const principal = { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId };
-         await collabSync.requestTeamTransfer(
-            projectId,
-            ctx.workspaceId,
-            targetWorkspaceId,
-            principal,
-          );
-          continue;
+async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team', targetWorkspaceId?: string | null) {
+  let transferMeta: { targetOwnerMemberId?: string } | void = undefined;
+  for (const projectId of projectIds) {
+    if (visibility === 'team') {
+       // When transferring to a different workspace, use the metadata-only
+       // transfer path if the collab runtime supports it. Falls back to
+       // a full publish inside the runtime when the adapter doesn't support
+       // transferToWorkspace.
+      if (targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId) {
+        if (!collabSync.requestTeamTransfer) {
+          throw new Error('cross-workspace transfer is not supported by the current resource transport');
         }
+        const principal = { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId };
+         const result = await collabSync.requestTeamTransfer(
+           projectId,
+           ctx.workspaceId,
+           targetWorkspaceId,
+           principal,
+         );
+         if (result?.targetOwnerMemberId) {
+           transferMeta = { targetOwnerMemberId: result.targetOwnerMemberId };
+         }
+         continue;
+       }
        const principal = targetWorkspaceId
          ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId }
          : workspaceProjectPrincipal(ctx);
@@ -3269,50 +3385,112 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     } catch {
       // ignore
     }
+  return transferMeta;
   }
   function ownerForTeamShare(summary: any, ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
     if (visibility !== 'team') return summary?.createdByWorkspaceMemberId ?? null;
     return summary?.createdByWorkspaceMemberId ?? ctx.workspaceMemberId;
   }
-  function workspaceProjectMovePatch(
-    id: string,
-    summary: any,
-    ctx: WorkspaceProjectContext,
-    visibility: 'personal' | 'team',
-    targetWorkspaceId?: string | null,
-  ) {
-    const effectiveWorkspaceId = targetWorkspaceId || ctx.workspaceId;
+ function workspaceProjectMovePatch(
+   id: string,
+   summary: any,
+   ctx: WorkspaceProjectContext,
+   visibility: 'personal' | 'team',
+   targetWorkspaceId?: string | null,
+   targetMemberId?: string | null,
+ ) {
+   const effectiveWorkspaceId = targetWorkspaceId || ctx.workspaceId;
+  const effectiveMemberId = targetMemberId ?? ctx.workspaceMemberId;
+  const isCrossWorkspace = targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId;
   const effectivePrincipal = targetWorkspaceId
-    ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId }
+    ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId, memberId: effectiveMemberId }
     : workspaceProjectPrincipal(ctx);
+  let createdByWorkspaceMemberId = isCrossWorkspace || visibility === 'personal'
+    ? effectiveMemberId
+    : ownerForTeamShare(summary, ctx, visibility);
+  let updatedByWorkspaceMemberId = effectiveMemberId;
+  // When moving from personal to team, both owner IDs must be the same
+  // value and non-null. The project is being transferred to a new team
+  // workspace, so the target workspace's member ID (effectiveMemberId)
+  // is the authoritative owner identity for BOTH fields.
+  const isPersonalToTeam = summary?.visibility === 'personal' && visibility === 'team';
+  if (isPersonalToTeam) {
+    createdByWorkspaceMemberId = updatedByWorkspaceMemberId;
+  }
+  // Unify: if either owner ID is null, use the other's value.
+  // Both fields must always be non-null and consistent.
+  if (!createdByWorkspaceMemberId && updatedByWorkspaceMemberId) {
+    createdByWorkspaceMemberId = updatedByWorkspaceMemberId;
+  }
+  if (!updatedByWorkspaceMemberId && createdByWorkspaceMemberId) {
+    updatedByWorkspaceMemberId = createdByWorkspaceMemberId;
+  }
   return {
     visibility,
     workspaceId: effectiveWorkspaceId,
-    createdByWorkspaceMemberId: ownerForTeamShare(summary, ctx, visibility),
-    updatedByWorkspaceMemberId: ctx.workspaceMemberId,
+    createdByWorkspaceMemberId,
+    updatedByWorkspaceMemberId,
     resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(id, effectivePrincipal) : null,
     cloudTombstonedAt: visibility === 'team' ? null : Date.now(),
     syncState: visibility === 'team' ? 'pending_upload' : 'local_only',
   };
-  }
-  function restoreWorkspaceProjectRow(row: any) {
-    rebindWorkspaceProject(db, row.id, {
-      visibility: row.workspaceVisibility,
-      resourceState: row.resourceState,
-      createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
-      updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
-      resourceHubResourceId: row.resourceHubResourceId ?? null,
-      cloudTombstonedAt: row.cloudTombstonedAt ?? null,
-      syncState: row.syncState ?? 'local_only',
-      version: row.workspaceVersion ?? 1,
-      updatedAt: row.workspaceUpdatedAt ?? Date.now(),
-      workspaceId: row.workspaceId,
-    });
-  }
+ }function restoreWorkspaceProjectRow(row: any) {
+   rebindWorkspaceProject(db, row.id, {
+     visibility: row.workspaceVisibility,
+     resourceState: row.resourceState,
+     createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
+     updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
+     resourceHubResourceId: row.resourceHubResourceId ?? null,
+     cloudTombstonedAt: row.cloudTombstonedAt ?? null,
+     syncState: row.syncState ?? 'local_only',
+     version: row.workspaceVersion ?? 1,
+     updatedAt: row.workspaceUpdatedAt ?? Date.now(),
+     workspaceId: row.workspaceId,
+   });
+ }
 
   /**
-   * True when a team-share request was refused because the hub catalog
-   * already registers this project under a DIFFERENT member's ownership
+   * Resolve the target workspace's ID and the current user's member ID
+   * in that workspace, from the workspace directory. When no target ID
+   * is given, resolves the personal (default, one-person-team) workspace.
+   * Used for cross-workspace moves: the same user has different member
+   * IDs across workspaces, so the local binding row must carry the
+   * target workspace's identity, not the source workspace's.
+   */
+  async function resolveTargetWorkspaceIdentity(targetWorkspaceId?: string | null): Promise<{
+    workspaceId: string;
+    workspaceMemberId: string;
+  } | null> {
+    if (!ctx.fetchWorkspaceDirectory) return null;
+    try {
+      const directory = await ctx.fetchWorkspaceDirectory();
+      if (!directory.ok) return null;
+      const target = targetWorkspaceId
+        ? directory.items.find(
+            (item) =>
+              item.workspaceId === targetWorkspaceId
+              && item.memberStatus === 'active'
+              && item.lifecycleState !== 'deleted',
+          )
+        : directory.items.find(
+            (item) =>
+              item.isDefaultTeam === true
+              && item.memberStatus === 'active'
+              && item.lifecycleState !== 'deleted',
+          );
+      if (!target) return null;
+      return {
+        workspaceId: target.workspaceId,
+        workspaceMemberId: target.workspaceMemberId,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+ /**
+  * True when a team-share request was refused because the hub catalog
+  * already registers this project under a DIFFERENT member's ownership
    * (vela's `team_project_owner_conflict`, re-thrown through the CLI
    * transport). The literal is the hub API's stable error token, so matching
    * it keeps this mapping independent of how the CLI frames its stderr text.
@@ -3368,11 +3546,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         }
       }
       const locations = await configuredProjectLocations();
-      if (!project || !projectVisibleForLocations(project, locations)) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
-      if (visibility === 'team') {
-        const refusal = teamShareRefusalFor(ctx, workspaceTypes);
-        if (refusal) return sendTeamShareScopeRefused(res, ctx, refusal);
-      }
+     if (!project || !projectVisibleForLocations(project, locations)) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+     if (visibility === 'team') {
+       // Cross-workspace team moves target a different (team) workspace,
+       // so the current workspace's team-share scope refusal doesn't apply.
+       const refusal = targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId
+         ? null
+         : teamShareRefusalFor(ctx, workspaceTypes);
+       if (refusal) return sendTeamShareScopeRefused(res, ctx, refusal);
+     }
       // A "move to personal" request on a project this daemon has never
       // locally bound must not be judged against a 'personal' default this
       // same request is about to invent — see
@@ -3395,45 +3577,117 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           );
         }
       }
-      const wp = ensureWorkspaceProjection(project, ctx, 'personal');
-      const row = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
-      if (!row || !wp) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
-      const summary = normalizeWorkspaceProjectRow(row, ctx);
-      if (!workspaceMoveAllowed(summary, visibility, ctx) && !targetWorkspaceId) {
-        return sendApiError(res, 403, 'PROJECT_DELETE_FORBIDDEN', 'project move forbidden');
-      }
-      const movePatch = workspaceProjectMovePatch(project.id, summary, ctx, visibility, targetWorkspaceId);
-      if (targetWorkspaceId && targetWorkspaceId !== ctx.workspaceId) {
-        // Cross-workspace transfer: the row exists in the source workspace,
-        // not the target. Use rebindWorkspaceProject (finds by projectId,
-        // can change workspace_id) instead of updateWorkspaceProject (which
-        // would be a no-op since the row doesn't exist in the target yet).
-        rebindWorkspaceProject(db, project.id, movePatch);
-      } else {
-        updateWorkspaceProject(db, effectiveWorkspaceId, project.id, movePatch);
-      }
-      try {
-        await requestTeamVisibility([project.id], ctx, visibility, targetWorkspaceId);
-      } catch (error) {
-        restoreWorkspaceProjectRow(row);
-        throw new TeamProjectSyncError(error);
-      }
-     if (visibility === 'team') {
-       const ensureCommentAnchor = db.transaction(() => {
-         ensureTeamProjectCommentConversations(db, project.id);
-       });
-       ensureCommentAnchor();
+     // Capture whether a binding existed BEFORE ensureWorkspaceProjection,
+     // which may create one for an orphan project. Without this, the
+     // folder-only shortcut would fire for a freshly defaulted orphan,
+     // bypassing the move-allowed gate that should reject it.
+     const hadExistingBinding = Boolean(getWorkspaceProjectByProjectId(db, project.id));
+     const wp = ensureWorkspaceProjection(project, ctx, 'personal');
+     const row = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
+     if (!row || !wp) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+   const summary = normalizeWorkspaceProjectRow(row, ctx);
+   // Folder-only moves (same workspace, same visibility) skip the
+   // move-allowed gate since canMoveToPersonal/canMoveToTeam are false
+   // when already in that visibility. Still require basic mutation
+   // permission so a non-owner cannot move someone else's project.
+   const isFolderOnlyMoveRequest =
+     hadExistingBinding
+     && summary.currentUserAccess.canRename
+     && (!targetWorkspaceId || targetWorkspaceId === ctx.workspaceId)
+     && summary.visibility === visibility;
+   if (!isFolderOnlyMoveRequest && !workspaceMoveAllowed(summary, visibility, ctx, targetWorkspaceId)) {
+     return sendApiError(res, 403, 'PROJECT_DELETE_FORBIDDEN', 'project move forbidden');
+   }
+     // Cross-workspace transfer: call the server transfer first to resolve
+     // the target workspace's member ID, then patch local SQLite with the
+     // correct member ID. Same-workspace moves keep the optimistic order
+     // (patch first, then sync) so a sync failure rolls back cleanly.
+     //
+     // When removing from team (visibility='personal') while in a team
+     // workspace, the project must move back to the user's personal
+      // workspace. The frontend may or may not send targetWorkspaceId for
+      // personal moves (it sends the selected node's workspaceId, which
+      // for the default-team node is the personal workspace's own id).
+      // When the project is still a team project, resolve the personal
+      // workspace from the directory and treat this as a cross-workspace
+      // rebind — the personal space is a different workspace from the
+      // current team, even though both have workspaceType 'team'.
+      let targetMemberId: string | null = null;
+      let resolvedTargetWorkspaceId = targetWorkspaceId;
+      if (
+        visibility === 'personal'
+        && summary.visibility === 'team'
+        && (!targetWorkspaceId || targetWorkspaceId === ctx.workspaceId)
+      ) {
+        const personal = await resolveTargetWorkspaceIdentity();
+        if (personal) {
+         resolvedTargetWorkspaceId = personal.workspaceId;
+         targetMemberId = personal.workspaceMemberId;
+       }
      }
-     // Assign the project to the selected folder (or clear it for the
-     // workspace root) after the visibility move has committed. Only applies
-     // to team visibility; a personal move always returns to the root.
-     if (visibility === 'team' && targetFolderId !== undefined) {
-       setProjectFolder(db, effectiveWorkspaceId, project.id, targetFolderId);
-     } else if (visibility === 'personal') {
-       setProjectFolder(db, effectiveWorkspaceId, project.id, null);
+     // Folder-only move: same workspace AND same visibility — the project
+     // isn't changing workspaces or visibility, just its folder assignment.
+     // Skip the server sync; the local row patch + folder assignment is
+     // the whole operation.
+     const isFolderOnlyMove =
+       (!resolvedTargetWorkspaceId || resolvedTargetWorkspaceId === ctx.workspaceId)
+       && summary.visibility === visibility;
+     if (resolvedTargetWorkspaceId && resolvedTargetWorkspaceId !== ctx.workspaceId) {
+       try {
+         // Resolve the target member ID from the workspace directory
+         // FIRST. The same user has different member IDs across
+         // workspaces, so the directory is the authoritative local
+         // source for the target workspace's member ID. The server
+         // transfer's targetOwnerMemberId is only used as a fallback
+         // when the directory is unavailable or doesn't contain the
+         // target workspace.
+         if (!targetMemberId) {
+           const targetIdentity = await resolveTargetWorkspaceIdentity(resolvedTargetWorkspaceId);
+           if (targetIdentity) {
+             targetMemberId = targetIdentity.workspaceMemberId;
+           }
+         }
+         const transferMeta = await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId);
+         if (!targetMemberId && transferMeta?.targetOwnerMemberId) {
+           targetMemberId = transferMeta.targetOwnerMemberId;
+         }
+       } catch (error) {
+         throw new TeamProjectSyncError(error);
+       }
+       const movePatch = workspaceProjectMovePatch(project.id, summary, ctx, visibility, resolvedTargetWorkspaceId, targetMemberId);
+       rebindWorkspaceProject(db, project.id, movePatch);
+     } else {
+       const movePatch = workspaceProjectMovePatch(project.id, summary, ctx, visibility, resolvedTargetWorkspaceId);
+       updateWorkspaceProject(db, effectiveWorkspaceId, project.id, movePatch);
+       if (!isFolderOnlyMove) {
+         try {
+           await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId);
+         } catch (error) {
+           restoreWorkspaceProjectRow(row);
+           throw new TeamProjectSyncError(error);
+         }
+       }
      }
-     const updatedRow = listWorkspaceProjects(db, effectiveWorkspaceId).find((item: any) => item.id === project.id);
-     res.json({ project: normalizeWorkspaceProjectRow(updatedRow, ctx) });
+    // Use the resolved target workspace ID for folder assignment and
+    // response row lookup when the project moved cross-workspace.
+    const responseWorkspaceId = resolvedTargetWorkspaceId ?? effectiveWorkspaceId;
+    if (visibility === 'team') {
+      const ensureCommentAnchor = db.transaction(() => {
+        ensureTeamProjectCommentConversations(db, project.id);
+      });
+      ensureCommentAnchor();
+    }
+    // Assign the project to the selected folder (or clear it for the
+    // workspace root) after the visibility move has committed. When a
+    // target folder is provided the folder is preserved regardless of
+    // visibility; a personal move without a folder returns to the root.
+    if (targetFolderId !== undefined) {
+      setProjectFolder(db, responseWorkspaceId, project.id, targetFolderId);
+    } else if (visibility === 'personal') {
+      setProjectFolder(db, responseWorkspaceId, project.id, null);
+    }
+    const updatedRow = listWorkspaceProjects(db, responseWorkspaceId).find((item: any) => item.id === project.id);
+    res.json({ project: normalizeWorkspaceProjectRow(updatedRow, ctx) });
     } catch (err: any) {
       if (isTeamProjectOwnerConflictError(err)) {
         return sendApiError(res, 409, 'TEAM_PROJECT_OWNER_CONFLICT', String(err));
@@ -3457,48 +3711,143 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!ctx) return;
       const visibility = req.body?.visibility;
       const projectIds = parseProjectIds(req.body?.projectIds);
+      const batchTargetWorkspaceId = typeof req.body?.targetWorkspaceId === 'string'
+        ? req.body.targetWorkspaceId.trim()
+        : undefined;
+      const batchTargetFolderId = typeof req.body?.targetFolderId === 'string'
+        ? req.body.targetFolderId.trim() || null
+        : undefined;
       if (!validVisibility(visibility) || !projectIds) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'projectIds and visibility are required');
       }
-      if (visibility === 'team') {
-        const refusal = teamShareRefusalFor(ctx, workspaceTypes);
-        if (refusal) return sendTeamShareScopeRefused(res, ctx, refusal);
-      }
+     if (visibility === 'team') {
+       const refusal = batchTargetWorkspaceId && batchTargetWorkspaceId !== ctx.workspaceId
+         ? null
+         : teamShareRefusalFor(ctx, workspaceTypes);
+       if (refusal) return sendTeamShareScopeRefused(res, ctx, refusal);
+     }
       const locations = await configuredProjectLocations();
       const rows = workspaceProjectRowsForIds(projectIds, ctx, locations);
       const summaries = projectIds.map((id: string) => {
         const row = rows.find((item: any) => item.id === id);
         return row ? normalizeWorkspaceProjectRow(row, ctx) : null;
       });
-      if (summaries.some((item: any) => !item)) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
-      const forbidden = summaries.filter((item: any) => !workspaceMoveAllowed(item, visibility, ctx));
-      if (forbidden.length > 0) {
-        return sendApiError(res, 403, 'PROJECT_BATCH_CONTAINS_FORBIDDEN_ITEMS', 'batch contains forbidden projects');
-      }
-      const previousRows = projectIds.map((id: string) => rows.find((item: any) => item.id === id));
-      const moveMany = db.transaction((ids: string[]) => {
-        for (const id of ids) {
-          const summary = summaries.find((item: any) => item?.id === id);
-          updateWorkspaceProject(db, ctx.workspaceId, id, workspaceProjectMovePatch(id, summary, ctx, visibility));
+    if (summaries.some((item: any) => !item)) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+    // Folder-only batch moves (same workspace, same visibility) don't
+    // change visibility — just reassign (or clear) folders.
+    // Bypass the move-allowed gate for those, same as the single move.
+    const batchIsFolderOnlyRequest =
+      (!batchTargetWorkspaceId || batchTargetWorkspaceId === ctx.workspaceId)
+      && summaries.every((item: any) => item?.visibility === visibility);
+    const forbidden = batchIsFolderOnlyRequest
+      ? []
+      : summaries.filter((item: any) => !workspaceMoveAllowed(item, visibility, ctx, batchTargetWorkspaceId));
+    if (forbidden.length > 0) {
+      return sendApiError(res, 403, 'PROJECT_BATCH_CONTAINS_FORBIDDEN_ITEMS', 'batch contains forbidden projects');
+    }
+     // Resolve the personal (one-person-team) workspace identity for batch
+     // personal moves from a team workspace. The same user has different
+     // member IDs across workspaces, so both owner fields must carry the
+     // default team's member ID — not the team workspace's.
+     let batchTargetMemberId: string | null = null;
+     let batchResolvedTargetWorkspaceId = batchTargetWorkspaceId ?? null;
+     if (
+        visibility === 'personal'
+        && summaries.some((item: any) => item?.visibility === 'team')
+        && (!batchTargetWorkspaceId || batchTargetWorkspaceId === ctx.workspaceId)
+      ) {
+        const personal = await resolveTargetWorkspaceIdentity();
+        if (personal) {
+         batchResolvedTargetWorkspaceId = personal.workspaceId;
+         batchTargetMemberId = personal.workspaceMemberId;
+       }
+     }
+     // For cross-workspace team moves with an explicit target workspace,
+     // resolve the target member ID from the directory. The same user
+     // has different member IDs across workspaces, so the local rows
+     // must carry the target workspace's member ID.
+     if (
+       batchResolvedTargetWorkspaceId
+       && batchResolvedTargetWorkspaceId !== ctx.workspaceId
+       && !batchTargetMemberId
+     ) {
+       const targetIdentity = await resolveTargetWorkspaceIdentity(batchResolvedTargetWorkspaceId);
+       if (targetIdentity) {
+         batchTargetMemberId = targetIdentity.workspaceMemberId;
+       }
+     }
+     const batchIsCrossWorkspace = !!batchResolvedTargetWorkspaceId
+       && batchResolvedTargetWorkspaceId !== ctx.workspaceId;
+     // Folder-only batch move: same workspace AND same visibility for all
+     // projects — just reassign folders, skip the server sync.
+     const batchIsFolderOnly = !batchIsCrossWorkspace
+       && summaries.every((item: any) => item?.visibility === visibility);
+     const previousRows = projectIds.map((id: string) => rows.find((item: any) => item.id === id));
+     const moveMany = db.transaction((ids: string[]) => {
+       for (const id of ids) {
+         const summary = summaries.find((item: any) => item?.id === id);
+         const movePatch = workspaceProjectMovePatch(
+           id, summary, ctx, visibility,
+           batchResolvedTargetWorkspaceId, batchTargetMemberId,
+         );
+         if (batchIsCrossWorkspace) {
+           rebindWorkspaceProject(db, id, movePatch);
+         } else {
+           updateWorkspaceProject(db, ctx.workspaceId, id, movePatch);
+         }
+       }
+     });
+     moveMany(projectIds);
+     if (!batchIsFolderOnly) {
+     try {
+       const batchTransferMeta = await requestTeamVisibility(projectIds, ctx, visibility, batchResolvedTargetWorkspaceId);
+       // If the directory did not resolve a target member ID, use the
+       // server-authoritative target owner member ID as a fallback and
+       // re-patch the rows. When the directory already resolved the
+       // correct member ID, keep it — the directory is the local
+       // source of truth for workspace memberships.
+       if (!batchTargetMemberId && batchTransferMeta?.targetOwnerMemberId) {
+         batchTargetMemberId = batchTransferMeta.targetOwnerMemberId;
+         for (const id of projectIds) {
+           const summary = summaries.find((item: any) => item?.id === id);
+           const movePatch = workspaceProjectMovePatch(
+             id, summary, ctx, visibility,
+             batchResolvedTargetWorkspaceId, batchTargetMemberId,
+           );
+           if (batchIsCrossWorkspace) {
+             rebindWorkspaceProject(db, id, movePatch);
+           } else {
+             updateWorkspaceProject(db, batchResolvedTargetWorkspaceId || ctx.workspaceId, id, movePatch);
+           }
+         }
+       }
+     } catch (error) {
+       const rollbackMany = db.transaction((items: any[]) => {
+         for (const item of items) restoreWorkspaceProjectRow(item);
+       });
+       rollbackMany(previousRows.filter(Boolean));
+       throw new TeamProjectSyncError(error);
+     }
+     }
+     if (visibility === 'team') {
+       const ensureCommentAnchors = db.transaction((ids: string[]) => {
+         for (const id of ids) ensureTeamProjectCommentConversations(db, id);
+       });
+       ensureCommentAnchors(projectIds);
+     }
+     // Assign all batch-moved projects to the selected folder (or clear
+     // for the workspace root) when targetFolderId is provided.
+     const batchResponseWorkspaceId = batchResolvedTargetWorkspaceId || batchTargetWorkspaceId || ctx.workspaceId;
+      if (batchTargetFolderId !== undefined) {
+        for (const id of projectIds) {
+          setProjectFolder(db, batchResponseWorkspaceId, id, batchTargetFolderId);
         }
-      });
-      moveMany(projectIds);
-      try {
-        await requestTeamVisibility(projectIds, ctx, visibility);
-      } catch (error) {
-        const rollbackMany = db.transaction((items: any[]) => {
-          for (const item of items) restoreWorkspaceProjectRow(item);
-        });
-        rollbackMany(previousRows.filter(Boolean));
-        throw new TeamProjectSyncError(error);
+      } else if (visibility === 'personal') {
+        for (const id of projectIds) {
+          setProjectFolder(db, batchResponseWorkspaceId, id, null);
+        }
       }
-      if (visibility === 'team') {
-        const ensureCommentAnchors = db.transaction((ids: string[]) => {
-          for (const id of ids) ensureTeamProjectCommentConversations(db, id);
-        });
-        ensureCommentAnchors(projectIds);
-      }
-      const updatedRows = listWorkspaceProjects(db, ctx.workspaceId);
+      const updatedRows = listWorkspaceProjects(db, batchResponseWorkspaceId);
       const projects = projectIds.map((id: string) => normalizeWorkspaceProjectRow(updatedRows.find((row: any) => row.id === id), ctx));
       res.json({ ok: true, projects });
     } catch (err: any) {
@@ -4053,6 +4402,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
            title: null,
            sessionMode: initialSessionMode,
            createdAt: now,
+           updatedAt: now,
          });
          bindCreatedProjectToWorkspace(
            (input) => ensureWorkspaceProject(db, input),
@@ -4736,11 +5086,32 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         workspaceType: requestWorkspaceType,
       });
     }
+    // When the project's binding workspace differs from the request's
+    // workspace, the request's member ID belongs to the wrong workspace.
+    // The same user has different member IDs across workspaces, so resolve
+    // the current user's member ID in the project's workspace from the
+    // directory. This ensures the scope carries the correct identity for
+    // subsequent permission checks (e.g. write access). Falls back to the
+    // persisted creator member ID when the directory is unavailable.
+    let scopeMemberId: string | null =
+      claimed && claimed !== 'missing' ? claimed.workspaceMemberId : null;
+    if (
+      binding?.workspaceId
+      && claimed
+      && claimed !== 'missing'
+      && binding.workspaceId !== claimed.workspaceId
+    ) {
+      const projectWorkspaceIdentity = await resolveTargetWorkspaceIdentity(binding.workspaceId);
+      if (projectWorkspaceIdentity) {
+        scopeMemberId = projectWorkspaceIdentity.workspaceMemberId;
+      } else {
+        scopeMemberId = null;
+      }
+    }
     const scope = resolveLocalProjectWorkspaceScope({
       projectId: project.id,
       binding,
-      requestWorkspaceMemberId:
-        claimed && claimed !== 'missing' ? claimed.workspaceMemberId : null,
+      requestWorkspaceMemberId: scopeMemberId,
       requestWorkspaceType,
       knownWorkspaceType: workspaceTypes?.typeOf(binding?.workspaceId) ?? null,
       ...(ctx.configuredEnv ? { configuredEnv: ctx.configuredEnv() } : {}),

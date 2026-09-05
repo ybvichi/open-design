@@ -43,6 +43,17 @@ export function SharedWithMeView() {
             {subtitle}
           </span>
         </div>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.refreshBtn}
+            title={t('recentProjects.refresh')}
+            aria-label={t('recentProjects.refresh')}
+            onClick={() => window.dispatchEvent(new CustomEvent('shared:projects-refresh'))}
+          >
+            <Icon name="refresh" size={16} aria-hidden />
+          </button>
+        </div>
       </header>
 
       <div className={styles.typeTabs} role="tablist">

@@ -58,6 +58,7 @@ import {
 import { readVelaControlApiContext } from '../integrations/vela.js';
 import { readProjectManifest } from '../project-locations.js';
 import { redactSecrets } from '../redact.js';
+import { getDefaultTeamId, getTeamMemberId } from '../ids.js';
 
 /** The fields register-on-pull reads out of a pulled project's manifest. */
 export interface PulledProjectManifest {
@@ -2306,6 +2307,25 @@ export function registerCollabSyncRoutes(
       } catch {
         // Hub unavailable: fall back to the local state.
       }
+    }
+    // Cross-workspace owner override: the HDW cloud catalog (and the local
+    // owners/scopedOwners maps populated from it) can still carry the
+    // personal-space (default team) member ID after a cross-workspace
+    // transfer. The same user has different member IDs across workspaces,
+    // so when the resolved owner matches the default-team member ID AND the
+    // caller's workspace context gives them a different member ID, substitute
+    // the caller's workspace member ID. This keeps /collab/status's
+    // ownerMemberId aligned with the project workspace scope so the
+    // frontend's isOwner check resolves correctly.
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    if (
+      ownerMemberId
+      && defaultMemberId
+      && ownerMemberId === defaultMemberId
+      && principal?.memberId
+      && principal.memberId !== defaultMemberId
+    ) {
+      ownerMemberId = principal.memberId;
     }
     // The caller owns the project when the resolved owner id matches their own
     // member id. The owner is the single writer of their own project: the front

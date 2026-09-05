@@ -59,6 +59,16 @@
   background: var(--bg-subtle, color-mix(in srgb, var(--primary, #6366f1) 12%, transparent));
 }
 
+/* Disabled (greyed-out, not selectable) row. */
+.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.disabled:hover {
+  background: transparent;
+}
+
 .expandBtn {
   appearance: none;
   border: none;
@@ -165,4 +175,34 @@
 .row:active,
 .expandBtn:active {
   transform: none !important;
+}
+
+/* --- Tab bar (tabbed mode) --- */
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.tab {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 100ms var(--ease-out, ease-out), border-color 100ms var(--ease-out, ease-out);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive {
+  color: var(--primary, #6366f1);
+  border-bottom-color: var(--primary, #6366f1);
 }

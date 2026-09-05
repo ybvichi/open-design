@@ -19,6 +19,73 @@ import { Skeleton } from './Loading';
 import { useT } from '../i18n';
 import styles from './TeamTreeSection.module.css';
 
+/** Distinct palette for team icons — each workspace gets a deterministic pick. */
+const TEAM_ICON_COLORS = [
+  '#8AB4FF', '#A78BFA', '#6EE7B7', '#FCA5A5',
+  '#FDBA74', '#67E8F9', '#A5B4FC', '#F9A8D4',
+  '#86EFAC', '#FCD34D', '#7DD3FC', '#C4B5FD',
+];
+const colorCache = new Map<string, string>();
+const claimedPaletteSlots = new Set<number>();
+
+/** localStorage key for a team's expanded/collapsed state. */
+const TEAM_EXPANDED_KEY = (workspaceId: string) => `open-design:team-expanded:${workspaceId}`;
+
+function loadExpanded(workspaceId: string): boolean {
+  try {
+    return window.localStorage.getItem(TEAM_EXPANDED_KEY(workspaceId)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function saveExpanded(workspaceId: string, expanded: boolean): void {
+  try {
+    window.localStorage.setItem(TEAM_EXPANDED_KEY(workspaceId), expanded ? 'true' : 'false');
+  } catch {
+    // localStorage may be unavailable (private mode, quota) — ignore.
+  }
+}
+
+function teamIconColor(workspaceId: string): string {
+  const cached = colorCache.get(workspaceId);
+  if (cached) return cached;
+  let hash = 0;
+  for (let i = 0; i < workspaceId.length; i++) {
+    hash = ((hash << 5) - hash + workspaceId.charCodeAt(i)) | 0;
+  }
+  const absHash = Math.abs(hash);
+  const paletteIndex = absHash % TEAM_ICON_COLORS.length;
+  let color: string;
+  if (!claimedPaletteSlots.has(paletteIndex)) {
+    // Claim a curated palette slot for this workspace.
+    claimedPaletteSlots.add(paletteIndex);
+    color = TEAM_ICON_COLORS[paletteIndex] ?? '#8AB4FF';
+  } else {
+    // All palette slots are taken — generate a random HSL color
+    // so every team beyond the 12th still gets a distinct shade.
+    const hue = absHash % 360;
+    const sat = 45 + (absHash % 15);
+    const light = 68 + (absHash % 10);
+    color = `hsl(${hue}, ${sat}%, ${light}%)`;
+  }
+  colorCache.set(workspaceId, color);
+  return color;
+}
+
+/** Team avatar icon — a person silhouette in a rounded square, tinted per workspace. */
+function TeamIcon({ workspaceId, className }: { workspaceId: string; className?: string }) {
+  const fill = teamIconColor(workspaceId);
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M0.000205 113.868959v796.262082A113.663955 113.663955 0 0 0 113.868959 1023.999795h796.262082A114.073554 114.073554 0 0 0 1023.999795 910.131041V113.868959A114.073554 114.073554 0 0 0 910.131041 0.000205H113.868959A113.663955 113.663955 0 0 0 0.000205 113.868959z m682.598127 227.532709A170.598332 170.598332 0 1 1 512 170.598537a170.393532 170.393532 0 0 1 170.598332 170.803131z m-511.999795 455.065418c0-113.868754 227.532709-176.332729 341.401463-176.332729s341.401463 61.439975 341.401463 176.332729v56.934377H170.598537v-56.934377z"
+        fill={fill}
+      />
+    </svg>
+  );
+}
+
 /** A folder under a team workspace. */
 export interface TeamFolder {
   id: string;
@@ -51,11 +118,28 @@ interface TeamNodeProps {
 
 function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTeam }: TeamNodeProps) {
   const t = useT();
-  const [expanded, setExpanded] = useState(false);
-  const [folders, setFolders] = useState<TeamFolder[]>([]);
+  const [expanded, setExpanded] = useState(() => loadExpanded(team.workspaceId));
+  // null = not yet loaded; [] = loaded, no folders; [...] = loaded, has folders.
+  const [folders, setFolders] = useState<TeamFolder[] | null>(null);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const isActiveTeam = activeTeamId === team.workspaceId;
   const isTeamSelected = isActiveTeam && !activeFolderId;
+
+  // Persist expanded/collapsed state to localStorage so it survives reloads.
+  useEffect(() => {
+    saveExpanded(team.workspaceId, expanded);
+  }, [team.workspaceId, expanded]);
+
+  // Auto-expand the team node when the route lands on a folder inside this
+  // team, so the selected folder node is visible without a manual click.
+  // Navigating away does not force-collapse — the user's manual toggle is
+  // preserved.
+  useEffect(() => {
+    if (isActiveTeam && activeFolderId) {
+      setExpanded(true);
+    }
+  }, [isActiveTeam, activeFolderId]);
+
   const canRename = team.role === 'admin' || team.role === 'owner';
   const canDelete = team.role === 'owner';
   const [editing, setEditing] = useState(false);
@@ -63,17 +147,22 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+ const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch root-level folders for this team from the HDW folder API, and
-  // refresh when a create/delete dispatches `hdw:folders-updated` for
-  // this team. Folders are loaded lazily — the request is only sent when
-  // the user expands this team node.
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [folderEditValue, setFolderEditValue] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState(false);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+ // Fetch root-level folders for this team from the HDW folder API.
+  // Folders are fetched eagerly on mount so we know whether to show the
+  // expand button (teams with no subfolders hide it), and re-fetched when
+  // expanded to get fresh data before showing the folder list.
+  const didInitialFetch = useRef(false);
   useEffect(() => {
-    if (!expanded) return;
     let cancelled = false;
     const loadFolders = async () => {
-      setFoldersLoading(true);
+      if (expanded) setFoldersLoading(true);
       try {
         const res = await fetch(
           `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(team.workspaceId)}`,
@@ -93,7 +182,11 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
         if (!cancelled) setFoldersLoading(false);
       }
     };
-    void loadFolders();
+    // Always fetch on mount; re-fetch on expand; skip on collapse.
+    if (expanded || !didInitialFetch.current) {
+      didInitialFetch.current = true;
+      void loadFolders();
+    }
     function onFoldersUpdated(e: Event) {
       const detail = (e as CustomEvent).detail;
       if (detail?.teamId !== team.workspaceId) return;
@@ -111,7 +204,14 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [editing]);
+ }, [editing]);
+
+  useEffect(() => {
+    if (editingFolderId && folderInputRef.current) {
+      folderInputRef.current.focus();
+      folderInputRef.current.select();
+    }
+  }, [editingFolderId]);
 
   const startEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -192,34 +292,78 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     setExpanded((v) => !v);
   };
 
-  const handleFolderClick = (folder: TeamFolder) => {
-    navigate({
-      kind: 'home',
-      view: 'team-folder',
-      teamId: team.workspaceId,
-      folderId: folder.id,
-    });
+ const handleFolderClick = (folder: TeamFolder) => {
+   navigate({
+     kind: 'home',
+     view: 'team-folder',
+     teamId: team.workspaceId,
+     folderId: folder.id,
+   });
+ };
+
+  const startFolderEdit = (folder: TeamFolder, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canRename) return;
+    setFolderEditValue(folder.name);
+    setEditingFolderId(folder.id);
+  };
+
+  const commitFolderRename = async (folder: TeamFolder) => {
+    const trimmed = folderEditValue.trim();
+    if (!trimmed || trimmed === folder.name) {
+      setEditingFolderId(null);
+      return;
+    }
+    setRenamingFolder(true);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder_id: folder.id,
+          folder_name: trimmed,
+          workspace_id: team.workspaceId,
+          operator_member_id: team.workspaceMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setFolders((prev) =>
+          prev ? prev.map((f) => (f.id === folder.id ? { ...f, name: trimmed } : f)) : prev,
+        );
+        window.dispatchEvent(
+          new CustomEvent('hdw:folders-updated', { detail: { teamId: team.workspaceId } }),
+        );
+      }
+    } catch {
+      // ignore — leave name unchanged
+    } finally {
+      setRenamingFolder(false);
+      setEditingFolderId(null);
+    }
+  };
+
+  const cancelFolderEdit = () => {
+    setFolderEditValue('');
+    setEditingFolderId(null);
+  };
+
+  const handleFolderEditKeyDown = (folder: TeamFolder, e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void commitFolderRename(folder);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelFolderEdit();
+    }
   };
 
   return (
     <div className={styles.teamNode}>
       <div className={`${styles.teamRow}${isTeamSelected ? ` ${styles.isActiveRow}` : ''}`}>
-        <button
-          type="button"
-          className={styles.expandBtn}
-          onClick={handleToggle}
-          aria-label={expanded ? t('entry.navCollapse') : t('entry.navExpand')}
-          aria-expanded={expanded}
-          tabIndex={-1}
-        >
-          <Icon
-            name={expanded ? 'chevron-down' : 'chevron-right'}
-            size={12}
-          />
-        </button>
         {editing ? (
           <div className={styles.teamLabel}>
-            <Icon name="folder" size={16} className={styles.teamIcon} />
+            <TeamIcon workspaceId={team.workspaceId} className={styles.teamIcon} />
             <input
               ref={inputRef}
               className={styles.editInput}
@@ -232,16 +376,38 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
           </div>
         ) : (
           <>
-            <button
-              type="button"
+            <div
               className={styles.teamLabel}
               onClick={handleTeamClick}
               onDoubleClick={canRename ? startEdit : undefined}
               title={team.workspaceName}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTeamClick();
+                }
+              }}
             >
-              <Icon name="folder" size={16} className={styles.teamIcon} />
+              {(folders === null || folders.length > 0) && (
+                <button
+                  type="button"
+                  className={styles.expandBtn}
+                  onClick={handleToggle}
+                  aria-label={expanded ? t('entry.navCollapse') : t('entry.navExpand')}
+                  aria-expanded={expanded}
+                  tabIndex={-1}
+                >
+                  <Icon
+                    name={expanded ? 'chevron-down' : 'chevron-right'}
+                    size={12}
+                  />
+                </button>
+              )}
+              <TeamIcon workspaceId={team.workspaceId} className={styles.teamIcon} />
               <span className={styles.teamName}>{team.workspaceName}</span>
-            </button>
+            </div>
             <span className={styles.actions}>
               {canDelete ? (
                 <button
@@ -267,18 +433,39 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
             <Skeleton width={13} height={13} radius={4} />
             <Skeleton width="40%" height={13} radius={6} />
           </div>
-        </div>
-      ) : expanded && folders.length > 0 ? (
+       </div>
+      ) : expanded && folders !== null && folders.length > 0 ? (
         <div className={styles.folderList} role="group">
-          {folders.map((folder) => {
-            const isActiveFolder =
-              isActiveTeam && activeFolderId === folder.id;
-            return (
+         {folders.map((folder) => {
+           const isActiveFolder =
+             isActiveTeam && activeFolderId === folder.id;
+           const isEditingFolder = editingFolderId === folder.id;
+           if (isEditingFolder) {
+             return (
+               <div
+                 key={folder.id}
+                 className={`${styles.folderRow}${isActiveFolder ? ` ${styles.isActive}` : ''}`}
+               >
+                 <Icon name="folder-filled" size={13} className={styles.folderIcon} />
+                 <input
+                   ref={folderInputRef}
+                   className={styles.editInput}
+                   value={folderEditValue}
+                   disabled={renamingFolder}
+                   onChange={(e) => setFolderEditValue(e.target.value)}
+                   onBlur={() => void commitFolderRename(folder)}
+                   onKeyDown={(e) => handleFolderEditKeyDown(folder, e)}
+                 />
+               </div>
+             );
+           }
+           return (
               <button
                 key={folder.id}
                 type="button"
                 className={`${styles.folderRow}${isActiveFolder ? ` ${styles.isActive}` : ''}`}
                 onClick={() => handleFolderClick(folder)}
+                onDoubleClick={canRename ? (e) => startFolderEdit(folder, e) : undefined}
                 title={folder.name}
               >
                 <Icon name="folder-filled" size={13} className={styles.folderIcon} />

@@ -15,4 +15,15 @@ module.exports = app => {
   }).catch(err => {
     app.logger.error('[hdw] blob store init failed:', err);
   });
+
+  // 退出/重启前关闭 knex 连接池,避免连接残留导致 PostgreSQL 53300(too_many_connections)。
+  app.beforeClose(async () => {
+    try {
+      const { createKnex } = require('./app/utils/knex.js');
+      await createKnex().destroy();
+      app.logger.info('[hdw] knex pool closed');
+    } catch (err) {
+      app.logger.error('[hdw] knex pool close failed:', err);
+    }
+  });
 };

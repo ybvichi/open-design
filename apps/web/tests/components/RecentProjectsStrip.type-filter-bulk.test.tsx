@@ -44,6 +44,7 @@ function movedProject(input: MoveCall): WorkspaceProjectSummary {
       designSystemId: null,
       createdAt: 1,
       updatedAt: 2,
+    createdByWorkspaceMemberId: 'wm-1',
     },
   };
 }
@@ -61,6 +62,45 @@ vi.mock('../../src/providers/registry', () => ({
     `/api/projects/${projectId}/files/${fileName}`,
 }));
 
+vi.mock('../../src/collab/useWorkspaceContext', () => ({
+  notifyTeamProjectsChanged: vi.fn(),
+  useWorkspaceBilling: () => null,
+
+  readWorkspaceDirectoryForCurrentGeneration: async () => ({
+    items: [
+      {
+        workspaceId: 'ws-team-2',
+        workspaceName: 'Team Two',
+        workspaceType: 'team',
+        workspaceMemberId: 'wm-2',
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+        isDefaultTeam: false,
+      },
+    ],
+  }),
+  useWorkspaceContext: () => ({
+    context: {
+      workspaceId: 'ws-1',
+      workspaceType: 'team',
+      workspaceMemberId: 'wm-1',
+      role: 'member',
+      memberStatus: 'active',
+      lifecycleState: 'active',
+      billingState: 'active',
+      providerMode: 'platform_credits',
+      planId: null,
+      seatSummary: { seatLimit: 5, usedSeats: 2, availableSeats: 3 },
+      permissions: {},
+      teamId: 'team-1',
+    },
+    loading: false,
+    failure: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 afterEach(() => {
   cleanup();
   moveWorkspaceProject.mockClear();
@@ -75,6 +115,7 @@ function project(overrides: Partial<Project>): Project {
     designSystemId: null,
     createdAt: 1,
     updatedAt: 2,
+    createdByWorkspaceMemberId: 'wm-1',
     status: { value: 'not_started' },
     ...overrides,
   };
@@ -303,6 +344,11 @@ describe('RecentProjectsStrip bulk selection bar (#75)', () => {
     expect(within(bar).getByText('2 selected')).toBeTruthy();
 
     fireEvent.click(within(bar).getByText('Move to team space'));
+    // The tree dialog requires a team node to be selected before Confirm is enabled.
+    await waitFor(() => {
+      expect(screen.getByText('Team Two')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('Team Two'));
     fireEvent.click(screen.getByText('Confirm move'));
 
     await waitFor(() => {
@@ -347,11 +393,15 @@ describe('RecentProjectsStrip bulk selection bar (#75)', () => {
   });
 
   it('blocks batch mutations when the selection contains another member’s project', () => {
+    const foreignProjects = ALL_PROJECTS.map((p) =>
+      p.id === 'p-deck' ? { ...p, createdByWorkspaceMemberId: null } : p,
+    );
     const { container } = renderGrid({
       canManageProjectCollection: true,
       collaborationEnabled: true,
       onDelete: () => true,
       projectOwnerMemberIds: new Map([['p-deck', 'someone-else']]),
+      projects: foreignProjects,
     });
 
     const bar = enterSelectionMode(container, ['Deck project']);

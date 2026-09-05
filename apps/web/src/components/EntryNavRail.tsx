@@ -817,6 +817,9 @@ export function EntryTopRightCluster({
               <RemixIcon name="battery-charge-line" size={13} /> {balanceLabel ?? '—'}
             </button>
           ) : null} */}
+            <div className="entry-nav-rail__account-updater" data-testid="entry-nav-account-updater">
+              {updaterSlot}
+            </div>
             <div
               ref={accountContainerRef}
               className="entry-nav-rail__account entry-nav-rail__account--floating"
@@ -986,13 +989,6 @@ export function EntryTopRightCluster({
                 />
               ) : null}
               </div>
-              </div>
-              {/* Update-ready rocket: an independent control immediately after
-                  the credits/avatar capsule. The slot stays mounted so
-                  `:empty { display: none }` can remove it from cluster layout
-                  until an installer has downloaded. */}
-              <div className="entry-nav-rail__account-updater" data-testid="entry-nav-account-updater">
-                {updaterSlot}
               </div>
             </>
           ) : null}
@@ -1384,7 +1380,9 @@ export function EntryNavRail({
       );
       notifyWorkspaceBillingRefresh();
       notifyTeamProjectsChanged();
-      selectView('home');
+      // Context switch is complete — stay on the current route. The user
+      // navigated here deliberately; switching the underlying workspace
+      // identity should refresh the data, not force a page jump.
     } catch {
       trackWorkspaceSwitchResult(analytics.track, {
         page_name: analyticsPage,
@@ -1695,7 +1693,7 @@ export function EntryNavRail({
           <Icon name="sparkles" size={16} />
         </NavButton>
 
-        {context ? (
+        {false&&context ? (
           <div className="entry-nav-rail__team-section">
             <NavButton
               active={view === 'drafts'}
@@ -1750,7 +1748,7 @@ export function EntryNavRail({
             {canViewWorkspaceSettings && workspaceSettingsUrl ? (
               <a
                 className="entry-nav-rail__btn"
-                href={workspaceSettingsUrl}
+                href={workspaceSettingsUrl ?? undefined}
                 {...externalLinkProps}
                 aria-label={t('entry.navWorkspaceSettings')}
                 data-testid="entry-nav-workspace-settings"
@@ -1772,7 +1770,7 @@ export function EntryNavRail({
               </a>
             ) : null}
           </div>
-        ) : (
+        ) : true?null:(
           <>
             <NavButton
               active={view === 'design-systems'}

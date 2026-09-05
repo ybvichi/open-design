@@ -253,7 +253,9 @@ export function UpdaterPopup({
   const installBusy = installState === 'opening' || installState === 'handoff' || installState === 'quitting';
   const quitRecoverable = installState === 'recoverable' || installState === 'quitting';
   const canStartInstall = ready || installState === 'recoverable';
-  const showControl = ready || installState !== 'idle';
+  // The version pill is always visible; the "update available" badge and
+  // popover only surface when `ready` (a real downloaded installer exists).
+  const showControl = true;
   const installFailureText = model.canOpenInstaller ? t('updater.openFailedFallback') : t('updater.failed');
   const controlLabel = quitRecoverable
     ? t('updater.quitButton')
@@ -440,13 +442,13 @@ export function UpdaterPopup({
         aria-disabled={installBusy ? 'true' : undefined}
         aria-expanded={panelOpen}
         aria-label={controlLabel}
-        className={`${styles.rocketButton}${installBusy ? ` ${styles.disabled}` : ''}`}
+        className={`${styles.versionPill}${installBusy ? ` ${styles.disabled}` : ''}`}
         data-testid="entry-nav-updater"
         data-tooltip={controlLabel}
         title={controlLabel}
         type="button"
         onClick={() => {
-          if (installBusy) return;
+          if (installBusy || !ready) return;
           if (panelOpen) {
             setPanelOpen(false);
             return;
@@ -461,7 +463,11 @@ export function UpdaterPopup({
           setPanelOpen(true);
         }}
       >
-        <RocketBadgeIcon className={styles.rocketIcon} />
+        <span className={styles.dot} aria-hidden="true" />
+        <span className={styles.installedVersion}>
+          HiDesign {model.currentVersion ?? appVersionBefore}
+        </span>
+        {ready ? <span className={styles.updateBadge}>{t('updater.available')}</span> : null}
       </button>
       <AnimatePresence>
         {panelOpen ? (
@@ -535,7 +541,7 @@ function UpdaterPopupPanel({
 }) {
   return (
     <motion.section
-      aria-labelledby="updater-popup-title"
+      aria-label={t('updater.ready')}
       className="updater-popup is-ready"
       data-testid="updater-popup"
       role="dialog"
@@ -545,57 +551,59 @@ function UpdaterPopupPanel({
       exit="exit"
       onMouseDown={(event) => event.stopPropagation()}
     >
-      {/* No cover art: this panel has no cover source. Covers on the update
-          surfaces come from the what's-new document's `imageUrl` (see
-          WhatsNewPopup), never from a bundled asset or a hardcoded URL. */}
-      <div className="updater-popup__body">
-        <h2 id="updater-popup-title">{quitRecoverable ? t('updater.quitFailedTitle') : t('updater.ready')}</h2>
-        {quitRecoverable && model.updateKind === 'payload'
-          ? null
-          : <p>{quitRecoverable ? t('updater.quitFailedBody') : versionText(t, model)}</p>}
-        {!quitRecoverable && model.reinstall?.url != null ? (
-          <ReinstallLearnMoreLink t={t} url={model.reinstall.url} />
-        ) : null}
-        {channelLabel != null ? <span className="updater-popup__badge">{channelLabel}</span> : null}
-        {installError != null ? (
-          <p className="updater-popup__error" data-testid="updater-install-error" role="alert">
-            {installError}
-          </p>
-        ) : null}
-      </div>
-      <div className="updater-popup__footer">
-        {!quitRecoverable ? <div className="updater-popup__preference">
-          <label className="updater-popup__checkbox">
-            <input
-              checked={allowSilentUpdatesChecked}
-              data-testid="updater-silent-update-checkbox"
-              disabled={installBusy || silentUpdatesPersisting}
-              type="checkbox"
-              onChange={(event) => onSilentUpdatesChange(event.currentTarget.checked)}
-            />
-            <span>{t('updater.allowSilentUpdates')}</span>
-          </label>
-          {silentUpdatesPersistError != null ? (
-            <p className="updater-popup__error" data-testid="updater-silent-update-error" role="alert">
-              {silentUpdatesPersistError}
-            </p>
+      <div className={styles.popoverHead}>
+        <div className={styles.popoverHeadInfo}>
+          <strong className={styles.availableVersion}>
+            {quitRecoverable ? t('updater.quitFailedTitle') : `HiDesign ${model.availableVersion}`}
+          </strong>
+          {quitRecoverable ? (
+            <span className={styles.updateTime}>{t('updater.quitFailedBody')}</span>
+          ) : model.status?.active?.downloadedAt ? (
+            <span className={styles.updateTime}>
+              更新时间：{model.status.active.downloadedAt.slice(0, 10)}
+            </span>
           ) : null}
-        </div> : null}
-        <div className="updater-popup__actions">
-          <button className="updater-popup__button" disabled={installBusy} type="button" onClick={onClose}>
-            {t('updater.later')}
-          </button>
-          <button
-            className="updater-popup__button updater-popup__button--primary"
-            data-testid="updater-install-button"
-            disabled={installBusy}
-            type="button"
-            onClick={onInstall}
-          >
-            {quitRecoverable ? t('updater.quitButton') : installActionText(t, model, installBusy)}
-          </button>
         </div>
+        {quitRecoverable ? null : <span className={styles.versionLatest}>{t('updater.ready')}</span>}
       </div>
+      {!quitRecoverable && model.reinstall?.url != null ? (
+        <ReinstallLearnMoreLink t={t} url={model.reinstall.url} />
+      ) : null}
+      {installError != null ? (
+        <p className={styles.error} data-testid="updater-install-error" role="alert">
+          {installError}
+        </p>
+      ) : null}
+      <button
+        className={styles.updateButton}
+        data-testid="updater-install-button"
+        disabled={installBusy}
+        type="button"
+        onClick={onInstall}
+      >
+        <Icon name="download" size={16} className={styles.updateButtonIcon} />
+        <span>{quitRecoverable ? t('updater.quitButton') : installActionText(t, model, installBusy)}</span>
+      </button>
+      {!quitRecoverable ? (
+        <label className={styles.checkbox}>
+          <input
+            checked={allowSilentUpdatesChecked}
+            data-testid="updater-silent-update-checkbox"
+            disabled={installBusy || silentUpdatesPersisting}
+            type="checkbox"
+            onChange={(event) => onSilentUpdatesChange(event.currentTarget.checked)}
+          />
+          <span>{t('updater.allowSilentUpdates')}</span>
+        </label>
+      ) : null}
+      {silentUpdatesPersistError != null ? (
+        <p className={styles.error} data-testid="updater-silent-update-error" role="alert">
+          {silentUpdatesPersistError}
+        </p>
+      ) : null}
+      <button className={styles.laterButton} disabled={installBusy} type="button" onClick={onClose}>
+        {t('updater.later')}
+      </button>
     </motion.section>
   );
 }

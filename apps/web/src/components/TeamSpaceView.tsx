@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useId, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
 import { navigate } from '../router';
 import { createPortal } from 'react-dom';
@@ -72,6 +73,7 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
   const [loading, setLoading] = useState(Boolean(teamId));
   const [operator, setOperator] = useState<OperatorInfo | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
 
   // Resolve the team name from the workspace directory by id. The directory
   // is the same source the left rail tree uses, so the title always matches
@@ -98,10 +100,24 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [teamId]);
+   return () => { cancelled = true; };
+ }, [teamId]);
 
-  // Fetch the current user's operator info (member ID + role) via the
+ // Update the title without a refetch when a team is renamed from the
+ // left nav rail. The `hdw:team-renamed` event carries the new name.
+ useEffect(() => {
+   if (!teamId) return;
+   function onTeamRenamed(e: Event) {
+     const detail = (e as CustomEvent).detail;
+     if (detail?.teamId === teamId && detail?.newName) {
+       setTeamName(detail.newName);
+     }
+   }
+   window.addEventListener('hdw:team-renamed', onTeamRenamed);
+   return () => window.removeEventListener('hdw:team-renamed', onTeamRenamed);
+ }, [teamId]);
+
+ // Fetch the current user's operator info (member ID + role) via the
   // dedicated single-member endpoint instead of filtering the full member
   // list. The member ID is derived locally so no extra request is needed.
   useEffect(() => {
@@ -158,8 +174,8 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
            {t('teamSpace.subtitle')}
          </span>
        </div>
-        {activeTab === 'projects' ? (
-          <div className={styles.headerActions}>
+        <div className={styles.headerActions}>
+          {activeTab === 'projects' ? (
             <button
               type="button"
               className={styles.inviteBtn}
@@ -168,11 +184,20 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
               <Icon name="plus" size={15} aria-hidden />
               <span>{t('teamSpace.newProjectGroup')}</span>
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          <button
+            type="button"
+            className={styles.refreshBtn}
+            title={t('recentProjects.refresh')}
+            aria-label={t('recentProjects.refresh')}
+            onClick={() => window.dispatchEvent(new CustomEvent('hdw:folders-updated', { detail: { teamId } }))}
+          >
+            <Icon name="refresh" size={16} aria-hidden />
+          </button>
+        </div>
      </header>
 
-      <div className={styles.typeTabs} role="tablist">
+      <div ref={setTypeTabsEl} className={styles.typeTabs} role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -190,7 +215,7 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
 
       <div className={styles.content} role="tabpanel">
        {activeTab === 'projects' ? (
-          <ProjectsPanel teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+          <ProjectsPanel controlsPortalTarget={typeTabsEl} teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
        ) : null}
        {activeTab === 'members' ? (
         <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
@@ -228,7 +253,7 @@ interface TeamFolderItem {
   folderName: string;
   projectCount: number;
   subfolderCount: number;
-  subfolderPreview: string[];
+  subfolderPreview: Array<{ name: string; kind: 'folder' | 'project' }>;
   createdAt: string;
 }
 
@@ -242,6 +267,7 @@ function ProjectsPanel({
   onOpenProject,
   onDeleteProject,
   onRenameProject,
+  controlsPortalTarget,
 }: {
   teamId?: string;
   operator: OperatorInfo | null;
@@ -251,6 +277,7 @@ function ProjectsPanel({
   onOpenProject?: (id: string) => void;
   onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
   onRenameProject?: (id: string, name: string) => void;
+  controlsPortalTarget?: HTMLElement | null;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<TeamFolderItem[]>([]);
@@ -264,10 +291,15 @@ function ProjectsPanel({
   const [removing, setRemoving] = useState(false);
   const operatorMemberId = operator?.memberId ?? null;
   const operatorRole = operator?.role ?? null;
-  const canManage = operatorRole === 'owner' || operatorRole === 'admin';
+ const canManage = operatorRole === 'owner' || operatorRole === 'admin';
 
-  // Fetch the team's project folders from the HDW folder API, and refresh
-  // when a create/delete dispatches the `hdw:folders-updated` event.
+  const [renameFolderTarget, setRenameFolderTarget] = useState<TeamFolderItem | null>(null);
+  const [renameFolderInput, setRenameFolderInput] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState(false);
+  const renameFolderTitleId = useId();
+
+ // Fetch the team's project folders from the HDW folder API, and refresh
+ // when a create/delete dispatches the `hdw:folders-updated` event.
   useEffect(() => {
     if (!teamId) { setFolders([]); return; }
     let cancelled = false;
@@ -282,12 +314,31 @@ function ProjectsPanel({
         const body = await res.json();
         if (cancelled) return;
         const list: any[] = body?.data?.folders ?? [];
+        // The HDW folder list doesn't include project_count, so fetch local
+        // batch counts and merge them into the folder items.
+        let counts: Record<string, number> = {};
+        try {
+          const countsRes = await fetch(
+            `/api/folders/counts?workspace_id=${encodeURIComponent(teamId)}`,
+          { cache: 'no-store' },
+          );
+          if (countsRes.ok) {
+            const countsBody = await countsRes.json();
+            counts = countsBody?.data?.counts ?? {};
+          }
+        } catch { /* counts stay empty */ }
+        if (cancelled) return;
         setFolders(list.map((f) => ({
           folderId: f.folder_id || f.id || '',
           folderName: f.folder_name || f.name || '',
-          projectCount: Number(f.project_count) || 0,
+          projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
           subfolderCount: Number(f.subfolder_count) || 0,
-          subfolderPreview: Array.isArray(f.subfolder_preview) ? f.subfolder_preview : [],
+          subfolderPreview: Array.isArray(f.subfolder_preview)
+            ? f.subfolder_preview.map((p: any) =>
+                typeof p === 'string'
+                  ? { name: p, kind: 'folder' as const }
+                  : { name: p.name || '', kind: (p.kind === 'project' ? 'project' : 'folder') as 'folder' | 'project' })
+            : [],
           createdAt: f.created_at || '',
         })));
       } catch {
@@ -404,23 +455,65 @@ function ProjectsPanel({
     }
   }
 
-  function handleFolderClick(folder: TeamFolderItem) {
-    navigate({
-      kind: 'home',
-      view: 'team-folder',
-      teamId: teamId!,
-      folderId: folder.folderId,
-    });
+ function handleFolderClick(folder: TeamFolderItem) {
+   navigate({
+     kind: 'home',
+     view: 'team-folder',
+     teamId: teamId!,
+     folderId: folder.folderId,
+   });
+ }
+
+  function startFolderRename(folder: TeamFolderItem) {
+    setRenameFolderInput(folder.folderName);
+    setRenameFolderTarget(folder);
+  }
+
+  function cancelFolderRename() {
+    setRenameFolderTarget(null);
+    setRenameFolderInput('');
+  }
+
+  async function commitFolderRename() {
+    if (!renameFolderTarget || !teamId || !operatorMemberId) return;
+    const trimmed = renameFolderInput.trim();
+    if (!trimmed || trimmed === renameFolderTarget.folderName) {
+      cancelFolderRename();
+      return;
+    }
+    setRenamingFolder(true);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder_id: renameFolderTarget.folderId,
+          folder_name: trimmed,
+          workspace_id: teamId,
+          operator_member_id: operatorMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setFolders((prev) => prev.map((f) => f.folderId === renameFolderTarget.folderId ? { ...f, folderName: trimmed } : f));
+        window.dispatchEvent(new CustomEvent('hdw:folders-updated', { detail: { teamId } }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRenamingFolder(false);
+      cancelFolderRename();
+    }
   }
 
   return (
     <div className={styles.projectsWrap}>
-      <h2 className={styles.projectsTitle}>{t('teamSpace.projectGroupsTitle')}</h2>
+      {/* <h2 className={styles.projectsTitle}>{t('teamSpace.projectGroupsTitle')}</h2> */}
       <div className={styles.folderList}>
         {loading ? (
           <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
         ) : folders.length === 0 ? (
-          <div className={styles.folderEmpty}>{t('teamSpace.noProjectGroups')}</div>
+          null
         ) : folders.map((folder) => (
            <article
               key={folder.folderId}
@@ -431,25 +524,31 @@ function ProjectsPanel({
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder); } }}
               title={folder.folderName}
             >
-            {canManage ? (
-              <FolderCardMenu
-                onDelete={() => setRemoveTarget(folder)}
-                deleteLabel={t('teamSpace.deleteGroup')}
-              />
-            ) : null}
+           {canManage ? (
+             <FolderCardMenu
+                onRename={() => startFolderRename(folder)}
+               renameLabel={t('common.rename')}
+               onDelete={() => setRemoveTarget(folder)}
+               deleteLabel={t('teamSpace.deleteGroup')}
+             />
+           ) : null}
              <div className={styles.folderCardGrid}>
               {Array.from({ length: 4 }, (_, i) => {
-                const name = folder.subfolderPreview[i];
+                const item = folder.subfolderPreview[i];
+                if (!item) {
+                  return <div key={i} className={styles.gridCellEmpty} />;
+                }
+                if (item.kind === 'project') {
+                  return (
+                    <div key={i} className={`${styles.gridCell} ${styles.gridCellProject}`} title={item.name} />
+                  );
+                }
                 return (
-                  <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                    {name ? (
-                      <>
-                        <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
-                          <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                          <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                        </svg>
-                      </>
-                    ) : null}
+                  <div key={i} className={styles.gridCell} title={item.name}>
+                    <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                      <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                      <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                    </svg>
                   </div>
                 );
               })}
@@ -459,9 +558,9 @@ function ProjectsPanel({
                   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
                     <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
                     <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                  </svg>
-                  <span className={styles.folderName}>{folder.folderName}</span>
-               </div>
+                 </svg>
+                 <span className={styles.folderName}>{folder.folderName}</span>
+              </div>
                 <div className={styles.folderCardMeta}>
                   <div className={styles.folderCounts}>
                     <span className={styles.folderCount}>
@@ -494,8 +593,12 @@ function ProjectsPanel({
             space="team"
             onOpen={(id) => onOpenProject?.(id)}
             onDelete={onDeleteProject}
-            onRename={onRenameProject}
+            onRename={(id, name) => {
+              setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+              onRenameProject?.(id, name);
+            }}
             hideTitle
+            controlsPortalTarget={controlsPortalTarget}
           />
         )}
       </div>
@@ -548,6 +651,42 @@ function ProjectsPanel({
           </div>,
           document.body,
         )
+      ) : null}
+      {renameFolderTarget ? (
+        <Dialog
+          as="form"
+          className="modal-rename"
+          onClose={cancelFolderRename}
+          closeOnEscape
+          ariaLabelledBy={renameFolderTitleId}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void commitFolderRename();
+          }}
+        >
+          <DialogTitle id={renameFolderTitleId}>{t('designs.renameTitle')}</DialogTitle>
+          <label>
+            {t('designs.renamePrompt', { name: renameFolderTarget.folderName })}
+            <input
+              type="text"
+              value={renameFolderInput}
+              autoFocus
+              onChange={(e) => setRenameFolderInput(e.target.value)}
+            />
+          </label>
+          <DialogFooter className="row">
+            <button type="button" onClick={cancelFolderRename}>
+              {t('designs.renameCancel')}
+            </button>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!renameFolderInput.trim() || renameFolderInput.trim() === renameFolderTarget.folderName || renamingFolder}
+            >
+              {t('designs.renameSave')}
+            </button>
+          </DialogFooter>
+        </Dialog>
       ) : null}
     </div>
   );
@@ -833,42 +972,59 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
   const [teamName, setTeamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(folderId));
   const [operator, setOperator] = useState<OperatorInfo | null>(null);
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
+ const [showCreateFolder, setShowCreateFolder] = useState(false);
 
-  // Build breadcrumb path by walking up the folder_pid chain.
-  useEffect(() => {
-    if (!folderId || !teamId) { setBreadcrumb([]); setLoading(false); return; }
-    setLoading(true);
-    let cancelled = false;
-    void (async () => {
-      try {
-        const path: BreadcrumbItem[] = [];
-        let currentId: string | null = folderId;
-        for (let i = 0; i < 20 && currentId; i++) {
-          const res = await fetch(
-            `/api/hdw/webapi/v1/folder/detail?folder_id=${encodeURIComponent(currentId)}`,
-            { cache: 'no-store' },
-          );
-          if (!res.ok) break;
-          const body: any = await res.json();
-          if (cancelled) return;
-          if (body?.code !== 0 || !body?.data) break;
-          const folder: any = body.data;
-          path.unshift({ folderId: folder.folder_id, folderName: folder.folder_name || '' });
-          currentId = folder.folder_pid || null;
-        }
-        if (!cancelled) setBreadcrumb(path);
-      } catch {
-        // Leave empty breadcrumb.
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [folderId, teamId]);
+ // Bump when a folder rename event arrives so the breadcrumb refetches
+ // without a route change.
+ const [breadcrumbVersion, setBreadcrumbVersion] = useState(0);
 
-  // Resolve the team name from the workspace directory.
-  useEffect(() => {
+ // Build breadcrumb path by walking up the folder_pid chain.
+ useEffect(() => {
+   if (!folderId || !teamId) { setBreadcrumb([]); setLoading(false); return; }
+   setLoading(true);
+   let cancelled = false;
+   void (async () => {
+     try {
+       const path: BreadcrumbItem[] = [];
+       let currentId: string | null = folderId;
+       for (let i = 0; i < 20 && currentId; i++) {
+         const res = await fetch(
+           `/api/hdw/webapi/v1/folder/detail?folder_id=${encodeURIComponent(currentId)}`,
+           { cache: 'no-store' },
+         );
+         if (!res.ok) break;
+         const body: any = await res.json();
+         if (cancelled) return;
+         if (body?.code !== 0 || !body?.data) break;
+         const folder: any = body.data;
+         path.unshift({ folderId: folder.folder_id, folderName: folder.folder_name || '' });
+         currentId = folder.folder_pid || null;
+       }
+       if (!cancelled) setBreadcrumb(path);
+     } catch {
+       // Leave empty breadcrumb.
+     } finally {
+       if (!cancelled) setLoading(false);
+     }
+   })();
+   return () => { cancelled = true; };
+ }, [folderId, teamId, breadcrumbVersion]);
+
+ // Refresh breadcrumb when a folder is renamed from the left nav rail.
+ useEffect(() => {
+   if (!teamId) return;
+   function onFoldersUpdated(e: Event) {
+     const detail = (e as CustomEvent).detail;
+     if (detail?.teamId === teamId) {
+       setBreadcrumbVersion((v) => v + 1);
+     }
+   }
+   window.addEventListener('hdw:folders-updated', onFoldersUpdated);
+   return () => window.removeEventListener('hdw:folders-updated', onFoldersUpdated);
+ }, [teamId]);
+
+ // Resolve the team name from the workspace directory.
+ useEffect(() => {
     if (!teamId) { setTeamName(null); return; }
     let cancelled = false;
     void (async () => {
@@ -881,14 +1037,28 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
         setTeamName(match?.workspaceName ?? null);
       } catch {
         // ignore
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [teamId]);
+     }
+   })();
+   return () => { cancelled = true; };
+ }, [teamId]);
 
-  // Fetch the current user's operator info (same as TeamSpaceView).
-  useEffect(() => {
-    if (!teamId) { setOperator(null); return; }
+ // Update the team name in the breadcrumb without a refetch when a team
+ // is renamed from the left nav rail.
+ useEffect(() => {
+   if (!teamId) return;
+   function onTeamRenamed(e: Event) {
+     const detail = (e as CustomEvent).detail;
+     if (detail?.teamId === teamId && detail?.newName) {
+       setTeamName(detail.newName);
+     }
+   }
+   window.addEventListener('hdw:team-renamed', onTeamRenamed);
+   return () => window.removeEventListener('hdw:team-renamed', onTeamRenamed);
+ }, [teamId]);
+
+ // Fetch the current user's operator info (same as TeamSpaceView).
+ useEffect(() => {
+   if (!teamId) { setOperator(null); return; }
     let cancelled = false;
     void (async () => {
       const username = getStoredUsername();
@@ -942,16 +1112,25 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
            {t('teamSpace.folderSubtitle')}
          </span>
        </div>
-       <div className={styles.headerActions}>
-         <button
-           type="button"
-           className={styles.inviteBtn}
-           onClick={() => setShowCreateFolder(true)}
-         >
-           <Icon name="plus" size={15} aria-hidden />
-           <span>{t('teamSpace.newSubFolder')}</span>
-         </button>
-       </div>
+      <div className={styles.headerActions}>
+        <button
+          type="button"
+          className={styles.inviteBtn}
+          onClick={() => setShowCreateFolder(true)}
+        >
+          <Icon name="plus" size={15} aria-hidden />
+          <span>{t('teamSpace.newSubFolder')}</span>
+        </button>
+        <button
+          type="button"
+          className={styles.refreshBtn}
+          title={t('recentProjects.refresh')}
+          aria-label={t('recentProjects.refresh')}
+          onClick={() => window.dispatchEvent(new CustomEvent('hdw:folders-updated', { detail: { teamId } }))}
+        >
+          <Icon name="refresh" size={16} aria-hidden />
+        </button>
+      </div>
      </header>
 
 
@@ -1012,9 +1191,14 @@ function FoldersPanel({
 
   const operatorMemberId = operator?.memberId ?? null;
   const operatorRole = operator?.role ?? null;
-  const canManage = operatorRole === 'owner' || operatorRole === 'admin';
+ const canManage = operatorRole === 'owner' || operatorRole === 'admin';
 
-  // Fetch subfolders whose folder_pid equals the current folderId.
+  const [renameFolderTarget, setRenameFolderTarget] = useState<TeamFolderItem | null>(null);
+  const [renameFolderInput, setRenameFolderInput] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState(false);
+  const renameFolderTitleId = useId();
+
+ // Fetch subfolders whose folder_pid equals the current folderId.
   useEffect(() => {
     if (!teamId || !folderId) { setFolders([]); return; }
     let cancelled = false;
@@ -1029,12 +1213,31 @@ function FoldersPanel({
         const body = await res.json();
         if (cancelled) return;
         const list: any[] = body?.data?.folders ?? [];
+        // The HDW folder list doesn't include project_count, so fetch local
+        // batch counts and merge them into the folder items.
+        let counts: Record<string, number> = {};
+        try {
+          const countsRes = await fetch(
+            `/api/folders/counts?workspace_id=${encodeURIComponent(teamId)}`,
+          { cache: 'no-store' },
+          );
+          if (countsRes.ok) {
+            const countsBody = await countsRes.json();
+            counts = countsBody?.data?.counts ?? {};
+          }
+        } catch { /* counts stay empty */ }
+        if (cancelled) return;
         setFolders(list.map((f) => ({
           folderId: f.folder_id || f.id || '',
           folderName: f.folder_name || f.name || '',
-          projectCount: Number(f.project_count) || 0,
+          projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
           subfolderCount: Number(f.subfolder_count) || 0,
-          subfolderPreview: Array.isArray(f.subfolder_preview) ? f.subfolder_preview : [],
+          subfolderPreview: Array.isArray(f.subfolder_preview)
+            ? f.subfolder_preview.map((p: any) =>
+                typeof p === 'string'
+                  ? { name: p, kind: 'folder' as const }
+                  : { name: p.name || '', kind: (p.kind === 'project' ? 'project' : 'folder') as 'folder' | 'project' })
+            : [],
           createdAt: f.created_at || '',
         })));
       } catch {
@@ -1044,12 +1247,12 @@ function FoldersPanel({
       }
     };
     void loadFolders();
-    function onFoldersUpdated(e: Event) {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.folderId !== folderId) return;
-      void loadFolders();
-    }
-    window.addEventListener('hdw:subfolders-updated', onFoldersUpdated);
+   function onFoldersUpdated(e: Event) {
+     const detail = (e as CustomEvent).detail;
+     if (detail?.folderId != null && detail?.folderId !== folderId) return;
+    void loadFolders();
+   }
+   window.addEventListener('hdw:subfolders-updated', onFoldersUpdated);
     return () => {
       cancelled = true;
       window.removeEventListener('hdw:subfolders-updated', onFoldersUpdated);
@@ -1149,13 +1352,55 @@ function FoldersPanel({
     }
   }
 
-  function handleFolderClick(folder: TeamFolderItem) {
-    navigate({
-      kind: 'home',
-      view: 'team-folder',
-      teamId: teamId!,
-      folderId: folder.folderId,
-    });
+ function handleFolderClick(folder: TeamFolderItem) {
+   navigate({
+     kind: 'home',
+     view: 'team-folder',
+     teamId: teamId!,
+     folderId: folder.folderId,
+   });
+ }
+
+  function startFolderRename(folder: TeamFolderItem) {
+    setRenameFolderInput(folder.folderName);
+    setRenameFolderTarget(folder);
+  }
+
+  function cancelFolderRename() {
+    setRenameFolderTarget(null);
+    setRenameFolderInput('');
+  }
+
+  async function commitFolderRename() {
+    if (!renameFolderTarget || !teamId || !folderId || !operatorMemberId) return;
+    const trimmed = renameFolderInput.trim();
+    if (!trimmed || trimmed === renameFolderTarget.folderName) {
+      cancelFolderRename();
+      return;
+    }
+    setRenamingFolder(true);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder_id: renameFolderTarget.folderId,
+          folder_name: trimmed,
+          workspace_id: teamId,
+          operator_member_id: operatorMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setFolders((prev) => prev.map((f) => f.folderId === renameFolderTarget.folderId ? { ...f, folderName: trimmed } : f));
+        window.dispatchEvent(new CustomEvent('hdw:subfolders-updated', { detail: { teamId, folderId } }));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRenamingFolder(false);
+      cancelFolderRename();
+    }
   }
 
   return (
@@ -1193,11 +1438,11 @@ function FoldersPanel({
           </>
         ) : null}
       </nav>
-      <div className={styles.folderList}>
+      {folders?.length?<div className={styles.folderList}>
         {loading ? (
           <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
         ) : folders.length === 0 ? (
-          <div className={styles.folderEmpty}>{t('teamSpace.noSubFolders')}</div>
+          null
         ) : folders.map((folder) => (
           <article
             key={folder.folderId}
@@ -1208,25 +1453,31 @@ function FoldersPanel({
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFolderClick(folder); } }}
             title={folder.folderName}
           >
-            {canManage ? (
-              <FolderCardMenu
-                onDelete={() => setRemoveTarget(folder)}
-                deleteLabel={t('teamSpace.deleteFolder')}
-              />
-            ) : null}
+           {canManage ? (
+             <FolderCardMenu
+                onRename={() => startFolderRename(folder)}
+               renameLabel={t('common.rename')}
+               onDelete={() => setRemoveTarget(folder)}
+               deleteLabel={t('teamSpace.deleteFolder')}
+             />
+           ) : null}
            <div className={styles.folderCardGrid}>
              {Array.from({ length: 4 }, (_, i) => {
-               const name = folder.subfolderPreview[i];
+               const item = folder.subfolderPreview[i];
+               if (!item) {
+                 return <div key={i} className={styles.gridCellEmpty} />;
+               }
+               if (item.kind === 'project') {
+                 return (
+                   <div key={i} className={`${styles.gridCell} ${styles.gridCellProject}`} title={item.name} />
+                 );
+               }
                return (
-                 <div key={i} className={name ? styles.gridCell : styles.gridCellEmpty}>
-                   {name ? (
-                     <>
-                       <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
-                         <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                         <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-                       </svg>
-                     </>
-                   ) : null}
+                 <div key={i} className={styles.gridCell} title={item.name}>
+                   <svg viewBox="0 0 16 16" width="24" height="24" fill="none" className={styles.gridCellIcon} aria-hidden="true">
+                     <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
+                     <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+                   </svg>
                  </div>
                );
              })}
@@ -1235,11 +1486,11 @@ function FoldersPanel({
              <div className={styles.folderCardTitle}>
                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" className={styles.folderIcon} aria-hidden="true">
                  <path d="M1.5 1L7.11362 1C7.75952 1 8.36567 1.31193 8.74109 1.83752L11 5L0 5L0 2.5C0 1.67157 0.671573 1 1.5 1Z" fill="rgb(253,153,52)" fillRule="evenodd" />
-                 <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
-               </svg>
-               <span className={styles.folderName}>{folder.folderName}</span>
-             </div>
-              <div className={styles.folderCardMeta}>
+                <path d="M0 3L14 3C15.1046 3 16 3.89543 16 5L16 13C16 14.1046 15.1046 15 14 15L2 15C0.89543 15 0 14.1046 0 13L0 3Z" fill="rgb(255,197,15)" fillRule="evenodd" />
+              </svg>
+              <span className={styles.folderName}>{folder.folderName}</span>
+            </div>
+             <div className={styles.folderCardMeta}>
                 <div className={styles.folderCounts}>
                   <span className={styles.folderCount}>
                     {t('teamSpace.subFolderCount', { n: folder.subfolderCount })}
@@ -1253,7 +1504,7 @@ function FoldersPanel({
            </div>
         </article>
        ))}
-     </div>
+     </div>:null}
       {/* Projects directly inside this folder (folder_id = folderId).
           Rendered below the subfolder cards so the two areas stay
           visually separate, mirroring the personal-folder layout. */}
@@ -1271,7 +1522,10 @@ function FoldersPanel({
             space="team"
             onOpen={(id) => onOpenProject?.(id)}
             onDelete={onDeleteProject}
-            onRename={onRenameProject}
+            onRename={(id, name) => {
+              setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+              onRenameProject?.(id, name);
+            }}
             hideTitle
           />
         )}
@@ -1325,6 +1579,42 @@ function FoldersPanel({
           </div>,
           document.body,
         )
+      ) : null}
+      {renameFolderTarget ? (
+        <Dialog
+          as="form"
+          className="modal-rename"
+          onClose={cancelFolderRename}
+          closeOnEscape
+          ariaLabelledBy={renameFolderTitleId}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void commitFolderRename();
+          }}
+        >
+          <DialogTitle id={renameFolderTitleId}>{t('designs.renameTitle')}</DialogTitle>
+          <label>
+            {t('designs.renamePrompt', { name: renameFolderTarget.folderName })}
+            <input
+              type="text"
+              value={renameFolderInput}
+              autoFocus
+              onChange={(e) => setRenameFolderInput(e.target.value)}
+            />
+          </label>
+          <DialogFooter className="row">
+            <button type="button" onClick={cancelFolderRename}>
+              {t('designs.renameCancel')}
+            </button>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!renameFolderInput.trim() || renameFolderInput.trim() === renameFolderTarget.folderName || renamingFolder}
+            >
+              {t('designs.renameSave')}
+            </button>
+          </DialogFooter>
+        </Dialog>
       ) : null}
     </div>
   );

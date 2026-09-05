@@ -1,6 +1,9 @@
 import type { Express, Request, Response } from 'express';
 import { getDefaultTeamId, getTeamMemberId } from '../ids.js';
 import { fetchHdwTeams } from '../http/hdw.js';
+import type { VelaTeamProjectCatalog } from '../collab/vela-cli-team-projects.js';
+import type { TeamProject } from '@open-design/contracts';
+import type { SqliteDb } from '../db.js';
 
 /**
  * Mock mirror of workspace collab-context routes.
@@ -19,6 +22,13 @@ export interface RegisterCollabContextHideSignRoutesDeps {
   env?: NodeJS.ProcessEnv;
   /** Daemon data root — used to read the SSO session for display-name injection. */
   dataDir?: string;
+  /** HDW HTTP team project catalog — when present, `/api/workspace/projects/team`
+   *  queries the real HDW database instead of returning an empty array. */
+  hdwTeamProjectCatalog?: VelaTeamProjectCatalog | null;
+  /** Local SQLite database — used to enrich the HDW catalog's stale
+   *  `ownerMemberId` with the local DB's authoritative
+   *  `created_by_workspace_member_id` after cross-workspace transfers. */
+  db?: SqliteDb | null;
 }
 
 // --- Mock data -----------------------------------------------------------
@@ -90,7 +100,7 @@ async function buildMockData(dataDir?: string) {
 
   const TEAM_WORKSPACE_ID = getDefaultTeamId();
   const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
-  const MOCK_TEAM_WORKSPACE_NAME = '一人团队';
+  const MOCK_TEAM_WORKSPACE_NAME = '个人空间';
 
   const hdwTeams = await fetchHdwTeams(dataDir);
 
@@ -100,7 +110,7 @@ async function buildMockData(dataDir?: string) {
         workspaceId: TEAM_WORKSPACE_ID,
         workspaceName: MOCK_TEAM_WORKSPACE_NAME,
         workspaceIconKey: 'spark',
-        workspaceType: 'team' as const,
+        workspaceType: 'personal' as const,
         workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
         isDefaultTeam: true,
         role: 'owner' as const,
@@ -137,12 +147,12 @@ async function buildMockData(dataDir?: string) {
     //     workspaceName: personalWorkspaceName,
     //   },
     // },
-    [TEAM_WORKSPACE_ID]: {
-      context: {
-        workspaceId: TEAM_WORKSPACE_ID,
-        workspaceType: 'team',
-        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
-        isDefaultTeam: true,
+   [TEAM_WORKSPACE_ID]: {
+     context: {
+       workspaceId: TEAM_WORKSPACE_ID,
+       workspaceType: 'personal',
+       workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+       isDefaultTeam: true,
         role: 'owner',
         memberStatus: 'active',
         lifecycleState: 'active',
@@ -263,10 +273,55 @@ export function registerCollabContextHideSignRoutes(
     res.json({ activeWorkspaceId: wsId, context: entry.context });
   });
 
-  app.get('/api/workspace/projects/team', (req: Request, res: Response) => {
+  app.get('/api/workspace/projects/team', async (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/projects/team', req);
-    res.json({ projects: [] });
-  });
+    //res.json({ projects: [] });
+    const catalog = deps.hdwTeamProjectCatalog;
+    if (!catalog) {
+      res.json({ projects: [] });
+      return;
+    }
+    const wsId = req.header('x-od-workspace-id') ?? '';
+    if (!wsId) {
+      res.json({ projects: [] });
+      return;
+    }
+   let projects: TeamProject[];
+   try {
+     projects = await catalog.list(wsId);
+   } catch {
+     res.status(503).json({
+       error: 'UPSTREAM_UNAVAILABLE',
+       message: 'team project catalog is temporarily unavailable',
+       retryable: true,
+     });
+     return;
+  }
+  // The HDW cloud catalog ownerMemberId can be stale after a cross-workspace
+  // transfer it still carries the personal-space member ID. The same user
+  // has different member IDs across workspaces, so if ownerMemberId matches
+  // the default-team (personal space) member ID, replace it with the current
+  // user member ID in this workspace so the frontend correctly identifies
+  // the owner.
+  try {
+    const defaultTeamId = getDefaultTeamId();
+    const defaultMemberId = getTeamMemberId(defaultTeamId);
+    if (defaultMemberId && wsId !== defaultTeamId) {
+      const teams = await fetchHdwTeams(deps.dataDir);
+      const wsMemberId = teams.find((t) => t.workspace_id === wsId)?.workspace_member_id;
+      if (wsMemberId) {
+        projects = projects.map((p) =>
+          p.ownerMemberId === defaultMemberId
+            ? { ...p, ownerMemberId: wsMemberId }
+            : p,
+        );
+      }
+    }
+  } catch {
+    // Best-effort: if the directory fetch fails, return the original data.
+  }
+  res.json({ projects });
+ });
 
   app.get('/api/workspace/events', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/events', req);

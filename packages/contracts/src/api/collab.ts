@@ -434,7 +434,7 @@ export function workspaceContextHasTeamIdentity(
 ): boolean {
   return Boolean(
     context &&
-    context.workspaceType === 'team' &&
+    (context.workspaceType === 'team' || context.isDefaultTeam === true) &&
     context.workspaceId &&
     context.workspaceMemberId,
   );

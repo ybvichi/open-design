@@ -10,9 +10,13 @@ import styles from './TeamSpaceView.module.css';
  * a delete action. Shared by TeamSpaceView and PersonalAllView.
  */
 export function FolderCardMenu({
+  onRename,
+  renameLabel,
   onDelete,
   deleteLabel,
 }: {
+  onRename?: () => void;
+  renameLabel?: string;
   onDelete: () => void;
   deleteLabel: string;
 }) {
@@ -46,18 +50,28 @@ export function FolderCardMenu({
       {open ? (
         <div
           className={styles.folderCardMenu}
-          role="menu"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.danger}
-            onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
-          >
-            <Icon name="trash" size={12} />
-            <span>{deleteLabel}</span>
-          </button>
+         role="menu"
+         onClick={(e) => e.stopPropagation()}
+       >
+         {onRename ? (
+           <button
+             type="button"
+             role="menuitem"
+             onClick={(e) => { e.stopPropagation(); setOpen(false); onRename(); }}
+           >
+             <Icon name="edit" size={12} />
+             <span>{renameLabel}</span>
+           </button>
+         ) : null}
+         <button
+           type="button"
+           role="menuitem"
+           className={styles.danger}
+           onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
+         >
+           <Icon name="trash" size={12} />
+           <span>{deleteLabel}</span>
+         </button>
         </div>
       ) : null}
     </div>

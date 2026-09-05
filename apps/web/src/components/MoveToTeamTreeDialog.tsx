@@ -34,6 +34,8 @@ export interface TeamTreeSelection {
   /** null = the team workspace root; a folder id = that specific folder. */
   folderId: string | null;
   folderName: string | null;
+  /** True when the selected workspace is the personal (one-person) default team. */
+  isDefaultTeam?: boolean;
 }
 
 interface MoveToTeamTreeDialogProps {
@@ -44,14 +46,40 @@ interface MoveToTeamTreeDialogProps {
   workspaceItems?: readonly WorkspaceDirectoryItem[];
   /** When true, disables the confirm button while a move is in-flight. */
   busy?: boolean;
+  /** When true, include personal (default-team) workspaces in the tree. */
+  includePersonal?: boolean;
+  /** The current workspace's id — always shown in the tree even when
+   * includePersonal would filter it out, so the user can pick a folder
+   * within the current workspace (folder-only move). */
+  currentWorkspaceId?: string | null;
+  /** Item keys that should be disabled (greyed out, not selectable).
+   *  Key format: `${workspaceId}:root` for workspace roots,
+   *  `${workspaceId}:${folderId}` for folders. */
+  disabledKeys?: Set<string>;
+  /** Dialog mode:
+   *  - 'team' (default): existing behavior controlled by includePersonal.
+   *  - 'personal-folders': show only the personal (default-team) workspace
+   *    with its folder tree auto-expanded.
+  *  - 'tabbed': show a tab bar to switch between team workspaces and the
+  *    personal workspace, each with its own folder tree. */
+  mode?: 'team' | 'personal-folders' | 'tabbed';
+  /** When false (user is not the project owner), hide the personal-space tab
+   *  in 'tabbed' mode. Admins can move to other teams but never to personal. */
+  canMoveToPersonal?: boolean;
 }
 
 /** Fetch folders under a workspace (root when folderPid is null). */
 async function fetchFolders(
   workspaceId: string,
   folderPid?: string | null,
+  isDefaultTeam?: boolean,
 ): Promise<FolderNode[]> {
-  let url = `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(workspaceId)}`;
+  // Personal (default-team) workspaces use the local SQLite folder API;
+  // team workspaces use the HDW folder API. Both return the same shape.
+  const basePath = isDefaultTeam
+    ? `/api/folders?workspace_id=${encodeURIComponent(workspaceId)}`
+    : `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(workspaceId)}`;
+  let url = basePath;
   if (folderPid) {
     url += `&folder_pid=${encodeURIComponent(folderPid)}`;
   }
@@ -71,14 +99,18 @@ function FolderTreeItem({
   folder,
   depth,
   workspaceId,
+  isDefaultTeam,
   selectedKey,
   onSelect,
+  disabledKeys,
 }: {
   folder: FolderNode;
   depth: number;
   workspaceId: string;
+  isDefaultTeam?: boolean;
   selectedKey: string | null;
   onSelect: (folderId: string, folderName: string) => void;
+  disabledKeys?: Set<string>;
 }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
@@ -87,6 +119,7 @@ function FolderTreeItem({
   const itemKey = `${workspaceId}:${folder.id}`;
   const isSelected = selectedKey === itemKey;
   const hasChildren = folder.subfolderCount > 0;
+  const isDisabled = disabledKeys?.has(itemKey) ?? false;
 
   // Lazily fetch subfolders when the node is first expanded.
   useEffect(() => {
@@ -96,7 +129,7 @@ function FolderTreeItem({
     const load = async () => {
       setLoading(true);
       try {
-        const subs = await fetchFolders(workspaceId, folder.id);
+        const subs = await fetchFolders(workspaceId, folder.id, isDefaultTeam);
         if (!cancelled) setChildren(subs);
       } catch {
         if (!cancelled) setChildren([]);
@@ -106,7 +139,7 @@ function FolderTreeItem({
     };
     void load();
     return () => { cancelled = true; };
-  }, [expanded, hasChildren, children, workspaceId, folder.id]);
+  }, [expanded, hasChildren, children, workspaceId, isDefaultTeam, folder.id]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -115,18 +148,21 @@ function FolderTreeItem({
   };
 
   const handleSelect = () => {
+    if (isDisabled) return;
     onSelect(folder.id, folder.name);
   };
 
   return (
     <div className={styles.folderItem}>
       <div
-        className={`${styles.row}${isSelected ? ` ${styles.selected}` : ''}`}
+        className={`${styles.row}${isSelected ? ` ${styles.selected}` : ''}${isDisabled ? ` ${styles.disabled}` : ''}`}
         style={{ paddingLeft: `${12 + depth * 20}px` }}
-        onClick={handleSelect}
+        onClick={isDisabled ? undefined : handleSelect}
         role="button"
-        tabIndex={0}
+        tabIndex={isDisabled ? -1 : 0}
+        aria-disabled={isDisabled || undefined}
         onKeyDown={(e) => {
+          if (isDisabled) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             handleSelect();
@@ -165,8 +201,10 @@ function FolderTreeItem({
               folder={child}
               depth={depth + 1}
               workspaceId={workspaceId}
+              isDefaultTeam={isDefaultTeam}
               selectedKey={selectedKey}
               onSelect={onSelect}
+              disabledKeys={disabledKeys}
             />
           ))}
         </div>
@@ -180,17 +218,22 @@ function TeamTreeItem({
   team,
   selectedKey,
   onSelect,
+  autoExpand,
+  disabledKeys,
 }: {
   team: WorkspaceDirectoryItem;
   selectedKey: string | null;
-  onSelect: (workspaceId: string, workspaceName: string, folderId: string | null, folderName: string | null) => void;
+  onSelect: (workspaceId: string, workspaceName: string, folderId: string | null, folderName: string | null, isDefaultTeam?: boolean) => void;
+  autoExpand?: boolean;
+  disabledKeys?: Set<string>;
 }) {
   const t = useT();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(autoExpand ?? false);
   const [folders, setFolders] = useState<FolderNode[] | null>(null);
   const [loading, setLoading] = useState(false);
   const itemKey = `${team.workspaceId}:root`;
   const isSelected = selectedKey === itemKey;
+  const isDisabled = disabledKeys?.has(itemKey) ?? false;
 
   useEffect(() => {
     if (!expanded) return;
@@ -199,7 +242,7 @@ function TeamTreeItem({
     const load = async () => {
       setLoading(true);
       try {
-        const rootFolders = await fetchFolders(team.workspaceId);
+        const rootFolders = await fetchFolders(team.workspaceId, undefined, team.isDefaultTeam);
         if (!cancelled) setFolders(rootFolders);
       } catch {
         if (!cancelled) setFolders([]);
@@ -217,17 +260,20 @@ function TeamTreeItem({
   };
 
   const handleSelect = () => {
-    onSelect(team.workspaceId, team.workspaceName, null, null);
+    if (isDisabled) return;
+    onSelect(team.workspaceId, team.workspaceName, null, null, team.isDefaultTeam);
   };
 
   return (
     <div className={styles.teamItem}>
       <div
-        className={`${styles.row}${isSelected ? ` ${styles.selected}` : ''}`}
-        onClick={handleSelect}
+        className={`${styles.row}${isSelected ? ` ${styles.selected}` : ''}${isDisabled ? ` ${styles.disabled}` : ''}`}
+        onClick={isDisabled ? undefined : handleSelect}
         role="button"
-        tabIndex={0}
+        tabIndex={isDisabled ? -1 : 0}
+        aria-disabled={isDisabled || undefined}
         onKeyDown={(e) => {
+          if (isDisabled) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             handleSelect();
@@ -264,10 +310,12 @@ function TeamTreeItem({
                 folder={folder}
                 depth={1}
                 workspaceId={team.workspaceId}
+                isDefaultTeam={team.isDefaultTeam}
                 selectedKey={selectedKey}
                 onSelect={(folderId, folderName) =>
-                  onSelect(team.workspaceId, team.workspaceName, folderId, folderName)
+                  onSelect(team.workspaceId, team.workspaceName, folderId, folderName, team.isDefaultTeam)
                 }
+                disabledKeys={disabledKeys}
               />
             ))
           ) : (
@@ -284,12 +332,18 @@ export function MoveToTeamTreeDialog({
   onCancel,
   workspaceItems: propItems,
   busy,
+  includePersonal = false,
+  currentWorkspaceId,
+  mode = 'team',
+  disabledKeys,
+  canMoveToPersonal = true,
 }: MoveToTeamTreeDialogProps) {
   const t = useT();
   const titleId = useId();
   const [items, setItems] = useState<readonly WorkspaceDirectoryItem[] | null>(propItems ?? null);
   const [loading, setLoading] = useState(!propItems);
   const [selected, setSelected] = useState<TeamTreeSelection | null>(null);
+  const [activeTab, setActiveTab] = useState<'team' | 'personal'>('team');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch the workspace directory when items are not supplied via props.
@@ -301,10 +355,29 @@ export function MoveToTeamTreeDialog({
       try {
         const directory = await readWorkspaceDirectoryForCurrentGeneration();
         if (cancelled) return;
-        // Only show team workspaces (exclude personal/default-team).
-        const teamItems = (directory.items ?? []).filter(
-          (item) => item.workspaceType === 'team' && !item.isDefaultTeam,
-        );
+        let teamItems: WorkspaceDirectoryItem[];
+        if (mode === 'personal-folders') {
+          // Show only the personal (default-team) workspace. The personal
+          // workspace has workspaceType 'personal' with isDefaultTeam true,
+          // so filter by isDefaultTeam rather than workspaceType.
+          teamItems = (directory.items ?? []).filter(
+            (item) => item.isDefaultTeam === true,
+          );
+        } else if (mode === 'tabbed') {
+          // Show all workspaces (personal + team) so the tab switch can
+          // filter between them.
+          teamItems = (directory.items ?? []).filter(
+            (item) => item.workspaceType === 'team' || item.isDefaultTeam === true,
+          );
+        } else {
+          // Default team mode: show team workspaces only. Personal
+          // (default-team) is excluded so moving to a team space never
+          // offers the personal workspace as a destination.
+          teamItems = (directory.items ?? []).filter(
+            (item) =>
+              item.workspaceType === 'team' && !item.isDefaultTeam,
+          );
+        }
         setItems(teamItems);
       } catch {
         if (!cancelled) setItems([]);
@@ -314,7 +387,7 @@ export function MoveToTeamTreeDialog({
     };
     void load();
     return () => { cancelled = true; };
-  }, [propItems]);
+  }, [propItems, includePersonal, currentWorkspaceId, mode]);
 
   const selectedKey = useMemo(() => {
     if (!selected) return null;
@@ -323,14 +396,40 @@ export function MoveToTeamTreeDialog({
       : `${selected.workspaceId}:root`;
   }, [selected]);
 
+
+  // In tabbed mode, filter items by the active tab.
+  const displayItems = useMemo(() => {
+    if (!items) return null;
+    if (mode === 'tabbed') {
+      // When canMoveToPersonal is false, never show personal-space items
+      // even if the active tab somehow flips to 'personal'.
+      if (!canMoveToPersonal) {
+        return items.filter((item) => !item.isDefaultTeam);
+      }
+      return activeTab === 'team'
+        ? items.filter((item) => !item.isDefaultTeam)
+        : items.filter((item) => item.isDefaultTeam === true);
+    }
+   return items;
+  }, [items, mode, activeTab, canMoveToPersonal]);
+
+  const handleTabSwitch = useCallback((tab: 'team' | 'personal') => {
+    setActiveTab(tab);
+    setSelected(null);
+  }, []);
   const handleSelect = useCallback(
-    (workspaceId: string, workspaceName: string, folderId: string | null, folderName: string | null) => {
-      setSelected({ workspaceId, workspaceName, folderId, folderName });
+    (workspaceId: string, workspaceName: string, folderId: string | null, folderName: string | null, isDefaultTeam?: boolean) => {
+      setSelected({ workspaceId, workspaceName, folderId, folderName, isDefaultTeam });
     },
     [],
   );
 
-  const handleConfirm = () => {
+ const showPersonal = includePersonal || mode === 'personal-folders' || (mode === 'tabbed' && canMoveToPersonal);
+// In tabbed mode, only show the personal tab when the user is the project
+// owner (canMoveToPersonal). Admins can move to other teams but not to personal.
+const showPersonalTab = mode === 'tabbed' && canMoveToPersonal;
+
+ const handleConfirm = () => {
     if (!selected || busy) return;
     onConfirm(selected);
   };
@@ -342,8 +441,26 @@ export function MoveToTeamTreeDialog({
       closeOnEscape
       ariaLabelledBy={titleId}
     >
-      <DialogTitle id={titleId}>{t('recentProjects.moveToTeam')}</DialogTitle>
-      <DialogDescription>{t('recentProjects.moveToTeamTreeDesc')}</DialogDescription>
+      <DialogTitle id={titleId}>{showPersonal ? t('recentProjects.moveTo') : t('recentProjects.moveToTeam')}</DialogTitle>
+      <DialogDescription>{showPersonal ? t('recentProjects.moveTreeDesc') : t('recentProjects.moveToTeamTreeDesc')}</DialogDescription>
+      {mode === 'tabbed' && showPersonalTab ? (
+        <div className={styles.tabs}>
+          <button
+            type="button"
+            className={`${styles.tab}${activeTab === 'team' ? ` ${styles.tabActive}` : ''}`}
+            onClick={() => handleTabSwitch('team')}
+          >
+           {t('recentProjects.teamSpaceTab')}
+         </button>
+          <button
+            type="button"
+            className={`${styles.tab}${activeTab === 'personal' ? ` ${styles.tabActive}` : ''}`}
+            onClick={() => handleTabSwitch('personal')}
+          >
+            {t('recentProjects.personalSpaceTab')}
+          </button>
+        </div>
+      ) : null}
       <div className={styles.treeContainer} ref={scrollRef}>
         {loading ? (
           <div className={styles.skeletonList}>
@@ -360,19 +477,21 @@ export function MoveToTeamTreeDialog({
               <Skeleton width="55%" height={13} radius={6} />
             </div>
           </div>
-        ) : items && items.length > 0 ? (
+        ) : displayItems && displayItems.length > 0 ? (
           <div className={styles.tree}>
-            {items.map((team) => (
+            {displayItems.map((team) => (
               <TeamTreeItem
                 key={team.workspaceId}
                 team={team}
                 selectedKey={selectedKey}
                 onSelect={handleSelect}
+                autoExpand={mode === 'personal-folders' || (mode === 'tabbed' && activeTab === 'personal')}
+                disabledKeys={disabledKeys}
               />
             ))}
           </div>
         ) : (
-          <div className={styles.emptyState}>{t('recentProjects.treeNoTeams')}</div>
+          <div className={styles.emptyState}>{showPersonal ? t('recentProjects.treeNoWorkspaces') : t('recentProjects.treeNoTeams')}</div>
         )}
       </div>
       <DialogFooter className={styles.footer}>
@@ -385,7 +504,7 @@ export function MoveToTeamTreeDialog({
           onClick={handleConfirm}
           disabled={!selected || busy}
         >
-          {t('recentProjects.confirmMoveToTeam')}
+          {showPersonal ? t('recentProjects.confirmMove') : t('recentProjects.confirmMoveToTeam')}
         </button>
       </DialogFooter>
     </Dialog>

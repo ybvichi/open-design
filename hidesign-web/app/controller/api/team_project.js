@@ -3,6 +3,8 @@
 const { createKnex } = require('../../utils/knex.js');
 const crypto = require('node:crypto');
 
+const { getTeamMemberId } = require('../../utils/ids.js');
+
 const Controller = require('egg').Controller;
 
 // Team project catalog endpoints: list, get, upsert, remove, transfer.
@@ -16,6 +18,12 @@ const Controller = require('egg').Controller;
 //   5. Log the transfer in project_transfers.
 //
 // Response format: raw JSON to match the daemon's HdwCloudClient.
+// The transfer resolves the TARGET workspace's member ID for the source
+// owner: it looks up the source member's username from workspace_members,
+// then derives the target member ID via getTeamMemberId(targetWorkspaceId,
+// username). This ensures the target resource and team_project rows bind
+// to the correct member identity in the target workspace, not the source
+// workspace's member ID.
 
 class TeamProjectController extends Controller {
   getKnex() {
@@ -217,6 +225,21 @@ class TeamProjectController extends Controller {
       }
 
       const targetResourceId = `project-transfer-${crypto.randomUUID()}`;
+      // Resolve the TARGET workspace's member ID for the source owner.
+      // The source owner_member_id is scoped to the source workspace; the
+      // target resource and team_project must bind to the same user's
+      // member ID in the TARGET workspace. workspace_member_id is
+      // deterministic: getTeamMemberId(targetWorkspaceId, username).
+      const sourceMember = await k('workspace_members')
+        .where({
+          workspace_id: sourceWorkspaceId,
+          workspace_member_id: source.owner_member_id,
+        })
+        .select('username')
+        .first();
+      const targetOwnerMemberId = sourceMember?.username
+        ? getTeamMemberId(targetWorkspaceId, sourceMember.username)
+        : source.owner_member_id; // fallback: keep source ID if member row missing
 
       // Run the transfer in a transaction. The transaction returns the
       // targetVersionId so we can include it in the response.
@@ -226,7 +249,7 @@ class TeamProjectController extends Controller {
           id: targetResourceId,
           workspace_id: targetWorkspaceId,
           kind: source.kind,
-          owner_member_id: source.owner_member_id,
+          owner_member_id: targetOwnerMemberId,
           metadata: source.resource_metadata,
         });
 
@@ -275,7 +298,7 @@ class TeamProjectController extends Controller {
           workspace_id: targetWorkspaceId,
           project_id: projectId,
           resource_id: targetResourceId,
-          owner_member_id: source.owner_member_id,
+          owner_member_id: targetOwnerMemberId,
           display_name: source.display_name,
           sync_state: 'synced',
           last_synced_version_id: targetVersionId,
@@ -312,6 +335,7 @@ class TeamProjectController extends Controller {
         workspaceId: targetWorkspaceId,
         version: version.version,
         versionId: committedVersionId,
+        targetOwnerMemberId,
       };
     } catch (err) {
       ctx.logger.error('[hdw] transfer error:', err);

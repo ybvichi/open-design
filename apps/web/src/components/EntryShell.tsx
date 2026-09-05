@@ -643,6 +643,8 @@ export function EntryShell({
     if ((!selectedCloudIdentityRejected && !amrAuthRequired) || view === 'onboarding') return;
     navigate({ kind: 'home', view: 'onboarding' }, { replace: true });
   }, [amrAuthRequired, amrLoggedIn, usesOpenDesignCloud, view]);
+  // Context switching for /team/xxx and personal routes is handled at the
+  // app level (App.tsx) so it also fires for non-home routes like /community.
   let accountFooterNotice: ReactNode = null;
   if (accountFooterState === 'syncing') {
     accountFooterNotice = <RailAccountSyncTip />;
@@ -2024,11 +2026,12 @@ export function EntryShell({
             <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
          ) : null}
          {view === 'personal-all' ? (
-           <PersonalAllView
-             designSystems={designSystems}
-             onOpenProject={onOpenProject}
-             onDeleteProject={onDeleteProject}
-             onRenameProject={onRenameProject}
+          <PersonalAllView
+            designSystems={designSystems}
+            onOpenProject={onOpenProject}
+            onDeleteProject={onDeleteProject}
+            onDuplicateProject={onDuplicateProject}
+            onRenameProject={onRenameProject}
            />
          ) : null}
          {view === 'personal-folder' ? (

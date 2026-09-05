@@ -22,6 +22,9 @@ export interface ResourcePublishInput {
 export interface PublishedResourceVersion {
   version: number;
   versionId?: string;
+  /** For cross-workspace transfers: the owner's member ID in the TARGET
+   * workspace, resolved by the hdw server. */
+  targetOwnerMemberId?: string;
 }
 
 export interface ResourcePublishAdapter {

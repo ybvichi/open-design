@@ -207,47 +207,65 @@ export function materializePulledTeamMirror(
     ) {
       throw new Error(`team mirror receipt resource conflict for ${input.id}`);
     }
-    const existingBinding = getWorkspaceProjectByProjectId(db, input.id) as
-      | {
-          workspaceId: string;
-          visibility: string;
-          resourceState: string | null;
-          createdByWorkspaceMemberId: string | null;
-          resourceHubResourceId: string | null;
-          cloudTombstonedAt: number | null;
-        }
-      | undefined;
-    const existing = getProject(db, input.id);
-    const existingIsPlaceholder = isUnmaterializedSharedPlaceholder(existing);
-    if (options.placeholder && existing && !existingIsPlaceholder) {
-      throw new Error(`team placeholder project conflict for ${input.id}`);
-    }
-    const isRevokedMirror =
-      existingBinding?.resourceState === 'deleted'
-      && Boolean(existing?.metadata?.teamMirrorRevokedAt);
-    const compatibleBinding =
-      !existingBinding ||
-      (
-        existingBinding.workspaceId === scope.workspaceId &&
-        existingBinding.visibility === 'team' &&
-        (
-          existingBinding.resourceState === 'active'
-          || isRevokedMirror
-        ) &&
-        existingBinding.cloudTombstonedAt === null &&
-        (
-          existingBinding.createdByWorkspaceMemberId === expectedCreator
-          || (
-            !options.placeholder
-            && existingIsPlaceholder
-            && existingBinding.createdByWorkspaceMemberId === null
-          )
-        ) &&
-        (
-          existingBinding.resourceHubResourceId === null ||
-          existingBinding.resourceHubResourceId === resourceHubResourceId
-        )
+   const existingBinding = getWorkspaceProjectByProjectId(db, input.id) as
+     | {
+         workspaceId: string;
+         visibility: string;
+         resourceState: string | null;
+         createdByWorkspaceMemberId: string | null;
+         resourceHubResourceId: string | null;
+         cloudTombstonedAt: number | null;
+         syncState: string | null;
+       }
+     | undefined;
+   const existing = getProject(db, input.id);
+   const existingIsPlaceholder = isUnmaterializedSharedPlaceholder(existing);
+   if (options.placeholder && existing && !existingIsPlaceholder) {
+     throw new Error(`team placeholder project conflict for ${input.id}`);
+   }
+   const isRevokedMirror =
+     existingBinding?.resourceState === 'deleted'
+     && Boolean(existing?.metadata?.teamMirrorRevokedAt);
+   // A stale personal-space binding (personal visibility, local_only sync
+   // state, null or viewer-matching creator) is compatible: the project
+    // was moved cross-workspace on the cloud but the local row was never
+    // rebound. The rebindWorkspaceProject call below will correct it.
+    // Only match when the binding is in a DIFFERENT workspace from the
+    // scope — a personal binding in the same team workspace is a genuine
+    // local project that must not be silently converted to a team mirror.
+    const isStalePersonalBinding =
+      existingBinding
+      && existingBinding.workspaceId !== scope.workspaceId
+      && existingBinding.visibility === 'personal'
+      && existingBinding.syncState === 'local_only'
+      && (
+        !existingBinding.createdByWorkspaceMemberId
+        || existingBinding.createdByWorkspaceMemberId === scope.viewerMemberId
       );
+   const compatibleBinding =
+     !existingBinding ||
+      isStalePersonalBinding ||
+     (
+       existingBinding.workspaceId === scope.workspaceId &&
+       existingBinding.visibility === 'team' &&
+       (
+         existingBinding.resourceState === 'active'
+         || isRevokedMirror
+       ) &&
+       existingBinding.cloudTombstonedAt === null &&
+       (
+         existingBinding.createdByWorkspaceMemberId === expectedCreator
+         || (
+           !options.placeholder
+           && existingIsPlaceholder
+           && existingBinding.createdByWorkspaceMemberId === null
+         )
+       ) &&
+       (
+         existingBinding.resourceHubResourceId === null ||
+         existingBinding.resourceHubResourceId === resourceHubResourceId
+       )
+     );
     if (!compatibleBinding) {
       throw new Error(`team mirror binding conflict for ${input.id}`);
     }

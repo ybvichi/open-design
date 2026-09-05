@@ -36,6 +36,8 @@ import type {
   ProjectWorkspaceScope,
   ProjectScenarioTaskProfile,
   WorkspaceProjectSummary,
+  WorkspaceActiveResponse,
+  WorkspaceDirectoryItem,
 } from '@open-design/contracts';
 import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
@@ -129,6 +131,7 @@ import { workspaceProjectHeaders } from './collab/workspace-identity';
 import {
   beginWorkspaceScopedRead,
   currentWorkspaceAccountGeneration,
+  notifyTeamProjectsChanged,
   notifyWorkspaceContextRefresh,
   resolveBoundProjectWorkspaceContext,
   resolveCurrentWorkspaceContextReadWitness,
@@ -2008,6 +2011,48 @@ function AppInner() {
     route,
     workspaceContextState.failure,
   ]);
+
+  // Centralized workspace context switching: /team/xxx views use the team
+  // workspace context; every other route reverts to the personal workspace
+  // context. This runs at the app level (not just inside EntryShell) so it
+  // also fires for non-home routes like /community — the context switches
+  // underneath, but the route itself never changes.
+  const routeTeamId = route.kind === 'home' ? route.teamId : undefined;
+  const isTeamRoute =
+    route.kind === 'home' && (route.view === 'team-space' || route.view === 'team-folder');
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/workspace/directory', { cache: 'no-store' });
+        if (!res.ok) return;
+        const body = await res.json() as { items?: WorkspaceDirectoryItem[] };
+        if (cancelled) return;
+        const target = isTeamRoute
+          ? body.items?.find((item) => item.workspaceId === routeTeamId)
+          : body.items?.find((item) => item.isDefaultTeam === true);
+        if (!target || cancelled) return;
+        const activeRes = await fetch('/api/workspace/active', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId: target.workspaceId,
+            workspaceMemberId: target.workspaceMemberId,
+          }),
+        });
+        if (cancelled) return;
+        if (activeRes.ok) {
+          const activeBody = await activeRes.json() as WorkspaceActiveResponse;
+          if (!cancelled && activeBody?.context) {
+            notifyWorkspaceContextRefresh({ context: activeBody.context });
+          }
+        }
+      } catch {
+        // Context switch failed; the previous context remains active.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isTeamRoute, routeTeamId]);
 
   // Bootstrap — detect daemon, then fan out independent fetches so each
   // entry-view tab can render the moment its own data lands. Earlier this
@@ -3928,6 +3973,24 @@ function AppInner() {
     removeWorkspaceProjectTabs(id);
     iframeKeepAlivePool.evictProject(id, { includeActive: true });
     setProjects((curr) => curr.filter((p) => p.id !== id));
+    notifyTeamProjectsChanged({ kind: 'catalog', projectId: id });
+    window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+    if (mutationContext) {
+      invalidateWorkspaceProjectLists(
+        mutationContext,
+        mutationAccountGeneration,
+      );
+      window.dispatchEvent(
+        new CustomEvent('hdw:folders-updated', {
+          detail: { teamId: mutationContext.workspaceId },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent('hdw:subfolders-updated', {
+          detail: { teamId: mutationContext.workspaceId },
+        }),
+      );
+    }
     if (route.kind === 'project' && route.projectId === id) {
       navigate({ kind: 'home', view: 'home' });
     }
@@ -4821,15 +4884,10 @@ function AppInner() {
   // a fresh template list. The template store is global — if they just
   // saved a template inside a project, returning home should reflect it
   // immediately in the From-template tab without forcing a page reload.
-  // Same rationale for design systems: a brand extraction (or any in-project
-  // design-system creation) registers a `user:<id>` system out of band, so the
-  // Design systems tab must re-fetch to show it — and the brand-ready prompt
-  // relies on the new system being present so it can preselect it.
   useEffect(() => {
     if (route.kind !== 'home') return;
     void refreshTemplates();
-    if (workspaceContext?.workspaceType !== 'team') void refreshDesignSystems();
-  }, [route.kind, refreshTemplates, refreshDesignSystems, workspaceContext?.workspaceType]);
+  }, [route.kind, refreshTemplates]);
 
   // Existing card grids (DesignsTab, ProjectView), pickers (NewProjectPanel,
   // ChatComposer mention) all look skills up by id without caring whether

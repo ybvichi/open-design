@@ -23,7 +23,7 @@ type FetchLike = typeof fetch;
  * The `pathPrefix` (default `/hdw`) is appended separately, so these base
  * URLs exclude the `/hdw` segment.
  */
-const PROD_HDW_API_URL = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web';
+const PROD_HDW_API_URL = 'https://pixso.hikvision.com.cn';
 const DEV_HDW_API_URL = 'http://127.0.0.1:7002';
 
 export interface HdwCloudConfig {
@@ -36,12 +36,14 @@ export interface HdwCloudConfig {
 export function readHdwCloudConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): HdwCloudConfig | null {
+  const HDW_API_URL =  PROD_HDW_API_URL;//env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL
+  const pathPrefix =  '/hik-plugin/hidesign-web/hdw';//env.NODE_ENV === 'production' ? '/hik-plugin/hidesign-web' : '/hdw'
   const baseUrl = env.OD_HDW_API_URL?.trim()
-    || (env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL);
+    || HDW_API_URL;
   return {
     baseUrl,
     token: env.OD_HDW_API_TOKEN?.trim() || null,
-    pathPrefix: env.OD_HDW_API_PREFIX?.trim() || '/hdw',
+    pathPrefix: env.OD_HDW_API_PREFIX?.trim() || pathPrefix,
   };
 }
 
@@ -433,4 +435,8 @@ export interface HdwTransferResult {
   workspaceId: string;
   version: number;
   versionId: string;
+  /** The source owner's member ID in the TARGET workspace. The server
+   * resolves this by looking up the source member's username and deriving
+   * the target workspace_member_id deterministically. */
+  targetOwnerMemberId?: string;
 }

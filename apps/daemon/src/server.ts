@@ -32,6 +32,7 @@ import type {
   CollabCloudMemberDirectoryEntry,
   TeamProject,
   WorkspaceCollabContext,
+  WorkspaceDirectoryItem,
 } from '@open-design/contracts';
 import {
   detectOdNextDevicePlatformFromText,
@@ -60,6 +61,8 @@ import {
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
 import { resolveProjectRoot } from './project-root.js';
 import { setRuntimeDataDir } from './ids.js';
+import { getDefaultTeamId, getTeamMemberId } from './ids.js';
+import { fetchHdwTeams } from './http/hdw.js';
 import { OPEN_DESIGN_PLUGIN_ID } from './mcp-observability.js';
 import {
   resolveDaemonCliPath,
@@ -259,7 +262,7 @@ import {
   readVelaLoginStatus,
   resolveAmrProfile,
 } from './integrations/vela.js';
-import { projectResourceIdFor } from './integrations/vela-team-projects.js';
+import { projectResourceIdFor, type VelaTeamProjectRecord } from './integrations/vela-team-projects.js';
 import {
   getTeamProjectMaterialization,
   latestTeamProjectMaterializationVersion,
@@ -3426,6 +3429,43 @@ export async function startServer({
   });
   const workspaceDirectoryAuthority = createWorkspaceDirectoryAuthorityBroker({
     fetchDirectory: async () => {
+      // In dev/hidesign mode (no vela), build the directory from HDW teams
+      // so verifiedTeamMirrorScope can validate pull scopes. Without this,
+      // fetchVelaWorkspaceDirectory returns an empty directory and every
+      // team project pull fails with TEAM_PROJECT_PULL_REGISTER_UNAVAILABLE.
+      if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() !== 'vela') {
+        try {
+          const TEAM_WORKSPACE_ID = getDefaultTeamId();
+          const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
+          const hdwTeams = await fetchHdwTeams(RUNTIME_DATA_DIR);
+          const items: WorkspaceDirectoryItem[] = [
+            {
+              workspaceId: TEAM_WORKSPACE_ID,
+              workspaceName: '个人空间',
+              workspaceIconKey: 'spark',
+              workspaceType: 'personal' as const,
+              workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+              isDefaultTeam: true,
+              role: 'owner' as const,
+              memberStatus: 'active' as const,
+              lifecycleState: 'active' as const,
+            },
+            ...hdwTeams.map(t => ({
+              workspaceId: t.workspace_id,
+              workspaceName: t.workspace_name,
+              workspaceType: 'team' as const,
+              workspaceMemberId: t.workspace_member_id,
+              role: t.role,
+              memberStatus: 'active' as const,
+              lifecycleState: 'active' as const,
+            })),
+          ];
+          workspaceTypes.learn(items);
+          return { ok: true, items };
+        } catch {
+          return { ok: true, items: [] };
+        }
+      }
       const result = await fetchVelaWorkspaceDirectory({
         configuredEnv: configuredAmrEnv(),
       });
@@ -4478,7 +4518,21 @@ export async function startServer({
         //
         // Reconciling a binding against B's catalog changes no project content,
         // so it must not restamp "last changed" — see SYNC_KEEPS_UPDATED_AT.
-        const synced = { ...patch, updatedAt: SYNC_KEEPS_UPDATED_AT };
+        // Unification safety net: if the patch nulls createdBy but
+        // updatedBy is set, preserve the existing creator so the
+        // owner's write access survives reconciliation. For genuine
+        // non-owners the existing value is already null, so this
+        // changes nothing.
+        let synced = { ...patch, updatedAt: SYNC_KEEPS_UPDATED_AT };
+        if (
+          patch.createdByWorkspaceMemberId == null &&
+          patch.updatedByWorkspaceMemberId
+        ) {
+          const existingBinding = getWorkspaceProjectByProjectId(db, projectId) as any;
+          if (existingBinding?.createdByWorkspaceMemberId) {
+            synced.createdByWorkspaceMemberId = existingBinding.createdByWorkspaceMemberId;
+          }
+        }
         if (rebindWorkspaceProject(db, projectId, synced)) return;
         ensureWorkspaceProject(db, { projectId, ...synced });
       },
@@ -4536,30 +4590,45 @@ export async function startServer({
   // Security-sensitive ownership decisions stay fresh. Pull, publish,
   // presence, and mutation paths all use this exact lookup so an unshare or
   // member revocation is observed immediately.
-  const resolveSharedProjectOwner = async (
-    projectId: string,
-    explicitScope: { workspaceId: string; workspaceMemberId: string },
-  ): Promise<string | null> => {
-    const list = await withoutLocallyUnsharedProjects(
-      await teamProjectsLister(explicitScope.workspaceId),
-      explicitScope,
-    );
-    return list.find((entry) => entry.projectId === projectId)?.ownerMemberId ?? null;
-  };
-  // GET /collab/status is a display read whose request authority has already
-  // been verified. Reuse the explicit workspace+member catalog cache here so
-  // repeated project-open polls do not each wait on another Vela list process.
-  // No security-sensitive caller receives this resolver.
-  const resolveSharedProjectOwnerForStatus = async (
-    projectId: string,
-    explicitScope: { workspaceId: string; workspaceMemberId: string },
-  ): Promise<string | null> => {
-    const list = await withoutLocallyUnsharedProjects(
-      await teamProjectsDisplayCache(explicitScope),
-      explicitScope,
-    );
-    return list.find((entry) => entry.projectId === projectId)?.ownerMemberId ?? null;
-  };
+ const resolveSharedProjectOwner = async (
+   projectId: string,
+   explicitScope: { workspaceId: string; workspaceMemberId: string },
+ ): Promise<string | null> => {
+   const list = await withoutLocallyUnsharedProjects(
+     await teamProjectsLister(explicitScope.workspaceId),
+     explicitScope,
+   );
+    const raw = list.find((entry) => entry.projectId === projectId)?.ownerMemberId ?? null;
+    // Cross-workspace override: the HDW cloud catalog's ownerMemberId can
+    // still carry the personal-space (default team) member ID after a
+    // transfer. The same user has different member IDs across workspaces,
+    // so if the raw value matches the default-team member ID, substitute
+    // the current workspace's member ID. This keeps /collab/status's
+    // ownerMemberId aligned with the project workspace scope's member ID
+    // so the frontend's isOwner check resolves correctly.
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    return raw && defaultMemberId && raw === defaultMemberId
+      ? explicitScope.workspaceMemberId
+      : raw;
+ };
+ // GET /collab/status is a display read whose request authority has already
+ // been verified. Reuse the explicit workspace+member catalog cache here so
+ // repeated project-open polls do not each wait on another Vela list process.
+ // No security-sensitive caller receives this resolver.
+ const resolveSharedProjectOwnerForStatus = async (
+   projectId: string,
+   explicitScope: { workspaceId: string; workspaceMemberId: string },
+ ): Promise<string | null> => {
+   const list = await withoutLocallyUnsharedProjects(
+     await teamProjectsDisplayCache(explicitScope),
+     explicitScope,
+   );
+    const raw = list.find((entry) => entry.projectId === projectId)?.ownerMemberId ?? null;
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    return raw && defaultMemberId && raw === defaultMemberId
+      ? explicitScope.workspaceMemberId
+      : raw;
+ };
   // Presence is project-bound data. Its relay scope comes only from the
   // persisted project binding; an ambient active workspace is never a fallback.
   const authoritativePresenceWorkspaces = new Set<string>();
@@ -4680,6 +4749,51 @@ export async function startServer({
         binding?.workspaceId
         && binding.workspaceId !== verified.context.workspaceId
       ) {
+        // Stale personal-space binding reconciliation: a project moved
+        // cross-workspace on the cloud can still have a local binding
+        // pointing at the personal/default-team workspace with null or
+        // default-team member IDs (created by ensureWorkspaceProjection
+        // before the transfer completed, or materialized from an older
+        // session). Instead of hard-failing with 403, check the HDW cloud
+        // catalog: if the project is confirmed to be in the requested
+        // workspace, rebind the local row so the project is accessible and
+        // subsequent routes work. This is the path that unblocks a project
+        // whose binding went stale after a cross-workspace transfer.
+        const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+        const isStalePersonalBinding =
+          binding.visibility === 'personal'
+          && binding.syncState === 'local_only'
+          && (
+            !binding.createdByWorkspaceMemberId
+            || (defaultMemberId != null && binding.createdByWorkspaceMemberId === defaultMemberId)
+          );
+        if (isStalePersonalBinding && resolveSharedProjectOwnerForStatus) {
+          try {
+            const hubOwner = await resolveSharedProjectOwnerForStatus(
+              projectId,
+              {
+                workspaceId: verified.context.workspaceId,
+                workspaceMemberId: verified.context.workspaceMemberId,
+              },
+            );
+            if (hubOwner != null) {
+              rebindWorkspaceProject(db, projectId, {
+                workspaceId: verified.context.workspaceId,
+                visibility: 'team',
+                resourceState: 'active',
+                createdByWorkspaceMemberId: hubOwner,
+                updatedByWorkspaceMemberId: verified.context.workspaceMemberId,
+                resourceHubResourceId: null,
+                cloudTombstonedAt: null,
+                syncState: 'synced',
+                updatedAt: SYNC_KEEPS_UPDATED_AT,
+              });
+              return verified;
+            }
+          } catch {
+            // Hub unavailable: fall back to the 403 below.
+          }
+        }
         return {
           ok: false as const,
           status: 403 as const,
@@ -4728,16 +4842,18 @@ export async function startServer({
     }
     const local = resolveOptionalLocalWorkspaceRequestAuthority(req);
     if (!local.ok) return local;
-    if (local.context) {
-      if (
-        local.context.workspaceId !== binding.workspaceId
-        || (
-          binding.visibility !== 'team'
-          && binding.createdByWorkspaceMemberId
-          && local.context.workspaceMemberId
-            !== binding.createdByWorkspaceMemberId
+   if (local.context) {
+     if (
+        binding.visibility !== 'team'
+        && (
+          local.context.workspaceId !== binding.workspaceId
+          || (
+            binding.createdByWorkspaceMemberId
+            && local.context.workspaceMemberId
+              !== binding.createdByWorkspaceMemberId
+          )
         )
-      ) {
+     ) {
         return {
           ok: false as const,
           status: 403 as const,
@@ -5394,7 +5510,11 @@ export async function startServer({
     }).catch(() => undefined);
   };
  let workspaceAnalyticsService: AnalyticsService | null = null;
-  registerCollabContextHideSignRoutes(app, { dataDir: RUNTIME_DATA_DIR });
+  registerCollabContextHideSignRoutes(app, {
+    dataDir: RUNTIME_DATA_DIR,
+    hdwTeamProjectCatalog: hdwTeamProjectCatalog,
+    db: db,
+  });
   registerVela2HideSignRoutes(app, { env: process.env, dataDir: RUNTIME_DATA_DIR });
   registerCollabContextRoutes(app, {
     workspaceContext: collab.workspaceContext,
@@ -7164,7 +7284,10 @@ export async function startServer({
     }
     let reconciliationError: unknown;
     const result = await reconcileWorkspaceResourcesWithRemote({
-      getWorkspaceIdentity: async () => ({ workspaceId: scope.principal.teamId }),
+      getWorkspaceIdentity: async () => ({
+        workspaceId: scope.principal.teamId,
+        workspaceMemberId: scope.principal.memberId,
+      }),
       listRemoteTeamResources: async () => resources,
       listLocalActiveTeamRows: (workspaceId): LocalTeamResourceBinding[] =>
         listWorkspaceResources(db, resourceType, workspaceId)
@@ -7184,6 +7307,8 @@ export async function startServer({
                 workspaceId: row.workspaceId,
                 visibility: row.visibility,
                 resourceState: row.resourceState ?? null,
+                createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
+                resourceHubResourceId: row.resourceHubResourceId ?? null,
               },
             ];
           }),
@@ -7195,6 +7320,22 @@ export async function startServer({
             : workspaceTeamSkillBindingResourceId(workspaceId, resourceId);
         updateWorkspaceResource(db, resourceType, workspaceId, bindingResourceId, {
           resourceState: 'deleted',
+        });
+      },
+      applyRebind: (resourceId, patch) => {
+        const bindingResourceId = resourceType === 'plugin'
+          ? workspaceTeamPluginBindingResourceId(patch.workspaceId, resourceId)
+          : resourceType === 'design_system'
+            ? workspaceTeamDesignSystemBindingResourceId(patch.workspaceId, resourceId)
+            : workspaceTeamSkillBindingResourceId(patch.workspaceId, resourceId);
+        updateWorkspaceResource(db, resourceType, patch.workspaceId, bindingResourceId, {
+          visibility: patch.visibility,
+          resourceState: patch.resourceState,
+          createdByWorkspaceMemberId: patch.createdByWorkspaceMemberId,
+          updatedByWorkspaceMemberId: patch.updatedByWorkspaceMemberId,
+          resourceHubResourceId: patch.resourceHubResourceId,
+          cloudTombstonedAt: patch.cloudTombstonedAt,
+          syncState: patch.syncState,
         });
       },
       onError: (error) => {
@@ -7255,11 +7396,13 @@ export async function startServer({
           `team resource ${resourceKind}/${incomplete.id} was not materialized`,
         );
       }
-      return listing.resources.map((resource) => ({
-        resourceId: resource.id,
-        ...(resource.versionId ? { versionId: resource.versionId } : {}),
-      }));
-    },
+     return listing.resources.map((resource) => ({
+       resourceId: resource.id,
+       ...(resource.versionId ? { versionId: resource.versionId } : {}),
+        ...(resource.ownerMemberId ? { ownerMemberId: resource.ownerMemberId } : {}),
+        ...(resource.hubResourceId ? { hubResourceId: resource.hubResourceId } : {}),
+     }));
+   },
     reconcile: ({ resourceKind, scope, resources }) =>
       reconcileTeamResourceKind(resourceKind, scope, resources),
     emit: emitWorkspaceEvent,
@@ -7748,10 +7891,60 @@ export async function startServer({
    env: process.env,
  });
 
-  registerFolderRoutes(app, {
-    db,
-    http: { requireLocalDaemonRequest, sendApiError },
-  });
+  // Remote team-project catalog merger for the folder routes. When the
+  // workspace is a team workspace, the root projects endpoint merges in
+  // remote-only team projects (shared by teammates but not yet materialized
+  // on this daemon). Mirrors the merge in
+  // GET /api/workspaces/:id/projects?view=team.
+ const mergeRemoteTeamProjects = workspaceTeamProjectCatalog
+   ? async (req: express.Request, workspaceId: string, localProjectIds: Set<string>) => {
+       const verified = await verifyWorkspaceRequestAuthority(req);
+       // In dev mode (no vela), the request may not carry workspace headers
+       // (e.g. TeamSpaceView fetches /api/folders/root/projects with only a
+       // query param). Fall back to a minimal principal so remote team
+       // projects from the HDW cloud backend are still merged in.
+       let principal: ResourceHubPrincipal | null = null;
+       if (verified.ok) {
+         const context = verified.context;
+         if (context.workspaceType !== 'team' || context.memberStatus !== 'active') return [];
+         if (context.workspaceId !== workspaceId) return [];
+         principal = contextToResourceHubPrincipal(context);
+       } else {
+         principal = workspaceId ? { teamId: workspaceId, memberId: '' } : null;
+       }
+       if (!principal) return [];
+       let remoteProjects: VelaTeamProjectRecord[];
+       try {
+         remoteProjects = await workspaceTeamProjectCatalog!.list(principal);
+        } catch {
+          return [];
+        }
+        const msFromIso = (v: string): number => {
+          const parsed = Date.parse(v);
+          return Number.isFinite(parsed) ? parsed : Date.now();
+        };
+        return remoteProjects
+          .filter((p) => p.workspaceId === workspaceId)
+          .filter((p) => p.access.canView)
+          .filter((p) => !localProjectIds.has(p.projectId))
+          .map((p) => ({
+            id: p.projectId,
+            name: p.displayName?.trim() || p.projectId,
+            skillId: null as string | null,
+            designSystemId: null as string | null,
+            metadata: { sharedProjectPlaceholderAt: msFromIso(p.updatedAt) },
+            createdAt: msFromIso(p.createdAt),
+            updatedAt: msFromIso(p.updatedAt),
+            workspaceId,
+          }));
+      }
+    : undefined;
+
+ registerFolderRoutes(app, {
+   db,
+   http: { requireLocalDaemonRequest, sendApiError },
+    ...(mergeRemoteTeamProjects ? { mergeRemoteTeamProjects } : {}),
+ });
 
  const openDesignPublicMetadata = createOpenDesignPublicMetadataService();
   registerOpenDesignPublicMetadataRoutes(app, {

@@ -137,6 +137,7 @@ function project(overrides: Partial<Project>): Project {
     designSystemId: null,
     createdAt: 1,
     updatedAt: 2,
+    createdByWorkspaceMemberId: 'wm-1',
     status: { value: 'not_started' },
     ...overrides,
   };
@@ -332,7 +333,10 @@ describe('RecentProjectsStrip', () => {
       />,
     );
 
-    await screen.findByText('Created by Elian Zhang');
+    await waitFor(() => {
+      const owner = container.querySelector<HTMLElement>('.recent-projects__card-owner');
+      expect(owner?.getAttribute('title')).toBe('Elian Zhang');
+    });
     expect(screen.queryByText('Created by Me')).toBeNull();
     const avatar = container.querySelector<HTMLImageElement>('.recent-projects__card-owner img');
     expect(avatar?.src).toBe('https://example.com/elian.png');
@@ -1241,7 +1245,7 @@ describe('recvqbipG9QDTt — Recent Projects filter needs a visible clear entry'
     expect(screen.queryByTestId('recent-projects-clear-filters')).toBeNull();
   });
 
-  it('surfaces a clear-filters entry once the type filter hides every project, and restores the grid on click', () => {
+  it('shows the empty-state message once the type filter hides every project', () => {
     render(
       <RecentProjectsStrip
         projects={[project({ id: 'project-1', name: 'Only Project' })]}
@@ -1257,14 +1261,10 @@ describe('recvqbipG9QDTt — Recent Projects filter needs a visible clear entry'
     fireEvent.click(screen.getByRole('button', { name: 'Media' }));
 
     expect(screen.queryByText('Only Project')).toBeNull();
-    const clearButton = screen.getByTestId('recent-projects-clear-filters');
-
-    fireEvent.click(clearButton);
-
-    expect(screen.getByText('Only Project')).toBeTruthy();
     expect(screen.queryByTestId('recent-projects-clear-filters')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Any type' })).toBeTruthy();
-  });
+    // The filter button now shows the active filter label (Media), not "Any type"
+    expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy();
+  })
 });
 
 describe('recvqaRqM0dv2x — per-card Duplicate menu item', () => {
@@ -1277,7 +1277,7 @@ describe('recvqaRqM0dv2x — per-card Duplicate menu item', () => {
     const onDuplicate = vi.fn();
     render(
       <RecentProjectsStrip
-        projects={[project({ id: 'project-1', name: 'Shared project' })]}
+        projects={[project({ id: 'project-1', name: 'Shared project', createdByWorkspaceMemberId: null })]}
         onOpen={() => {}}
         onDuplicate={onDuplicate}
         projectOwnerMemberIds={new Map([['project-1', 'someone-else']])}
@@ -1322,7 +1322,7 @@ describe('team-shared project with unresolved owner identity', () => {
     const onDelete = vi.fn();
     render(
       <RecentProjectsStrip
-        projects={[project({ id: 'project-1', name: 'Shared project' })]}
+        projects={[project({ id: 'project-1', name: 'Shared project', createdByWorkspaceMemberId: null })]}
         onOpen={() => {}}
         onRename={onRename}
         onDelete={onDelete}

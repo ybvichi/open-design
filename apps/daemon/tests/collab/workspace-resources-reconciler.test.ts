@@ -11,10 +11,11 @@ import { createRememberedTeamResourceScopes } from '../../src/collab/remembered-
 import type { TeamResourceRequestScope } from '../../src/collab/team-resource-share.js';
 
 const WORKSPACE_ID = 'team-1';
+const MEMBER_ID = 'member-a';
 
 function teamResourceScope(
   workspaceId = WORKSPACE_ID,
-  memberId = 'member-a',
+  memberId = MEMBER_ID,
 ): TeamResourceRequestScope {
   return {
     principal: {
@@ -65,10 +66,12 @@ describe('createWorkspaceResourceSignatureTracker', () => {
 describe('planWorkspaceResourceReconciliation (pure)', () => {
   it('retires a local active-team row the remote listing no longer confirms', () => {
     const localActiveTeamRows: LocalTeamResourceBinding[] = [
-      { resourceId: 'skill-gone', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+      { resourceId: 'skill-gone', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
     ];
     const actions = planWorkspaceResourceReconciliation({
       workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
       remoteResources: [],
       localActiveTeamRows,
     });
@@ -79,10 +82,12 @@ describe('planWorkspaceResourceReconciliation (pure)', () => {
 
   it('does nothing when the remote listing still confirms the local row', () => {
     const localActiveTeamRows: LocalTeamResourceBinding[] = [
-      { resourceId: 'skill-still-shared', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+      { resourceId: 'skill-still-shared', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
     ];
     const actions = planWorkspaceResourceReconciliation({
       workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
       remoteResources: [{ resourceId: 'skill-still-shared' }],
       localActiveTeamRows,
     });
@@ -91,41 +96,125 @@ describe('planWorkspaceResourceReconciliation (pure)', () => {
 
   it('ignores a row bound to a DIFFERENT workspace than the one being reconciled', () => {
     const localActiveTeamRows: LocalTeamResourceBinding[] = [
-      { resourceId: 'skill-other-ws', workspaceId: 'team-2', visibility: 'team', resourceState: 'active' },
+      { resourceId: 'skill-other-ws', workspaceId: 'team-2', visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
     ];
     const actions = planWorkspaceResourceReconciliation({
       workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
       remoteResources: [],
       localActiveTeamRows,
     });
     expect(actions).toEqual([]);
   });
 
-  it('retires multiple stale rows in one pass and leaves confirmed ones alone', () => {
+ it('retires multiple stale rows in one pass and leaves confirmed ones alone', () => {
+   const localActiveTeamRows: LocalTeamResourceBinding[] = [
+     { resourceId: 'still-shared', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+       createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
+     { resourceId: 'gone-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+       createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
+     { resourceId: 'gone-2', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+       createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
+   ];
+   const actions = planWorkspaceResourceReconciliation({
+     workspaceId: WORKSPACE_ID,
+     workspaceMemberId: MEMBER_ID,
+     remoteResources: [{ resourceId: 'still-shared' }],
+     localActiveTeamRows,
+   });
+   expect(actions).toEqual([
+     { kind: 'retire', resourceId: 'gone-1', workspaceId: WORKSPACE_ID },
+     { kind: 'retire', resourceId: 'gone-2', workspaceId: WORKSPACE_ID },
+   ]);
+ });
+
+  it('does nothing when the local row already has the correct member id and hub resource id', () => {
     const localActiveTeamRows: LocalTeamResourceBinding[] = [
-      { resourceId: 'still-shared', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
-      { resourceId: 'gone-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
-      { resourceId: 'gone-2', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+      { resourceId: 'ds-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: 'hub-1' },
     ];
     const actions = planWorkspaceResourceReconciliation({
       workspaceId: WORKSPACE_ID,
-      remoteResources: [{ resourceId: 'still-shared' }],
+      workspaceMemberId: MEMBER_ID,
+      remoteResources: [{ resourceId: 'ds-1', hubResourceId: 'hub-1' }],
       localActiveTeamRows,
     });
-    expect(actions).toEqual([
-      { kind: 'retire', resourceId: 'gone-1', workspaceId: WORKSPACE_ID },
-      { kind: 'retire', resourceId: 'gone-2', workspaceId: WORKSPACE_ID },
-    ]);
+    expect(actions).toEqual([]);
+  });
+
+  it('emits a rebind when the local row has a stale createdByWorkspaceMemberId', () => {
+    const localActiveTeamRows: LocalTeamResourceBinding[] = [
+      { resourceId: 'ds-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: 'wrong-member-id', resourceHubResourceId: 'hub-1' },
+    ];
+    const actions = planWorkspaceResourceReconciliation({
+      workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
+      remoteResources: [{ resourceId: 'ds-1', hubResourceId: 'hub-1' }],
+      localActiveTeamRows,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toEqual({
+      kind: 'rebind',
+      resourceId: 'ds-1',
+      patch: {
+        workspaceId: WORKSPACE_ID,
+        visibility: 'team',
+        resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID,
+        updatedByWorkspaceMemberId: MEMBER_ID,
+        resourceHubResourceId: 'hub-1',
+        cloudTombstonedAt: null,
+        syncState: 'synced',
+      },
+    });
+  });
+
+  it('emits a rebind when the local row has a stale resourceHubResourceId', () => {
+    const localActiveTeamRows: LocalTeamResourceBinding[] = [
+      { resourceId: 'ds-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: 'stale-hub-id' },
+    ];
+    const actions = planWorkspaceResourceReconciliation({
+      workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
+      remoteResources: [{ resourceId: 'ds-1', hubResourceId: 'correct-hub-id' }],
+      localActiveTeamRows,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.kind).toBe('rebind');
+    expect(actions[0]?.kind).toBe('rebind');
+    expect(actions[0]?.kind === 'rebind' ? actions[0].patch.resourceHubResourceId : null).toBe('correct-hub-id');
+  });
+
+  it('corrects ownership and retires stale rows in the same pass', () => {
+    const localActiveTeamRows: LocalTeamResourceBinding[] = [
+      { resourceId: 'ds-stale-owner', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: 'wrong-member-id', resourceHubResourceId: 'hub-1' },
+      { resourceId: 'ds-gone', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+        createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
+    ];
+    const actions = planWorkspaceResourceReconciliation({
+      workspaceId: WORKSPACE_ID,
+      workspaceMemberId: MEMBER_ID,
+      remoteResources: [{ resourceId: 'ds-stale-owner', hubResourceId: 'hub-1' }],
+      localActiveTeamRows,
+    });
+    expect(actions).toHaveLength(2);
+    expect(actions[0]?.kind).toBe('rebind');
+    expect(actions[1]).toEqual({ kind: 'retire', resourceId: 'ds-gone', workspaceId: WORKSPACE_ID });
   });
 });
 
 describe('reconcileWorkspaceResourcesWithRemote (orchestrator)', () => {
   function baseDeps(overrides: Partial<Parameters<typeof reconcileWorkspaceResourcesWithRemote>[0]> = {}) {
     return {
-      getWorkspaceIdentity: async () => ({ workspaceId: WORKSPACE_ID }),
+      getWorkspaceIdentity: async () => ({ workspaceId: WORKSPACE_ID, workspaceMemberId: MEMBER_ID }),
       listRemoteTeamResources: async () => [],
       listLocalActiveTeamRows: () => [],
       applyRetire: vi.fn(),
+      applyRebind: vi.fn(),
       ...overrides,
     };
   }
@@ -133,36 +222,43 @@ describe('reconcileWorkspaceResourcesWithRemote (orchestrator)', () => {
   it('is a no-op off-team (getWorkspaceIdentity resolves null)', async () => {
     const listRemoteTeamResources = vi.fn(async () => []);
     const applyRetire = vi.fn();
+    const applyRebind = vi.fn();
     const result = await reconcileWorkspaceResourcesWithRemote(
-      baseDeps({ getWorkspaceIdentity: async () => null, listRemoteTeamResources, applyRetire }),
+      baseDeps({ getWorkspaceIdentity: async () => null, listRemoteTeamResources, applyRetire, applyRebind }),
     );
-    expect(result).toEqual({ retired: 0 });
+    expect(result).toEqual({ retired: 0, rebound: 0 });
     expect(listRemoteTeamResources).not.toHaveBeenCalled();
     expect(applyRetire).not.toHaveBeenCalled();
+    expect(applyRebind).not.toHaveBeenCalled();
   });
 
   it('never retires on a failed remote read (best-effort: missing data is not empty data)', async () => {
     const applyRetire = vi.fn();
+    const applyRebind = vi.fn();
     const onError = vi.fn();
     const result = await reconcileWorkspaceResourcesWithRemote(
       baseDeps({
         listLocalActiveTeamRows: () => [
-          { resourceId: 'r1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+          { resourceId: 'r1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+            createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
         ],
         listRemoteTeamResources: async () => {
           throw new Error('vela unreachable');
         },
         applyRetire,
+        applyRebind,
         onError,
       }),
     );
-    expect(result).toEqual({ retired: 0 });
+    expect(result).toEqual({ retired: 0, rebound: 0 });
     expect(applyRetire).not.toHaveBeenCalled();
+    expect(applyRebind).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('never retires on a failed identity read either', async () => {
     const applyRetire = vi.fn();
+    const applyRebind = vi.fn();
     const onError = vi.fn();
     const result = await reconcileWorkspaceResourcesWithRemote(
       baseDeps({
@@ -170,27 +266,33 @@ describe('reconcileWorkspaceResourcesWithRemote (orchestrator)', () => {
           throw new Error('workspace context read failed');
         },
         applyRetire,
+        applyRebind,
         onError,
       }),
     );
-    expect(result).toEqual({ retired: 0 });
+    expect(result).toEqual({ retired: 0, rebound: 0 });
     expect(applyRetire).not.toHaveBeenCalled();
+    expect(applyRebind).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('applies retire actions through the injected writer and reports the count', async () => {
     const applyRetire = vi.fn();
+    const applyRebind = vi.fn();
     const result = await reconcileWorkspaceResourcesWithRemote(
       baseDeps({
         listLocalActiveTeamRows: () => [
-          { resourceId: 'gone', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+          { resourceId: 'gone', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+            createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
         ],
         listRemoteTeamResources: async () => [],
         applyRetire,
+        applyRebind,
       }),
     );
-    expect(result).toEqual({ retired: 1 });
+    expect(result).toEqual({ retired: 1, rebound: 0 });
     expect(applyRetire).toHaveBeenCalledWith(WORKSPACE_ID, 'gone');
+    expect(applyRebind).not.toHaveBeenCalled();
   });
 
   it('reports one writer failure through onError without aborting the rest of the pass', async () => {
@@ -199,18 +301,21 @@ describe('reconcileWorkspaceResourcesWithRemote (orchestrator)', () => {
     const result = await reconcileWorkspaceResourcesWithRemote(
       baseDeps({
         listLocalActiveTeamRows: () => [
-          { resourceId: 'a', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
-          { resourceId: 'b', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active' },
+          { resourceId: 'a', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+            createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
+          { resourceId: 'b', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+            createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
         ],
         listRemoteTeamResources: async () => [],
         applyRetire: (workspaceId: string, resourceId: string) => {
           if (resourceId === 'a') throw new Error('sqlite busy');
           applied.push(resourceId);
         },
+        applyRebind: vi.fn(),
         onError,
       }),
     );
-    expect(result).toEqual({ retired: 1 });
+    expect(result).toEqual({ retired: 1, rebound: 0 });
     expect(onError).toHaveBeenCalledTimes(1);
     expect(applied).toEqual(['b']);
   });
@@ -227,14 +332,39 @@ describe('reconcileWorkspaceResourcesWithRemote (orchestrator)', () => {
     const result = await reconcileWorkspaceResourcesWithRemote(
       baseDeps({
         listLocalActiveTeamRows: () => [
-          { resourceId: 'already-retired', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'deleted' },
+          { resourceId: 'already-retired', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'deleted',
+            createdByWorkspaceMemberId: MEMBER_ID, resourceHubResourceId: null },
         ],
         listRemoteTeamResources: async () => [],
         applyRetire,
       }),
     );
-    expect(result).toEqual({ retired: 1 });
-    expect(applyRetire).toHaveBeenCalledWith(WORKSPACE_ID, 'already-retired');
+    expect(result).toEqual({ retired: 1, rebound: 0 });
+   expect(applyRetire).toHaveBeenCalledWith(WORKSPACE_ID, 'already-retired');
+ });
+
+  it('applies rebind actions through the injected writer and reports the count', async () => {
+    const applyRetire = vi.fn();
+    const applyRebind = vi.fn();
+    const result = await reconcileWorkspaceResourcesWithRemote(
+      baseDeps({
+        listLocalActiveTeamRows: () => [
+          { resourceId: 'ds-1', workspaceId: WORKSPACE_ID, visibility: 'team', resourceState: 'active',
+            createdByWorkspaceMemberId: 'wrong-member-id', resourceHubResourceId: 'stale-hub' },
+        ],
+        listRemoteTeamResources: async () => [
+          { resourceId: 'ds-1', hubResourceId: 'correct-hub' },
+        ],
+        applyRetire,
+        applyRebind,
+      }),
+    );
+    expect(result).toEqual({ retired: 0, rebound: 1 });
+    expect(applyRetire).not.toHaveBeenCalled();
+    expect(applyRebind).toHaveBeenCalledWith('ds-1', expect.objectContaining({
+      createdByWorkspaceMemberId: MEMBER_ID,
+      resourceHubResourceId: 'correct-hub',
+    }));
   });
 });
 
@@ -256,7 +386,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
       },
       reconcile: async ({ resources }) => {
         calls.push(`reconcile:${resources[0]?.resourceId}`);
-        return { retired: 0 };
+        return { retired: 0, rebound: 0 };
       },
       emit: (_workspaceId, payload) => calls.push(`emit:${payload.resourceKind}`),
       now: () => 123,
@@ -294,7 +424,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
       },
       reconcile: async ({ resourceKind }) => {
         if (resourceKind === 'skill') throw new Error('sqlite failed');
-        return { retired: 0 };
+        return { retired: 0, rebound: 0 };
       },
       emit,
     });
@@ -329,8 +459,8 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
           if (remote === 'failure') throw new Error('hub unavailable');
           return remote === 'shared' ? [{ resourceId: 'skill-1' }] : [];
         },
-        reconcile: ({ resources }) => reconcileWorkspaceResourcesWithRemote({
-          getWorkspaceIdentity: async () => ({ workspaceId: WORKSPACE_ID }),
+       reconcile: ({ resources }) => reconcileWorkspaceResourcesWithRemote({
+          getWorkspaceIdentity: async () => ({ workspaceId: WORKSPACE_ID, workspaceMemberId: MEMBER_ID }),
           listRemoteTeamResources: async () => resources,
           listLocalActiveTeamRows: () => localState === 'active'
             ? [{
@@ -338,9 +468,12 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
                 workspaceId: WORKSPACE_ID,
                 visibility: 'team',
                 resourceState: 'active',
+                createdByWorkspaceMemberId: MEMBER_ID,
+                resourceHubResourceId: null,
               }]
             : [],
           applyRetire: () => { localState = 'deleted'; },
+          applyRebind: vi.fn(),
         }),
         emit: vi.fn(),
       });
@@ -384,7 +517,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
     const emit = vi.fn();
     const coordinator = createWorkspaceTeamResourceEventCoordinator({
       materializeAndList: async () => [{ resourceId: 'skill-1', versionId }],
-      reconcile: async () => ({ retired: 0 }),
+      reconcile: async () => ({ retired: 0, rebound: 0 }),
       emit,
     });
 
@@ -403,7 +536,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
     const emit = vi.fn();
     const coordinator = createWorkspaceTeamResourceEventCoordinator({
       materializeAndList: async () => [],
-      reconcile: async () => ({ retired }),
+      reconcile: async () => ({ retired, rebound: 0 }),
       emit,
     });
 
@@ -427,7 +560,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
         if (materializations === 1) await firstBlocked;
         return [{ resourceId: 'skill-1', versionId: String(materializations) }];
       },
-      reconcile: async () => ({ retired: 0 }),
+      reconcile: async () => ({ retired: 0, rebound: 0 }),
       emit: vi.fn(),
     });
 
@@ -465,7 +598,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
     remembered.remember(rememberedScope);
     const rememberedLease = remembered.activeWorkspaceLeases()[0]!;
     let materializations = 0;
-    const reconcile = vi.fn(async () => ({ retired: 0 }));
+    const reconcile = vi.fn(async () => ({ retired: 0, rebound: 0 }));
     const emit = vi.fn();
     const coordinator = createWorkspaceTeamResourceEventCoordinator({
       materializeAndList: async () => {
@@ -525,7 +658,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
     remembered.remember(rememberedScope);
     const rememberedLease = remembered.activeWorkspaceLeases()[0]!;
     let materializations = 0;
-    const reconcile = vi.fn(async () => ({ retired: 0 }));
+    const reconcile = vi.fn(async () => ({ retired: 0, rebound: 0 }));
     const emit = vi.fn();
     const coordinator = createWorkspaceTeamResourceEventCoordinator({
       materializeAndList: async () => {
@@ -585,7 +718,7 @@ describe('createWorkspaceTeamResourceEventCoordinator', () => {
       reconcile: async () => {
         reconciliations += 1;
         if (reconciliations === 1) await reconciliationBlocked;
-        return { retired: 0 };
+        return { retired: 0, rebound: 0 };
       },
       emit,
     });

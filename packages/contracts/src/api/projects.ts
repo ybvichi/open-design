@@ -375,6 +375,19 @@ export interface Project {
    * missing value.
    */
   workspaceId?: string | null;
+  /**
+   * The workspace member ID of the project's creator — the
+   * `created_by_workspace_member_id` column from the project's
+   * `workspace_projects` row.
+   *
+   * Carried on the nested project so a client that unwraps a
+   * `WorkspaceProjectSummary` into a plain `Project` keeps the creator
+   * identity instead of dropping it. Absent means the daemon has not
+   * bound the project to a workspace yet (or the row predates the
+   * creator column) — a client must treat absence as "unknown creator",
+   * NOT "created by me".
+   */
+  createdByWorkspaceMemberId?: string | null;
 }
 
 export interface ProjectTemplate {

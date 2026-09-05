@@ -1634,9 +1634,16 @@ export interface Dict {
  'recentProjects.moveToTeamTreeDesc': string;
  'recentProjects.treeNoFolders': string;
  'recentProjects.treeNoTeams': string;
+  'recentProjects.moveTo': string;
+  'recentProjects.confirmMove': string;
+  'recentProjects.moveTreeDesc': string;
+  'recentProjects.treeNoWorkspaces': string;
+  'recentProjects.teamSpaceTab': string;
+  'recentProjects.personalSpaceTab': string;
  'recentProjects.confirmMoveToPersonal': string;
-  'recentProjects.unshareInProgress': string;
-  'recentProjects.moveOutOfTeam': string;
+ 'recentProjects.unshareInProgress': string;
+  'recentProjects.refresh': string;
+ 'recentProjects.moveOutOfTeam': string;
   'recentProjects.unshareFailed': string;
   'recentProjects.shareFailed': string;
   'recentProjects.shareOwnerConflict': string;

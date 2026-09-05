@@ -31,7 +31,7 @@ import { emittedRenderableQuestionForm } from './question-form-detect.js';
 import { migrateOdNextRolloutStore } from './strategies/od-next/rollout.js';
 import { migrateStrategyTaskStore } from './strategies/task-store.js';
 
-type SqliteDb = Database.Database;
+export type SqliteDb = Database.Database;
 type DbRow = Record<string, any>;
 type JsonObject = Record<string, unknown>;
 type ChatSessionMode = 'design' | 'chat' | 'plan';
@@ -1317,6 +1317,27 @@ export function updateWorkspaceProject(db: SqliteDb, workspaceId: string, projec
       ? existing.cloudTombstonedAt
       : patch.cloudTombstonedAt,
     updatedAt: nextUpdatedAt(patch.updatedAt, existing.updatedAt),
+    // Unification: when a patch nulls createdBy but updatedBy is set and
+    // the existing row already has a non-null creator, preserve the
+    // existing creator. This protects the owner's write access (the team
+    // single-writer check uses createdByWorkspaceMemberId ===
+    // claimed.workspaceMemberId) from being stripped by reconciliation
+    // passes that misjudge ownership due to cross-workspace member ID
+    // differences. For genuine non-owners the existing value is already
+    // null, so this changes nothing. When both are null, fall back to
+    // updatedBy so the row is never left unattributed after a
+    // cross-workspace move. Use !== undefined (not != null) so an
+    // explicit null (e.g. team mirror materialization where the viewer
+    // is not the owner) is respected, and the fallback only fires when
+    // the field is truly absent from the patch.
+    createdByWorkspaceMemberId:
+      patch.createdByWorkspaceMemberId !== undefined
+        ? patch.createdByWorkspaceMemberId
+        : existing.createdByWorkspaceMemberId ?? patch.updatedByWorkspaceMemberId ?? null,
+    updatedByWorkspaceMemberId:
+      patch.updatedByWorkspaceMemberId !== undefined
+        ? patch.updatedByWorkspaceMemberId
+        : existing.updatedByWorkspaceMemberId ?? patch.createdByWorkspaceMemberId ?? null,
   };
   db.prepare(
     `UPDATE workspace_projects
@@ -1381,6 +1402,22 @@ export function rebindWorkspaceProject(db: SqliteDb, projectId: string, patch: D
       ? existing.cloudTombstonedAt
       : patch.cloudTombstonedAt,
     updatedAt: nextUpdatedAt(patch.updatedAt, existing.updatedAt),
+    // Unification (same logic as updateWorkspaceProject): when a patch
+    // nulls createdBy but updatedBy is set, preserve the existing creator
+    // or fall back to updatedBy so the row is never left unattributed.
+    // Both fields must always be non-null and consistent after a
+    // cross-workspace move. Use !== undefined (not != null) so an
+    // explicit null (e.g. team mirror materialization where the viewer
+    // is not the owner) is respected, and the fallback only fires when
+    // the field is truly absent from the patch.
+    createdByWorkspaceMemberId:
+      patch.createdByWorkspaceMemberId !== undefined
+        ? patch.createdByWorkspaceMemberId
+        : existing.createdByWorkspaceMemberId ?? patch.updatedByWorkspaceMemberId ?? null,
+    updatedByWorkspaceMemberId:
+      patch.updatedByWorkspaceMemberId !== undefined
+        ? patch.updatedByWorkspaceMemberId
+        : existing.updatedByWorkspaceMemberId ?? patch.createdByWorkspaceMemberId ?? null,
   };
   db.prepare(
     `UPDATE workspace_projects
@@ -1644,6 +1681,26 @@ export function countProjectsInFolder(
   return Number(result?.count ?? 0);
 }
 
+/** Batch project counts for every folder in a workspace. Returns a map
+ *  of folder_id → count so the caller can enrich a folder list (e.g. the
+ *  HDW proxy response) without N individual count queries. */
+export function countProjectsInAllFolders(
+  db: SqliteDb,
+  workspaceId: string,
+): Record<string, number> {
+  const rows = db
+    .prepare(
+      `SELECT folder_id, COUNT(*) AS count
+         FROM workspace_projects
+        WHERE workspace_id = ? AND folder_id IS NOT NULL
+        GROUP BY folder_id`,
+    )
+    .all(workspaceId) as Array<{ folder_id: string; count: number }>;
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.folder_id] = r.count;
+  return out;
+}
+
 /**
  * Breadcrumb path from the workspace root down to a folder, root-first.
  * Uses a recursive CTE that walks folder_pid upward. depth 0 is the
@@ -1694,17 +1751,17 @@ export function listFolderPreview(
   return db
     .prepare(
       `SELECT folder_name AS name, kind FROM (
-          SELECT folder_name, 'folder' AS kind, 0 AS sort_group, 0 AS sort_pos
-            FROM folders
-           WHERE workspace_id = ? AND folder_pid = ?
-          UNION ALL
-          SELECT p.name, 'project' AS kind, 1 AS sort_group, 0 AS sort_pos
-            FROM workspace_projects wp
-            JOIN projects p ON p.id = wp.project_id
-           WHERE wp.workspace_id = ? AND wp.folder_id = ?
-        )
-        ORDER BY sort_group, sort_pos, name
-        LIMIT ?`,
+        SELECT folder_name, 'folder' AS kind, 1 AS sort_group, 0 AS sort_pos
+           FROM folders
+          WHERE workspace_id = ? AND folder_pid = ?
+         UNION ALL
+         SELECT p.name, 'project' AS kind, 0 AS sort_group, 0 AS sort_pos
+           FROM workspace_projects wp
+           JOIN projects p ON p.id = wp.project_id
+          WHERE wp.workspace_id = ? AND wp.folder_id = ?
+       )
+      ORDER BY sort_group, sort_pos, name
+       LIMIT ?`,
     )
     .all(workspaceId, folderId, workspaceId, folderId, limit) as Array<{ name: string; kind: 'folder' | 'project' }>;
 }
@@ -2645,7 +2702,7 @@ export function insertConversation(db: SqliteDb, c: DbRow) {
     c.title ?? null,
     normalizeConversationSessionMode(c.sessionMode),
     c.createdAt,
-    c.updatedAt,
+    c.updatedAt ?? c.createdAt ?? Date.now(),
   );
   return getConversation(db, c.id);
 }

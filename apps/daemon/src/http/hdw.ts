@@ -11,7 +11,7 @@ import { readSsoConfigFile } from './hik_logins/hicoo.js';
 
 const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/webapi/v1';
 const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/webapi/v1';
-const HDW_BASE = process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
+const HDW_BASE = PROD_HDW_BASE;//process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
 
 /** Standard HDW API response envelope. */
 interface HdwResponse<T> {

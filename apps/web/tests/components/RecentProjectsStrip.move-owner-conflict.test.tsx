@@ -42,6 +42,7 @@ const movedTeamProject: WorkspaceProjectSummary = {
     designSystemId: null,
     createdAt: 1,
     updatedAt: 2,
+  createdByWorkspaceMemberId: 'wm-1',
   },
 };
 
@@ -60,6 +61,45 @@ vi.mock('../../src/providers/registry', () => ({
     `/api/projects/${projectId}/files/${fileName}`,
 }));
 
+vi.mock('../../src/collab/useWorkspaceContext', () => ({
+  notifyTeamProjectsChanged: vi.fn(),
+  useWorkspaceBilling: () => null,
+
+  readWorkspaceDirectoryForCurrentGeneration: async () => ({
+    items: [
+      {
+        workspaceId: 'ws-team-2',
+        workspaceName: 'Team Two',
+        workspaceType: 'team',
+        workspaceMemberId: 'wm-2',
+        role: 'owner',
+        memberStatus: 'active',
+        lifecycleState: 'active',
+        isDefaultTeam: false,
+      },
+    ],
+  }),
+  useWorkspaceContext: () => ({
+    context: {
+      workspaceId: 'ws-1',
+      workspaceType: 'team',
+      workspaceMemberId: 'wm-1',
+      role: 'member',
+      memberStatus: 'active',
+      lifecycleState: 'active',
+      billingState: 'active',
+      providerMode: 'platform_credits',
+      planId: null,
+      seatSummary: { seatLimit: 5, usedSeats: 2, availableSeats: 3 },
+      permissions: {},
+      teamId: 'team-1',
+    },
+    loading: false,
+    failure: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 afterEach(() => {
   cleanup();
   moveWorkspaceProject.mockReset();
@@ -74,6 +114,7 @@ function project(overrides: Partial<Project>): Project {
     designSystemId: null,
     createdAt: 1,
     updatedAt: 2,
+    createdByWorkspaceMemberId: 'wm-1',
     status: { value: 'not_started' },
     ...overrides,
   };
@@ -90,6 +131,11 @@ async function attemptMoveToTeam(props: Partial<React.ComponentProps<typeof Rece
   );
   fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
   fireEvent.click(screen.getByRole('menuitem', { name: /Move to team space/i }));
+  // The tree dialog requires a team node to be selected before Confirm is enabled.
+  await waitFor(() => {
+    expect(screen.getByText('Team Two')).toBeTruthy();
+  });
+  fireEvent.click(screen.getByText('Team Two'));
   fireEvent.click(screen.getByText('Confirm move'));
   return waitFor(() => {
     const alert = screen.getByRole('alert');
@@ -112,6 +158,11 @@ describe('move-to-team owner conflict message (recvqzjnshIlOe)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Move to team space/i }));
+    // The tree dialog requires a team node to be selected before Confirm is enabled.
+    await waitFor(() => {
+      expect(screen.getByText('Team Two')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('Team Two'));
     fireEvent.click(screen.getByText('Confirm move'));
 
     await waitFor(() => {
