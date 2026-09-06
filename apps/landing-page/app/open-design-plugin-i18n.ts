@@ -250,7 +250,7 @@ export const OPEN_DESIGN_PLUGIN_EN: OpenDesignPluginCopy = {
   },
 };
 
-export function getOpenDesignPluginCopy(locale: LandingLocaleCode): OpenDesignPluginCopy {
+export function getHiDesignPluginCopy(locale: LandingLocaleCode): OpenDesignPluginCopy {
   if (locale === 'en') return OPEN_DESIGN_PLUGIN_EN;
   return OPEN_DESIGN_PLUGIN_TRANSLATIONS[locale] ?? OPEN_DESIGN_PLUGIN_EN;
 }
