@@ -1235,6 +1235,7 @@ export const zhTW: Dict = {
   "recentProjects.creatorLine": "{name}建立",
   "recentProjects.selfCreator": "我",
   "recentProjects.teamMemberCreator": "團隊成員",
+  "recentProjects.readOnlyBadge": "讀",
   "recentProjects.ownOnlyMutation": "只能修改或刪除自己建立的專案。",
   "recentProjects.shareInProgress": "分享中…",
   "recentProjects.sharedInTeam": "已在團隊空間",

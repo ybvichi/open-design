@@ -558,6 +558,7 @@ operator,
     avatarUrl: string | null;
     ownedBySelf: boolean;
     canMutate: boolean;
+    canAdmin: boolean;
     memberId: string | null;
   } => {
     // In the personal space (default team) the user is the sole member
@@ -570,12 +571,13 @@ operator,
         avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
         ownedBySelf: true,
         canMutate: true,
+        canAdmin: false,
         memberId: selfMemberId,
       };
     }
-    // Admins can rename, delete, duplicate, and move team projects to other
-    // teams, but only the project owner can move it back to personal space.
-    // When an HDW team-space operator is provided, use its memberId/role
+    // Team projects are single-writer: only the creator can rename, delete,
+    // or duplicate. Admins can open the card menu but only see "move to" —
+    // they cannot rename, delete, or duplicate another member's project.
     // instead of the OpenDesign workspace-collab context: HDW team projects
     // carry HDW member IDs that do not match the collab workspace member ID,
     // and the operator role distinguishes owner from admin.
@@ -603,12 +605,13 @@ operator,
         avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
         ownedBySelf: true,
         canMutate: true,
+        canAdmin: false,
         memberId: ownerMemberId,
       };
     }
     const name = (ownerMemberId && resolveMember(ownerMemberId)?.displayName) ?? t('recentProjects.teamMemberCreator');
     const initial = (Array.from(name.trim())[0] ?? 'T').toUpperCase();
-    return { name, initial, avatarUrl: null, ownedBySelf: false, canMutate: isAdmin, memberId: ownerMemberId ?? null };
+    return { name, initial, avatarUrl: null, ownedBySelf: false, canMutate: false, canAdmin: isAdmin, memberId: ownerMemberId ?? null };
   };
   const visibleProjects = useMemo(
     () => sortedProjects
@@ -750,12 +753,18 @@ function commitMove() {
   // space, delete); nothing new is exposed here that a single card cannot do.
   const selectedProjects = visibleProjects.filter(({ project }) => selectedProjectIds.has(project.id));
   const selectedCount = selectedProjectIds.size;
- // Same gate as the per-card menu: only your own projects can be moved or
- // deleted, so a selection containing someone else's shared project disables
- // the mutations instead of half-applying them.
+  // Same gate as the per-card menu: only the owner can rename, delete, or
+  // duplicate. Admins can move but not delete, so the bulk toolbar needs two
+  // disabled states — one for move (admins allowed) and one for delete
+  // (owner only).
   const selectionHasForeignProject = selectedProjects.some(({ creator }) => !creator.canMutate);
-  const bulkMutationDisabled = selectedCount === 0 || selectionHasForeignProject;
-  const bulkMutationTitle = selectionHasForeignProject
+  const selectionHasNonAdminProject = selectedProjects.some(({ creator }) => !(creator.canMutate || creator.canAdmin));
+  const bulkMoveDisabled = selectedCount === 0 || selectionHasNonAdminProject;
+  const bulkDeleteDisabled = selectedCount === 0 || selectionHasForeignProject;
+  const bulkMoveTitle = selectionHasNonAdminProject
+    ? t('recentProjects.ownOnlyMutation')
+    : selectedProjects.map(({ project }) => project.name).join('、') || undefined;
+  const bulkDeleteTitle = selectionHasForeignProject
     ? t('recentProjects.ownOnlyMutation')
     : selectedProjects.map(({ project }) => project.name).join('、') || undefined;
   const canBulkMoveToTeam = collaborationAvailable && space !== 'team';
@@ -1466,9 +1475,8 @@ function requestDelete(project: Project) {
       </>
     );
   }
-
  function requestBulkMove(action: 'to-team' | 'to-personal') {
-   if (bulkMutationDisabled) return;
+    if (bulkMoveDisabled) return;
    trackCollection(action === 'to-team' ? 'bulk_move_to_team' : 'bulk_move_to_personal', {
      selection_count_bucket: countBucket(selectedCount),
    });
@@ -1485,7 +1493,7 @@ function requestDelete(project: Project) {
    setBulkMoveAction(action);
  }
   function requestBulkMoveToFolder() {
-    if (bulkMutationDisabled) return;
+    if (bulkMoveDisabled) return;
     trackCollection('bulk_move_to_folder', {
       selection_count_bucket: countBucket(selectedCount),
     });
@@ -1841,8 +1849,8 @@ function requestDelete(project: Project) {
             {canBulkMove ? (
               <button
                 type="button"
-                disabled={bulkMutationDisabled}
-                title={bulkMutationTitle}
+                disabled={bulkMoveDisabled}
+                title={bulkMoveTitle}
                 onClick={() => requestBulkMove('to-team')}
               >
                 <Icon name="import" size={14} /> {t('recentProjects.moveTo')}
@@ -1851,8 +1859,8 @@ function requestDelete(project: Project) {
             {space === 'drafts' ? (
               <button
                 type="button"
-                disabled={bulkMutationDisabled}
-                title={bulkMutationTitle}
+                disabled={bulkMoveDisabled}
+                title={bulkMoveTitle}
                 onClick={() => requestBulkMoveToFolder()}
               >
                 <Icon name="folder" size={14} /> {t('recentProjects.moveTo')}
@@ -1861,8 +1869,8 @@ function requestDelete(project: Project) {
             {canBulkMoveToTeam ? (
               <button
                 type="button"
-                disabled={bulkMutationDisabled}
-                title={bulkMutationTitle}
+                disabled={bulkMoveDisabled}
+                title={bulkMoveTitle}
                 onClick={() => requestBulkMove('to-team')}
               >
                 <Icon name="import" size={14} /> {t('recentProjects.moveToTeam')}
@@ -1871,8 +1879,8 @@ function requestDelete(project: Project) {
             {canBulkMoveToPersonal ? (
               <button
                 type="button"
-                disabled={bulkMutationDisabled}
-                title={bulkMutationTitle}
+                disabled={bulkMoveDisabled}
+                title={bulkMoveTitle}
                 onClick={() => requestBulkMove('to-personal')}
               >
                 <Icon name="log-out" size={14} /> {t('recentProjects.moveOutOfTeam')}
@@ -1882,8 +1890,8 @@ function requestDelete(project: Project) {
               <button
                 type="button"
                 className="danger"
-                disabled={bulkMutationDisabled}
-                title={bulkMutationTitle}
+                disabled={bulkDeleteDisabled}
+                title={bulkDeleteTitle}
                 onClick={() => {
                   trackCollection('bulk_delete', {
                     selection_count_bucket: countBucket(selectedCount),
@@ -1929,7 +1937,7 @@ function requestDelete(project: Project) {
               status === 'incomplete');
           const shared = isShared(project.id);
           const selected = selectedProjectIds.has(project.id);
-          const readonlyShared = shared && !creator.canMutate;
+          const readonlyShared = shared && !(creator.canMutate || creator.canAdmin);
           const opening = openingProjectId === project.id;
           return (
             <div
@@ -2146,7 +2154,7 @@ function requestDelete(project: Project) {
                   </div>
                 </div>
               </button>
-              {actionsAvailable && !selectionMode && creator.canMutate ? (
+              {actionsAvailable && !selectionMode && (creator.canMutate || creator.canAdmin) ? (
                <div
                  className="recent-projects__card-menu-anchor"
                   ref={menuOpenId === project.id ? menuContainerRef : undefined}
@@ -2177,7 +2185,7 @@ function requestDelete(project: Project) {
                       role="menu"
                       onClick={(event) => event.stopPropagation()}
                     >
-                     {onRename ? (
+                     {onRename && creator.canMutate ? (
                        <button
                          type="button"
                          role="menuitem"
@@ -2197,7 +2205,7 @@ function requestDelete(project: Project) {
                          ownedBySelf gate Rename/Delete already carry, so it
                          stayed enabled on a foreign card and looked like a
                          dead click when pressed. */}
-                     {onDuplicate ? (
+                     {onDuplicate && creator.canMutate ? (
                        <button
                          type="button"
                          role="menuitem"
@@ -2214,8 +2222,8 @@ function requestDelete(project: Project) {
                        <button
                          type="button"
                          role="menuitem"
-                         disabled={sharingId === project.id || unsharingId === project.id || !creator.canMutate}
-                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         disabled={sharingId === project.id || unsharingId === project.id || !(creator.canMutate || creator.canAdmin)}
+                         title={!(creator.canMutate || creator.canAdmin) ? t('recentProjects.ownOnlyMutation') : undefined}
                          onClick={() => requestMoveToFolder(project)}
                        >
                          <Icon name="folder" size={12} />
@@ -2234,8 +2242,8 @@ function requestDelete(project: Project) {
                        <button
                          type="button"
                          role="menuitem"
-                         disabled={sharingId === project.id || unsharingId === project.id || !creator.canMutate}
-                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         disabled={sharingId === project.id || unsharingId === project.id || !(creator.canMutate || creator.canAdmin)}
+                         title={!(creator.canMutate || creator.canAdmin) ? t('recentProjects.ownOnlyMutation') : undefined}
                          onClick={() => requestMove(project, 'to-team')}
                        >
                          <Icon name="share" size={12} />
@@ -2263,8 +2271,8 @@ function requestDelete(project: Project) {
                        <button
                          type="button"
                          role="menuitem"
-                         disabled={sharingId === project.id || shared || !creator.canMutate}
-                         title={!creator.canMutate ? t('recentProjects.ownOnlyMutation') : undefined}
+                         disabled={sharingId === project.id || shared || !(creator.canMutate || creator.canAdmin)}
+                         title={!(creator.canMutate || creator.canAdmin) ? t('recentProjects.ownOnlyMutation') : undefined}
                          onClick={() => requestMove(project, 'to-team')}
                        >
                          <Icon name="share" size={12} />
@@ -2288,7 +2296,7 @@ function requestDelete(project: Project) {
                           )}
                         </div>
                       ) : null}
-                     {onDelete ? (
+                     {onDelete && creator.canMutate ? (
                        <button
                          type="button"
                          role="menuitem"

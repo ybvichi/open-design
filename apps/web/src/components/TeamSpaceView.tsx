@@ -174,27 +174,37 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
            {t('teamSpace.subtitle')}
          </span>
        </div>
-        <div className={styles.headerActions}>
-          {activeTab === 'projects' ? (
-            <button
-              type="button"
-              className={styles.inviteBtn}
-              onClick={() => setShowCreateGroup(true)}
-            >
-              <Icon name="plus" size={15} aria-hidden />
-              <span>{t('teamSpace.newProjectGroup')}</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.refreshBtn}
-            title={t('recentProjects.refresh')}
-            aria-label={t('recentProjects.refresh')}
-            onClick={() => window.dispatchEvent(new CustomEvent('hdw:folders-updated', { detail: { teamId } }))}
-          >
-            <Icon name="refresh" size={16} aria-hidden />
-          </button>
-        </div>
+       <div className={styles.headerActions}>
+         {activeTab === 'projects' || activeTab === 'members' ? (
+           <button
+             type="button"
+             className={styles.inviteBtn}
+             onClick={onInvite}
+           >
+             <Icon name="plus" size={15} aria-hidden />
+             <span>{t('teamSpace.inviteMember')}</span>
+           </button>
+         ) : null}
+         {activeTab === 'projects' ? (
+           <button
+             type="button"
+             className={styles.inviteBtn}
+             onClick={() => setShowCreateGroup(true)}
+           >
+             <Icon name="plus" size={15} aria-hidden />
+             <span>{t('teamSpace.newProjectGroup')}</span>
+           </button>
+         ) : null}
+         <button
+           type="button"
+           className={styles.refreshBtn}
+           title={t('recentProjects.refresh')}
+           aria-label={t('recentProjects.refresh')}
+           onClick={() => window.dispatchEvent(new CustomEvent('hdw:folders-updated', { detail: { teamId } }))}
+         >
+           <Icon name="refresh" size={16} aria-hidden />
+         </button>
+       </div>
      </header>
 
       <div ref={setTypeTabsEl} className={styles.typeTabs} role="tablist">
@@ -214,12 +224,12 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
       </div>
 
       <div className={styles.content} role="tabpanel">
-       {activeTab === 'projects' ? (
+        {activeTab === 'projects' ? (
           <ProjectsPanel controlsPortalTarget={typeTabsEl} teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
-       ) : null}
-       {activeTab === 'members' ? (
-        <MembersTable teamId={teamId} onInvite={onInvite} operator={operator} />
-       ) : null}
+        ) : null}
+        {activeTab === 'members' ? (
+          <MembersTable teamId={teamId} operator={operator} />
+        ) : null}
         {activeTab === 'skill' ? (
           <PlaceholderPanel icon="puzzle" label={t('teamSpace.tabSkill')} note={t('teamSpace.skillNote')} />
         ) : null}
@@ -717,7 +727,7 @@ function ProjectsPanel({
     </div>
   );
 }
-function MembersTable({ teamId, onInvite, operator }: { teamId?: string; onInvite?: () => void; operator: OperatorInfo | null }) {
+function MembersTable({ teamId, operator }: { teamId?: string; operator: OperatorInfo | null }) {
   const t = useT();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
@@ -877,13 +887,6 @@ function MembersTable({ teamId, onInvite, operator }: { teamId?: string; onInvit
 
   return (
     <div className={styles.membersWrap}>
-      <div className={styles.membersToolbar}>
-        <span className={styles.membersToolbarTitle}>{t('teamSpace.membersToolbar')}</span>
-        <button type="button" className={styles.inviteBtn} onClick={onInvite}>
-          <Icon name="plus" size={15} aria-hidden />
-          <span>{t('teamSpace.inviteMember')}</span>
-        </button>
-      </div>
       <div className={styles.tableScroll}>
         <table className={styles.table}>
           <thead>

@@ -1218,6 +1218,7 @@ export const ko: Dict = {
   'recentProjects.creatorLine': 'Created by {name}',
   'recentProjects.selfCreator': 'Me',
   'recentProjects.teamMemberCreator': 'Team member',
+  'recentProjects.readOnlyBadge': 'Read',
   'recentProjects.ownOnlyMutation': 'Only projects you created can be changed or deleted.',
   'recentProjects.shareInProgress': 'Sharing…',
   'recentProjects.sharedInTeam': 'In team space',

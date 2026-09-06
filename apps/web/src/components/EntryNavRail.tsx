@@ -644,9 +644,9 @@ export function EntryTopRightCluster({
   const [messageCenterOpen, setMessageCenterOpen] = useState(false);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   // Where the message-center panel returns keyboard focus on close. The
-  // 消息中心 row cannot be it: the account menu unmounts the row before the
-  // panel opens, so the account trigger it hangs off is the stable control.
-  const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
+  // bell button sits outside the hover menu, so it stays mounted while the
+  // panel is open — the stable control to return focus to.
+  const messageCenterButtonRef = useRef<HTMLButtonElement | null>(null);
   // Sign-out confirm gate (recvqgMWpJZqhL): the menu item only ARMS the
   // confirmation dialog; the real logout chain runs on explicit confirm.
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -798,8 +798,9 @@ export function EntryTopRightCluster({
               console, mirroring the menu's 额度 row), avatar on the right.
               The capsule owns the pill material; the segments inside are
               chrome-free click targets. */}
-          {context ? (
-            <>
+        {context ? (
+          <>
+            
               <div className="entry-top-right-account-pill">
           {/* {(billing || balanceLabel) && showCreditsBalance ? (
             <button
@@ -817,17 +818,44 @@ export function EntryTopRightCluster({
               <RemixIcon name="battery-charge-line" size={13} /> {balanceLabel ?? '—'}
             </button>
           ) : null} */}
+
             <div className="entry-nav-rail__account-updater" data-testid="entry-nav-account-updater">
               {updaterSlot}
             </div>
+            {/* Message-center bell button — a standalone icon control left
+              of the account avatar. Clicking opens the MessageCenter
+              panel; the unread dot mirrors the avatar's dot. It lives
+              outside the hover menu so it stays mounted (and focusable)
+              while the panel is open. */}
+             <button
+               ref={messageCenterButtonRef}
+               type="button"
+               className="entry-top-right-message-center od-tooltip"
+               aria-label={t('messageCenter.title')}
+               title={t('messageCenter.title')}
+               data-tooltip={t('messageCenter.title')}
+               data-tooltip-placement="bottom"
+               aria-haspopup="dialog"
+               aria-expanded={messageCenterOpen}
+               data-testid="entry-nav-message-center"
+               onClick={() => {
+                 trackAccountAction('message_center');
+                 setMessageCenterOpen(true);
+               }}
+             >
+               <Icon name="bell" size={16} />
+               {messageUnreadCount > 0 ? (
+                 <span className="entry-top-right-message-center-dot" aria-hidden />
+               ) : null}
+             </button>
             <div
               ref={accountContainerRef}
               className="entry-nav-rail__account entry-nav-rail__account--floating"
               onMouseEnter={cancelAccountClose}
               onMouseLeave={scheduleAccountClose}
             >
+              
               <button
-                ref={accountTriggerRef}
                 type="button"
                 className="entry-nav-rail__account-trigger"
                 onClick={() => {
@@ -854,9 +882,6 @@ export function EntryTopRightCluster({
                   aria-hidden
                 >
                   {accountInitial}
-                  {messageUnreadCount > 0 ? (
-                    <span className="entry-nav-rail__account-avatar-dot" data-testid="account-avatar-unread-dot" />
-                  ) : null}
                 </span>
               </button>
               {accountOpen ? (
@@ -937,24 +962,6 @@ export function EntryTopRightCluster({
                     >
                       <Icon name="settings" size={15} /> {t('entry.accountSettings')}
                     </button>
-                    <button
-                      type="button"
-                      className="entry-nav-rail__menu-item"
-                      role="menuitem"
-                      aria-haspopup="dialog"
-                      aria-expanded={messageCenterOpen}
-                      data-testid="account-menu-message-center"
-                      onClick={() => {
-                        trackAccountAction('message_center');
-                        closeAccountMenu();
-                        setMessageCenterOpen(true);
-                      }}
-                    >
-                      <Icon name="bell" size={15} /> {t('messageCenter.title')}
-                      {messageUnreadCount > 0 ? (
-                        <span className="entry-nav-rail__menu-item-dot" aria-hidden />
-                      ) : null}
-                    </button>
                     {/* The Discord/X/mail social row used to sit here (#5517).
                         It now lives in the nav rail's footer — see
                         `RailSocialRow` — so the account menu stays a pure list
@@ -996,14 +1003,14 @@ export function EntryTopRightCluster({
         document.body,
       )}
       {/* Panel + unread polling live here (outside the hover menu, which
-          unmounts when closed); the 消息中心 menu row above just opens it.
+          unmounts when closed); the bell button above just opens it.
           Signed-out shells have no account module — `EntryNavRail` mounts its
           own MessageCenter for that branch, so this one is context-gated to
           keep exactly one instance (and one unread poller) alive. */}
       {context ? (
         <MessageCenter
           hideTrigger
-          returnFocusRef={accountTriggerRef}
+          returnFocusRef={messageCenterButtonRef}
           open={messageCenterOpen}
           onOpenChange={setMessageCenterOpen}
           onUnreadCountChange={setMessageUnreadCount}

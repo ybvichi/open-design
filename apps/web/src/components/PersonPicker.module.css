@@ -87,7 +87,7 @@
  }
  .acItemSub {
    font-size: 12px;
-   color: var(--text-muted);
+   color: var(--text-faint);
    text-overflow: ellipsis;
    white-space: nowrap;
    text-align: left;

@@ -1617,9 +1617,10 @@ export interface Dict {
   'recentProjects.sharedBadge': string;
   'recentProjects.sharedProjectFallbackName': string;
   'recentProjects.creatorLine': string;
-  'recentProjects.selfCreator': string;
-  'recentProjects.teamMemberCreator': string;
-  'recentProjects.ownOnlyMutation': string;
+ 'recentProjects.selfCreator': string;
+ 'recentProjects.teamMemberCreator': string;
+ 'recentProjects.readOnlyBadge': string;
+ 'recentProjects.ownOnlyMutation': string;
   'recentProjects.shareInProgress': string;
   'recentProjects.sharedInTeam': string;
   'recentProjects.moveToTeam': string;

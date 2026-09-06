@@ -1218,6 +1218,7 @@ export const fr: Dict = {
   'recentProjects.creatorLine': 'Créé par {name}',
   'recentProjects.selfCreator': 'Moi',
   'recentProjects.teamMemberCreator': "Membre de l'équipe",
+  "recentProjects.readOnlyBadge": "Read",
   'recentProjects.ownOnlyMutation': 'Seuls les projets que vous avez créés peuvent être modifiés ou supprimés.',
   'recentProjects.shareInProgress': 'Partage…',
   'recentProjects.sharedInTeam': "Dans l'espace d'équipe",

@@ -6112,6 +6112,48 @@
   gap: 7px;
   min-height: 30px;
 }
+/* Message-center bell button — standalone icon control left of the account
+   avatar in the top-right cluster. Same circular target size as the avatar
+   trigger so the two read as a pair. */
+.entry-top-right-message-center {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  position: relative;
+  padding:0;
+  flex: 0 0 auto;
+}
+.entry-top-right-message-center:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.entry-top-right-message-center:focus,
+.entry-top-right-message-center:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.entry-top-right-message-center svg {
+  width: 16px;
+  height: 16px;
+}
+/* Unread-messages red dot on the bell's top-right corner. */
+.entry-top-right-message-center-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--bg-panel);
+}
 /* Avatar-only trigger at the capsule's right end: a circle sized to the
    capsule's inner height — the name/email/plan all live in the hover menu. */
 .entry-nav-rail__account--floating .entry-nav-rail__account-trigger {

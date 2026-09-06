@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
 //
-// The message-center panel moved behind two external openers on the rail (the
-// signed-in account menu's 消息中心 row and the signed-out rail item), with
-// `MessageCenter hideTrigger`. `hideTrigger` leaves the component's internal
-// `triggerRef` unattached, so `closePanel()` had nothing to restore focus to:
-// opening the panel focuses the portaled dialog, and closing it unmounted the
-// focused node and dropped keyboard focus to the document. Both openers also
-// have to advertise the dialog they own (`aria-haspopup="dialog"` plus the
-// `aria-expanded` state) — the built-in bell already did.
+// The message-center panel is opened from two external openers: the
+// signed-in bell button in the top-right cluster and the signed-out rail
+// item, both using `MessageCenter hideTrigger`. `hideTrigger` leaves the
+// component's internal `triggerRef` unattached, so `closePanel()` had
+// nothing to restore focus to: opening the panel focuses the portaled
+// dialog, and closing it unmounted the focused node and dropped keyboard
+// focus to the document. Both openers also have to advertise the dialog
+// they own (`aria-haspopup="dialog"` plus the `aria-expanded` state) — the
+// built-in bell already did.
 //
 // Focus must return to a control that is still mounted after the close: the
-// signed-in row lives in a hover menu that unmounts before the panel opens, so
-// the account trigger is the stable host control there.
+// signed-in bell button sits outside the hover menu, so it stays mounted
+// while the panel is open — the stable control to return focus to.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
@@ -82,30 +83,28 @@ afterEach(() => {
 describe('EntryNavRail message-center openers', () => {
   it('returns focus to the account trigger when the panel close button is clicked', async () => {
     renderRail(teamContext());
-    const accountTrigger = screen.getByTestId('entry-nav-account');
+    const bellButton = screen.getByTestId('entry-nav-message-center');
 
-    fireEvent.click(accountTrigger);
-    fireEvent.click(screen.getByTestId('account-menu-message-center'));
+    fireEvent.click(bellButton);
     await waitFor(() => expect(screen.getByTestId('message-center-dialog')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: '关闭消息中心' }));
 
     expect(screen.queryByTestId('message-center-dialog')).toBeNull();
-    expect(document.activeElement).toBe(accountTrigger);
+    expect(document.activeElement).toBe(bellButton);
   });
 
   it('returns focus to the account trigger when the panel closes via the backdrop', async () => {
     renderRail(teamContext());
-    const accountTrigger = screen.getByTestId('entry-nav-account');
+    const bellButton = screen.getByTestId('entry-nav-message-center');
 
-    fireEvent.click(accountTrigger);
-    fireEvent.click(screen.getByTestId('account-menu-message-center'));
+    fireEvent.click(bellButton);
     const dialog = await waitFor(() => screen.getByTestId('message-center-dialog'));
 
     fireEvent.mouseDown(screen.getByTestId('message-center-backdrop'));
 
     expect(dialog.isConnected).toBe(false);
-    expect(document.activeElement).toBe(accountTrigger);
+    expect(document.activeElement).toBe(bellButton);
   });
 
   it('returns focus to the signed-out rail opener when the panel closes', async () => {
@@ -132,9 +131,8 @@ describe('EntryNavRail message-center openers', () => {
     signedOut.unmount();
 
     renderRail(teamContext());
-    fireEvent.click(screen.getByTestId('entry-nav-account'));
-    const menuRow = screen.getByTestId('account-menu-message-center');
-    expect(menuRow.getAttribute('aria-haspopup')).toBe('dialog');
-    expect(menuRow.getAttribute('aria-expanded')).toBe('false');
+    const bellButton = screen.getByTestId('entry-nav-message-center');
+    expect(bellButton.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(bellButton.getAttribute('aria-expanded')).toBe('false');
   });
 });

@@ -16,8 +16,8 @@ export interface Person {
 
 function truncateDeptPath(path: string): string {
   const parts = path.split('\\').map((s) => s.trim()).filter(Boolean);
-  if (parts.length <= 3) return parts.join('/');
-  return '.../' + parts.slice(-3).join('/');
+  if (parts.length <= 2) return parts.join('/');
+  return '.../' + parts.slice(-2).join('/');
 }
 
 /**

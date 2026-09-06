@@ -1233,6 +1233,7 @@ export const zhCN: Dict = {
   "recentProjects.creatorLine": "{name}创建",
   "recentProjects.selfCreator": "我",
   "recentProjects.teamMemberCreator": "团队成员",
+  "recentProjects.readOnlyBadge": "读",
   "recentProjects.ownOnlyMutation": "只能修改或删除自己创建的项目。",
   "recentProjects.shareInProgress": "分享中…",
   "recentProjects.sharedInTeam": "已在团队空间",

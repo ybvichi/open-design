@@ -225,7 +225,7 @@ describe('standalone updater rocket placement after the account capsule', () => 
     expect(trigger.contains(rocket)).toBe(false);
 
     fireEvent.click(trigger);
-    await waitFor(() => expect(screen.getByTestId('account-menu-message-center')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('entry-nav-message-center')).toBeTruthy());
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
   });
 
