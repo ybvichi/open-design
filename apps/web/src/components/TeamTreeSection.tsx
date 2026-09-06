@@ -153,6 +153,12 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
   const [folderEditValue, setFolderEditValue] = useState('');
   const [renamingFolder, setRenamingFolder] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<TeamFolder | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const createFolderInputRef = useRef<HTMLInputElement>(null);
 
  // Fetch root-level folders for this team from the HDW folder API.
   // Folders are fetched eagerly on mount so we know whether to show the
@@ -212,6 +218,12 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
       folderInputRef.current.select();
     }
   }, [editingFolderId]);
+
+  useEffect(() => {
+    if (showCreateFolder && createFolderInputRef.current) {
+      createFolderInputRef.current.focus();
+    }
+  }, [showCreateFolder]);
 
   const startEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -348,6 +360,71 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     setEditingFolderId(null);
   };
 
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    setCreatingFolder(true);
+    try {
+      const res = await fetch('/api/hdw/webapi/v1/folder/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace_id: team.workspaceId,
+          folder_name: name,
+          operator_member_id: team.workspaceMemberId,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setNewFolderName('');
+        setShowCreateFolder(false);
+        setExpanded(true);
+        window.dispatchEvent(
+          new CustomEvent('hdw:folders-updated', { detail: { teamId: team.workspaceId } }),
+        );
+      }
+    } catch {
+      // ignore — user can retry
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const handleCreateFolderKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleCreateFolder();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setNewFolderName('');
+      setShowCreateFolder(false);
+    }
+  };
+
+  const confirmDeleteFolderAction = async () => {
+    const folder = confirmDeleteFolder;
+    if (!folder) return;
+    setDeletingFolder(true);
+    try {
+      const res = await fetch(
+        `/api/hdw/webapi/v1/folder/${folder.id}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
+        { method: 'DELETE' },
+      );
+      const body = await res.json().catch(() => null);
+      if (res.ok && body?.code === 0) {
+        setFolders((prev) => (prev ? prev.filter((f) => f.id !== folder.id) : prev));
+        window.dispatchEvent(
+          new CustomEvent('hdw:folders-updated', { detail: { teamId: team.workspaceId } }),
+        );
+      }
+    } catch {
+      // ignore — folder stays in the list
+    } finally {
+      setDeletingFolder(false);
+      setConfirmDeleteFolder(null);
+    }
+  };
+
   const handleFolderEditKeyDown = (folder: TeamFolder, e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -413,19 +490,45 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
                 <button
                   type="button"
                   className={styles.deleteBtn}
+                  onClick={(e) => { e.stopPropagation(); setShowCreateFolder(true); }}
+                  aria-label="add folder"
+                  tabIndex={-1}
+                >
+                  <Icon name="plus" size={13} />
+                </button>
+              ) : null}
+              {canDelete ? (
+                <button
+                  type="button"
+                  className={styles.deleteBtn}
                   onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
                   aria-label="delete"
                   tabIndex={-1}
                 >
                   <Icon name="trash" size={13} />
                 </button>
-              ) : (
-                <Icon name="more-horizontal" size={14} className={styles.actionIcon} />
-              )}
+              ) : null}
             </span>
           </>
         )}
       </div>
+      {showCreateFolder ? (
+        <div className={styles.folderList}>
+          <div className={styles.folderRow}>
+            <Icon name="folder-filled" size={13} className={styles.folderIcon} />
+            <input
+              ref={createFolderInputRef}
+              className={styles.editInput}
+              value={newFolderName}
+              disabled={creatingFolder}
+              placeholder={t('teamSpace.newFolderNamePlaceholder')}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onBlur={() => { if (!creatingFolder) { setNewFolderName(''); setShowCreateFolder(false); } }}
+              onKeyDown={handleCreateFolderKeyDown}
+            />
+          </div>
+        </div>
+      ) : null}
       {expanded && foldersLoading ? (
         <div className={styles.folderList} role="group">
           <div className={styles.skeletonRow} aria-hidden>
@@ -470,9 +573,19 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
               >
                 <Icon name="folder-filled" size={13} className={styles.folderIcon} />
                 <span className={styles.folderName}>{folder.name}</span>
-                <span className={styles.actions} aria-hidden="true">
-                  <Icon name="more-horizontal" size={14} className={styles.actionIcon} />
-                </span>
+                {canDelete ? (
+                  <span className={styles.actions}>
+                    <button
+                      type="button"
+                      className={styles.deleteBtn}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteFolder(folder); }}
+                      aria-label="delete"
+                      tabIndex={-1}
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -490,6 +603,25 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
                 </button>
                 <button type="button" className={styles.confirmOk} onClick={confirmDeleteTeam} disabled={deleting}>
                   {t('teamSpace.removeConfirmBtn')}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      ) : null}
+      {confirmDeleteFolder ? (
+        createPortal(
+          <div className={styles.confirmOverlay} onClick={() => setConfirmDeleteFolder(null)}>
+            <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
+              <h3 className={styles.confirmTitle}>{t('teamSpace.deleteFolderConfirmTitle')}</h3>
+              <p className={styles.confirmMsg}>{t('teamSpace.deleteFolderConfirmMsg')}</p>
+              <div className={styles.confirmActions}>
+                <button type="button" className={styles.confirmCancel} onClick={() => setConfirmDeleteFolder(null)}>
+                  {t('teamSpace.removeCancelBtn')}
+                </button>
+                <button type="button" className={styles.confirmOk} onClick={confirmDeleteFolderAction} disabled={deletingFolder}>
+                  {t('teamSpace.deleteFolder')}
                 </button>
               </div>
             </div>

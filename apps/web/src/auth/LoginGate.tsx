@@ -281,14 +281,14 @@ function LoginScreen({ onAuthed, fingerprint }: { onAuthed: (cb:any) => void; fi
      <div className={styles.topRightUpdater}>
         <UpdaterPopup />
       </div>
-      {appVersion && appVersion !== '0.0.0' ? (
+      {/* {appVersion && appVersion !== '0.0.0' ? (
         <div className={styles.bottomLeftVersion}>
           <span className={styles.versionBadge}>
             <span className={styles.versionDot} />
             v{appVersion}
           </span>
         </div>
-      ) : null}
+      ) : null} */}
       {/* Animated aurora background layers */}
       <div className={styles.aurora} aria-hidden>
         <div className={`${styles.auroraBlob} ${styles.auroraBlob1}`} />

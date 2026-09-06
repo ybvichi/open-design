@@ -9,7 +9,7 @@
   padding: 0 32px 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg-panel);
+  background: var(--bg-app);
   color: var(--text);
   font-size: 13px;
   outline: none;

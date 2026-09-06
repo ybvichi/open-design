@@ -3091,6 +3091,14 @@ export function projectCover(
   };
   const trimmed = project.name.trim();
   const initial = (trimmed ? Array.from(trimmed)[0]! : '?').toUpperCase();
+  // Catalog-only team projects have not been materialized locally yet - the
+  // files do not exist on disk. Any override (stale snapshot cache) or
+  // entryFile metadata would point the iframe at a /raw/ URL for a file that
+  // does not exist, producing a 404 load. Short-circuit to the fallback glyph
+  // before the override/entryFile paths can build a src.
+  if (project.metadata?.sharedProjectPlaceholderAt != null) {
+    return { kind: 'fallback', style, initial };
+  }
   if (override) {
     return {
       kind: override.kind,
@@ -3107,7 +3115,12 @@ export function projectCover(
   }
   const meta = project.metadata;
   const entry = meta?.entryFile;
-  if (entry) {
+  // Catalog-only team projects have metadata (including entryFile) synced from
+  // the team catalog, but the actual files are not materialized locally until
+  // the first open. Building a src from entryFile here would point the iframe
+  // at a /raw/ URL for a file that does not exist yet — a 404 load. Skip the
+  // entryFile path for placeholders so the card shows the fallback glyph.
+  if (entry && meta?.sharedProjectPlaceholderAt == null) {
     const src = projectCoverUrl(
       project.id,
       entry,
