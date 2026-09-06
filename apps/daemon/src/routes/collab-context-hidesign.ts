@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { getDefaultTeamId, getTeamMemberId } from '../ids.js';
-import { fetchHdwTeams } from '../http/hdw.js';
+import { fetchHdwTeams, hdwGet } from '../http/hdw.js';
+import { readSsoConfigFile } from '../http/hik_logins/hicoo.js';
 import type { VelaTeamProjectCatalog } from '../collab/vela-cli-team-projects.js';
 import type { TeamProject } from '@open-design/contracts';
 import type { SqliteDb } from '../db.js';
@@ -29,6 +30,104 @@ export interface RegisterCollabContextHideSignRoutesDeps {
    *  `ownerMemberId` with the local DB's authoritative
    *  `created_by_workspace_member_id` after cross-workspace transfers. */
   db?: SqliteDb | null;
+}
+
+interface HdwFolderProjectRow {
+  folder_id: string | null;
+  project_id: string;
+}
+
+/**
+ * Fetch project IDs for a folder via the HDW webapi `folder/project/list`
+ * endpoint. The HDW cloud team-projects catalog does not return `folder_id`,
+ * so this is the authoritative source for folder-project associations.
+ *
+* `folderId = 'root'` queries root-level projects (folder_id IS NULL).
+* Returns a Set of project IDs that belong to the folder.
+*/
+async function fetchFolderProjectIds(
+  dataDir: string | undefined,
+  workspaceId: string,
+  folderId: string,
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  try {
+    if (!dataDir) return ids;
+    const session = readSsoConfigFile(dataDir);
+    const username = session?.username?.trim() ?? '';
+    if (!username) return ids;
+    const data = await hdwGet<{ projects: HdwFolderProjectRow[] }>(
+      '/folder/project/list',
+      { workspace_id: workspaceId, folder_id: folderId },
+      session?.cookies,
+    );
+    if (!data?.projects) return ids;
+    for (const row of data.projects) {
+      if (typeof row.project_id === 'string') ids.add(row.project_id);
+    }
+  } catch {
+    // Best-effort: folder filtering must not break the project list.
+  }
+  return ids;
+}
+
+/**
+ * Recursively list ALL folders in a workspace (root + nested) and collect
+ * every project ID that lives in any folder. Used to compute root-level
+ * projects (folder_id IS NULL) as the set difference: catalog projects
+ * NOT in any folder. The HDW `folder/project/list?folder_id=root` endpoint
+ * returns empty, so root must be derived by exclusion.
+ */
+async function fetchAllFolderProjectIds(
+  dataDir: string | undefined,
+  workspaceId: string,
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!dataDir) return ids;
+  const session = readSsoConfigFile(dataDir);
+  const username = session?.username?.trim() ?? '';
+  if (!username) return ids;
+  const cookies = session?.cookies;
+  const visited = new Set<string>();
+  async function listFolderProjects(parentPid: string): Promise<void> {
+    try {
+      const data = await hdwGet<{ folders: Array<Record<string, unknown>> }>(
+        '/folder/list',
+        { workspace_id: workspaceId, folder_pid: parentPid },
+        cookies,
+      );
+      if (!data?.folders) return;
+      for (const folder of data.folders) {
+        const folderId =
+          (folder.folder_id as string | undefined) ??
+          (folder.id as string | undefined) ??
+          '';
+        if (!folderId || visited.has(folderId)) continue;
+        visited.add(folderId);
+        // Collect projects directly inside this folder.
+        try {
+          const projData = await hdwGet<{ projects: HdwFolderProjectRow[] }>(
+            '/folder/project/list',
+            { workspace_id: workspaceId, folder_id: folderId },
+            cookies,
+          );
+          if (projData?.projects) {
+            for (const row of projData.projects) {
+              if (typeof row.project_id === 'string') ids.add(row.project_id);
+            }
+          }
+        } catch {
+          // Best-effort: skip this folder's projects on error.
+        }
+        // Recurse into subfolders.
+        await listFolderProjects(folderId);
+      }
+    } catch {
+      // Best-effort: folder listing must not break the project list.
+    }
+  }
+  await listFolderProjects('');
+  return ids;
 }
 
 // --- Mock data -----------------------------------------------------------
@@ -281,54 +380,85 @@ export function registerCollabContextHideSignRoutes(
       res.json({ projects: [] });
       return;
     }
-  const wsId = req.header('x-od-workspace-id') ?? '';
-  if (!wsId) {
-    res.json({ projects: [] });
-    return;
-  }
-  // 可选 folder_id 过滤:
-  //   不传          → 全部项目
-  //   folder_id=xxx → 该文件夹下的项目
-  //   folder_id=root → 根目录项目 (folder_id IS NULL)
-  const folderFilter = typeof req.query.folder_id === 'string'
-    ? req.query.folder_id
-    : undefined;
-  let projects: TeamProject[];
-  try {
-    projects = await catalog.list(wsId, folderFilter === 'root' ? null : folderFilter);
-  } catch {
-     res.status(503).json({
-       error: 'UPSTREAM_UNAVAILABLE',
-       message: 'team project catalog is temporarily unavailable',
-       retryable: true,
-     });
-     return;
-  }
-  // The HDW cloud catalog ownerMemberId can be stale after a cross-workspace
-  // transfer it still carries the personal-space member ID. The same user
-  // has different member IDs across workspaces, so if ownerMemberId matches
-  // the default-team (personal space) member ID, replace it with the current
-  // user member ID in this workspace so the frontend correctly identifies
-  // the owner.
-  try {
-    const defaultTeamId = getDefaultTeamId();
-    const defaultMemberId = getTeamMemberId(defaultTeamId);
-    if (defaultMemberId && wsId !== defaultTeamId) {
-      const teams = await fetchHdwTeams(deps.dataDir);
-      const wsMemberId = teams.find((t) => t.workspace_id === wsId)?.workspace_member_id;
-      if (wsMemberId) {
-        projects = projects.map((p) =>
-          p.ownerMemberId === defaultMemberId
-            ? { ...p, ownerMemberId: wsMemberId }
-            : p,
-        );
-      }
+    const wsId = req.header('x-od-workspace-id') ?? '';
+    if (!wsId) {
+      res.json({ projects: [] });
+      return;
     }
-  } catch {
-    // Best-effort: if the directory fetch fails, return the original data.
-  }
-  res.json({ projects });
- });
+    // 可选 folder_id 过滤:
+    //   不传          → 全部项目
+    //   folder_id=xxx → 该文件夹下的项目
+    //   folder_id=root → 根目录项目 (folder_id IS NULL)
+    //
+    // The HDW cloud team-projects API does not support folder_id filtering
+    // and does not return folder_id on project records. When a folder_id is
+    // requested, fetch the authoritative folder-project associations from
+    // the HDW webapi folder/project/list endpoint and filter server-side so
+    // the frontend never needs to load the entire workspace catalog.
+    const folderFilter = typeof req.query.folder_id === 'string'
+      ? req.query.folder_id
+      : undefined;
+    let projects: TeamProject[];
+    try {
+      projects = await catalog.list(wsId);
+    } catch {
+      res.status(503).json({
+        error: 'UPSTREAM_UNAVAILABLE',
+        message: 'team project catalog is temporarily unavailable',
+        retryable: true,
+      });
+      return;
+    }
+   if (folderFilter !== undefined) {
+      if (folderFilter === 'root') {
+        // Root: projects NOT in any folder. The HDW webapi
+        // `folder/project/list?folder_id=root` returns empty, so
+        // root-level projects must be derived by exclusion — collect
+        // every project ID that lives in any folder, then keep the
+        // catalog projects that are NOT in that set.
+        const allFolderProjectIds = await fetchAllFolderProjectIds(
+          deps.dataDir,
+          wsId,
+        );
+        projects = projects
+          .filter((p) => !allFolderProjectIds.has(p.projectId))
+          .map((p) => ({ ...p, folderId: null }));
+      } else {
+        const folderProjectIds = await fetchFolderProjectIds(
+          deps.dataDir,
+          wsId,
+          folderFilter,
+        );
+        projects = projects
+          .filter((p) => folderProjectIds.has(p.projectId))
+          .map((p) => ({ ...p, folderId: folderFilter }));
+      }
+   }
+    // The HDW cloud catalog ownerMemberId can be stale after a cross-workspace
+    // transfer it still carries the personal-space member ID. The same user
+    // has different member IDs across workspaces, so if ownerMemberId matches
+    // the default-team (personal space) member ID, replace it with the current
+    // user member ID in this workspace so the frontend correctly identifies
+    // the owner.
+    try {
+      const defaultTeamId = getDefaultTeamId();
+      const defaultMemberId = getTeamMemberId(defaultTeamId);
+      if (defaultMemberId && wsId !== defaultTeamId) {
+        const teams = await fetchHdwTeams(deps.dataDir);
+        const wsMemberId = teams.find((t) => t.workspace_id === wsId)?.workspace_member_id;
+        if (wsMemberId) {
+          projects = projects.map((p) =>
+            p.ownerMemberId === defaultMemberId
+              ? { ...p, ownerMemberId: wsMemberId }
+              : p,
+          );
+        }
+      }
+    } catch {
+      // Best-effort: if the directory fetch fails, return the original data.
+    }
+    res.json({ projects });
+});
 
   app.get('/api/workspace/events', (req: Request, res: Response) => {
     logRequest('GET', '/api/workspace/events', req);

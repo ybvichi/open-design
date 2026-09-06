@@ -574,6 +574,13 @@
   color: var(--text-strong);
 }
 
+.folderControls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 32px;
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;

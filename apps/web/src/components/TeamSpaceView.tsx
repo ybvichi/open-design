@@ -258,11 +258,16 @@ interface TeamFolderItem {
 }
 
 /** Fetch all team projects for a workspace from the daemon's team-projects
- *  endpoint. Each project carries a `folderId` (null = root-level, string =
- *  in that folder). The caller filters client-side, avoiding N+1 requests
- *  to the deprecated folder/project/list API. */
-async function fetchTeamProjects(workspaceId: string): Promise<TeamProject[]> {
-  const res = await fetch('/api/workspace/projects/team', {
+ *  endpoint. When `folderId` is provided, the daemon filters server-side
+ *  via the HDW webapi folder/project/list endpoint so the frontend never
+ *  loads the entire workspace catalog. Pass `'root'` for root-level
+ *  projects (folder_id IS NULL). Omit to fetch all projects. */
+async function fetchTeamProjects(
+  workspaceId: string,
+  folderId?: string,
+): Promise<TeamProject[]> {
+  const qs = folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '';
+  const res = await fetch(`/api/workspace/projects/team${qs}`, {
     headers: { 'x-od-workspace-id': workspaceId },
     cache: 'no-store',
   });
@@ -394,10 +399,8 @@ function ProjectsPanel({
     const loadProjects = async () => {
       setProjectsLoading(true);
       try {
-        const allProjects = await fetchTeamProjects(teamId);
-        const projects = allProjects
-          .filter((tp) => !tp.folderId)
-          .map(teamProjectToProject);
+        const rootProjects = await fetchTeamProjects(teamId, 'root');
+        const projects = rootProjects.map(teamProjectToProject);
         if (cancelled) return;
         setProjects(projects);
       } catch {
@@ -1212,6 +1215,8 @@ function FoldersPanel({
   const [removeTarget, setRemoveTarget] = useState<TeamFolderItem | null>(null);
   const [removing, setRemoving] = useState(false);
 
+  const [controlsEl, setControlsEl] = useState<HTMLDivElement | null>(null);
+
   const operatorMemberId = operator?.memberId ?? null;
   const operatorRole = operator?.role ?? null;
  const canManage = operatorRole === 'owner' || operatorRole === 'admin';
@@ -1286,10 +1291,8 @@ function FoldersPanel({
     const loadProjects = async () => {
       setProjectsLoading(true);
       try {
-        const allProjects = await fetchTeamProjects(teamId);
-        const projects = allProjects
-          .filter((tp) => tp.folderId === folderId)
-          .map(teamProjectToProject);
+        const folderProjects = await fetchTeamProjects(teamId, folderId);
+        const projects = folderProjects.map(teamProjectToProject);
         if (cancelled) return;
         setProjects(projects);
       } catch {
@@ -1453,6 +1456,7 @@ function FoldersPanel({
           </>
         ) : null}
       </nav>
+      <div ref={setControlsEl} className={styles.folderControls} />
       {folders?.length?<div className={styles.folderList}>
         {loading ? (
           <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
@@ -1543,6 +1547,7 @@ function FoldersPanel({
             }}
             hideTitle
             operator={operator}
+            controlsPortalTarget={controlsEl}
           />
         )}
       </div>

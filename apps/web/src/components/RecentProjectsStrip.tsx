@@ -2146,9 +2146,9 @@ function requestDelete(project: Project) {
                   </div>
                 </div>
               </button>
-              {actionsAvailable && !selectionMode ? (
-                <div
-                  className="recent-projects__card-menu-anchor"
+              {actionsAvailable && !selectionMode && creator.canMutate ? (
+               <div
+                 className="recent-projects__card-menu-anchor"
                   ref={menuOpenId === project.id ? menuContainerRef : undefined}
                 >
                   <button

@@ -206,10 +206,12 @@ onRenameProject,
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<PersonalFolderItem | null>(null);
-  const [removing, setRemoving] = useState(false);
+ const [removeTarget, setRemoveTarget] = useState<PersonalFolderItem | null>(null);
+ const [removing, setRemoving] = useState(false);
 
-  // Fetch subfolders whose folder_pid equals the current folderId.
+ const [controlsEl, setControlsEl] = useState<HTMLDivElement | null>(null);
+
+ // Fetch subfolders whose folder_pid equals the current folderId.
   useEffect(() => {
     if (!workspaceId || !folderId) { setFolders([]); return; }
     let cancelled = false;
@@ -387,12 +389,9 @@ onRenameProject,
           </>
         ) : null}
       </nav>
-      <div className={styles.folderList}>
-        {loading ? (
-          <div className={styles.folderEmpty}>{t('teamSpace.loading')}</div>
-       ) : folders.length === 0 ? (
-         null
-       ) : folders.map((folder) => (
+      <div ref={setControlsEl} className={styles.folderControls} />
+      {folders.length > 0 ? <div className={styles.folderList}>
+        {folders.map((folder) => (
           <article
             key={folder.folderId}
             className={styles.folderCard}
@@ -447,9 +446,9 @@ onRenameProject,
                 </div>
               </div>
             </div>
-         </article>
-       ))}
-     </div>
+        </article>
+      ))}
+     </div> : null}
       {/* Projects directly inside this folder (folder_id = folderId).
           Rendered below the subfolder cards so the two areas stay
           visually separate, mirroring the personal-all layout. */}
@@ -471,13 +470,14 @@ onRenameProject,
            setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
            onRenameProject?.(id, name);
          }}
-         hideTitle
-          currentWorkspaceId={workspaceId}
-          currentFolderId={folderId ?? null}
-       />
-        )}
-      </div>
-      {showCreateFolder ? (
+        hideTitle
+         currentWorkspaceId={workspaceId}
+         currentFolderId={folderId ?? null}
+         controlsPortalTarget={controlsEl}
+      />
+       )}
+     </div>
+     {showCreateFolder ? (
         createPortal(
           <div className={styles.confirmOverlay} onClick={() => onShowCreateFolderChange(false)}>
             <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
