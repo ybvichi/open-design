@@ -1386,6 +1386,14 @@ function projectCover(
 			brandHost: brandHostname(meta.brandSourceUrl),
 		};
 	}
+	// Catalog-only team projects have not been materialized locally yet - the
+	// files do not exist on disk. Any override (stale snapshot cache) or
+	// entryFile metadata would point the iframe at a /raw/ URL for a file that
+	// does not exist, producing a 404 load. Short-circuit to the fallback glyph
+	// before the override/entryFile paths can build a src.
+	if (meta?.sharedProjectPlaceholderAt != null) {
+		return { kind: "fallback", style, initial };
+	}
 	if (override) {
 		return {
 			kind: override.kind,
@@ -1401,7 +1409,7 @@ function projectCover(
 		};
 	}
 	const entry = meta?.entryFile;
-	if (entry) {
+	if (entry && meta?.sharedProjectPlaceholderAt == null) {
 		const src = projectCoverUrl(
 			project.id,
 			entry,
