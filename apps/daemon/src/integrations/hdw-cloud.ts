@@ -124,6 +124,39 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
     }
   }
 
+
+  /** Fetch the HDW workspace member roster and build a Map of
+   *  workspace_member_id -> displayname for owner-name enrichment. */
+  async function fetchMemberDisplayNames(workspaceId: string): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    try {
+      const { payload } = await request<{
+        code: number;
+        data?: {
+          members?: Array<{
+            workspace_member_id?: string;
+            displayname?: string;
+            username?: string;
+          }>;
+        };
+      }>(
+        'GET',
+        `/webapi/v1/team/${encodeURIComponent(workspaceId)}/members`,
+        undefined,
+        { 'x-hdw-workspace-id': workspaceId },
+      );
+      const members = payload?.data?.members ?? [];
+      for (const m of members) {
+        const id = m.workspace_member_id?.trim();
+        const name = m.displayname?.trim() || m.username?.trim() || '';
+        if (id && name) names.set(id, name);
+      }
+    } catch {
+      // Best-effort: member fetch must not break the project list.
+    }
+    return names;
+  }
+
   return {
     isConfigured(): boolean {
       return true;
@@ -278,7 +311,8 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       }
     },
 
-    /** List team projects for a workspace. */
+    /** List team projects for a workspace, enriched with the owner's
+     *  display name from the HDW workspace_members table. */
     async listTeamProjects(
       workspaceId: string,
       folderId?: string | null,
@@ -294,7 +328,24 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
         undefined,
         { 'x-hdw-workspace-id': workspaceId },
       );
-      return payload.projects ?? [];
+      const projects = payload.projects ?? [];
+      // Enrich each project with the owner's display name by resolving
+      // ownerMemberId -> workspace_member_id -> displayname from the
+      // HDW member roster. Best-effort: failures must not break the list.
+      if (projects.length > 0) {
+        try {
+          const memberNames = await fetchMemberDisplayNames(workspaceId);
+          if (memberNames.size > 0) {
+            for (const p of projects) {
+              const dn = p.ownerMemberId ? memberNames.get(p.ownerMemberId) : undefined;
+              if (dn) p.ownerDisplayName = dn;
+            }
+          }
+        } catch {
+          // Best-effort: name enrichment must not break the project list.
+        }
+      }
+      return projects;
     },
 
     /** Get a single team project. */
@@ -458,6 +509,9 @@ export interface HdwTeamProjectRecord {
    *  return this as `folder_id` (snake_case). */
   folderId?: string | null;
   folder_id?: string | null;
+  /** Owner's display name, enriched from the HDW workspace_members table
+   *  by joining ownerMemberId → workspace_member_id at query time. */
+  ownerDisplayName?: string | null;
 }
 
 export interface HdwUpsertTeamProjectInput {

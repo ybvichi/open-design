@@ -136,8 +136,9 @@ interface Props {
   ) => Promise<boolean> | boolean | void;
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
-  onDuplicateProject?: (id: string) => Promise<void> | void;
-  onRenameProject: (id: string, name: string) => void;
+ onDuplicateProject?: (id: string) => Promise<void> | void;
+ onRenameProject: (id: string, name: string) => void;
+ onCopyProject?: (id: string) => Promise<void> | void;
   onProjectsRefresh?: () => Promise<void> | void;
   onTeamProjectContentReady?: (
     projectId: string,
@@ -292,9 +293,10 @@ export function EntryView({
   onOpenProject,
   onOpenLiveArtifact,
   onDeleteProject,
-  onDuplicateProject,
-  onRenameProject,
-  onProjectsRefresh,
+ onDuplicateProject,
+ onRenameProject,
+ onProjectsRefresh,
+ onCopyProject,
   onTeamProjectContentReady,
   onChangeDefaultDesignSystem,
   onCreateDesignSystem,
@@ -417,8 +419,9 @@ export function EntryView({
       onOpenProject={onOpenProject}
       onOpenLiveArtifact={onOpenLiveArtifact}
       onDeleteProject={onDeleteProject}
-      onDuplicateProject={onDuplicateProject}
-      onRenameProject={onRenameProject}
+     onDuplicateProject={onDuplicateProject}
+     onRenameProject={onRenameProject}
+     onCopyProject={onCopyProject}
       onProjectsRefresh={onProjectsRefresh}
       onTeamProjectContentReady={onTeamProjectContentReady}
       onChangeDefaultDesignSystem={onChangeDefaultDesignSystem}

@@ -4893,6 +4893,142 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
           err.retryable ? { retryable: true } : {},
         );
       }
+     sendApiError(res, 400, 'BAD_REQUEST', String(err));
+   }
+ });
+  // Copy a team-shared project into the caller's personal workspace. Unlike
+  // /duplicate, this route does NOT require the caller to be the project
+  // creator — any active member of the source team workspace may copy a
+  // team project to their own personal space. The source project stays in
+  // the team workspace untouched; only a new personal copy is created.
+  app.post('/api/workspaces/:workspaceId/projects/:projectId/copy-to-personal', async (req, res) => {
+    const sourceProject = getProject(db, req.params.projectId);
+    try {
+      const locations = await configuredProjectLocations();
+      if (!sourceProject || !projectVisibleForLocations(sourceProject, locations)) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
+      // Read authority: any active team member can read (and therefore copy)
+      // a team-shared project. This deliberately uses 'read' mode, NOT
+      // 'duplicate' capability, because the caller is creating a NEW project
+      // in their personal workspace — they are not mutating the source.
+      if (!await authorizeProjectRequest(req, res, sourceProject.id, { mode: 'read' })) return;
+      if (isDesignSystemLikeProject(sourceProject)) {
+        return sendApiError(
+          res,
+          400,
+          'PROJECT_ALREADY_DESIGN_SYSTEM',
+          'project is already a design-system workspace',
+        );
+      }
+      // Resolve the caller's personal (default-team) workspace from the
+      // directory. The personal workspace is a different workspace from the
+      // source team, with a different member ID.
+      const personalIdentity = await resolveTargetWorkspaceIdentity();
+      if (!personalIdentity) {
+        return sendApiError(
+          res,
+          403,
+          'WORKSPACE_ACCESS_DENIED',
+          'could not resolve a personal workspace for the current user',
+        );
+      }
+      const targetFolderId: string | null =
+        typeof req.body?.targetFolderId === 'string' && req.body.targetFolderId.trim()
+          ? req.body.targetFolderId.trim()
+          : null;
+
+      const targetProjectId = randomId();
+      const targetName = normalizeProjectDuplicateName(req.body?.name, sourceProject);
+      const metadata = cloneProjectMetadataForDuplicate(sourceProject);
+      let insertedProject = false;
+      try {
+        await ensureProject(PROJECTS_DIR, targetProjectId, metadata);
+        const sourceFiles = await listFiles(PROJECTS_DIR, sourceProject.id, {
+          metadata: sourceProject.metadata,
+        });
+        const copiedFiles: string[] = [];
+        for (const file of sourceFiles) {
+          if (!file?.name || typeof file.name !== 'string') continue;
+          const sourceFile = await readProjectFile(
+            PROJECTS_DIR,
+            sourceProject.id,
+            file.name,
+            sourceProject.metadata,
+          );
+          await writeProjectFile(
+            PROJECTS_DIR,
+            targetProjectId,
+            sourceFile.name,
+            sourceFile.buffer,
+            {
+              overwrite: true,
+              ...(sourceFile.artifactManifest ? { artifactManifest: sourceFile.artifactManifest } : {}),
+            },
+            metadata,
+          );
+          copiedFiles.push(sourceFile.name);
+        }
+
+        const now = Date.now();
+        const project = insertProject(db, {
+          id: targetProjectId,
+          name: targetName,
+          skillId: sourceProject.skillId ?? null,
+          designSystemId: sourceProject.designSystemId ?? null,
+          pendingPrompt: null,
+          metadata,
+          customInstructions: sourceProject.customInstructions ?? null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        insertedProject = true;
+        // Bind the copy into the caller's personal workspace, not the
+        // source team workspace. The personal workspace member ID is the
+        // caller's own identity in that workspace.
+        ensureWorkspaceProject(db, {
+          projectId: targetProjectId,
+          workspaceId: personalIdentity.workspaceId,
+          visibility: 'personal',
+          resourceState: 'active',
+          createdByWorkspaceMemberId: personalIdentity.workspaceMemberId,
+          updatedByWorkspaceMemberId: personalIdentity.workspaceMemberId,
+          syncState: 'local_only',
+          resourceHubResourceId: null,
+          cloudTombstonedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          ...(targetFolderId ? { folderId: targetFolderId } : {}),
+        });
+        const conversationId = randomId();
+        insertConversation(db, {
+          id: conversationId,
+          projectId: targetProjectId,
+          title: null,
+          sessionMode: 'design',
+          createdAt: now,
+          updatedAt: now,
+        });
+        try {
+          const tabs = listTabs(db, sourceProject.id);
+          setTabs(db, targetProjectId, tabs);
+        } catch {
+          // Open-tabs state is convenience metadata; file duplication succeeds
+          // without it.
+        }
+        /** @type {import('@open-design/contracts').DuplicateProjectResponse} */
+        const body = {
+          project: { ...project, workspaceId: personalIdentity.workspaceId },
+          conversationId,
+          copiedFiles,
+        };
+        res.json(body);
+      } catch (err) {
+        if (insertedProject) dbDeleteProject(db, targetProjectId);
+        await removeProjectDir(PROJECTS_DIR, targetProjectId).catch(() => {});
+        throw err;
+      }
+    } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
     }
   });

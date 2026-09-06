@@ -298,8 +298,9 @@ function teamProjectToProject(tp: TeamProject): Project {
     designSystemId: tp.designSystemId ?? null,
     createdAt: typeof tp.createdAt === 'number' ? tp.createdAt : fallback,
     updatedAt: typeof tp.updatedAt === 'number' ? tp.updatedAt : fallback,
-    createdByWorkspaceMemberId: tp.ownerMemberId ?? null,
-    ...(tp.metadata ? { metadata: tp.metadata } : {}),
+  createdByWorkspaceMemberId: tp.ownerMemberId ?? null,
+  ownerDisplayName: tp.ownerDisplayName ?? null,
+  ...(tp.metadata ? { metadata: tp.metadata } : {}),
   };
 }
 

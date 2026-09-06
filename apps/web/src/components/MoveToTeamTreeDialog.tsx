@@ -65,7 +65,10 @@ interface MoveToTeamTreeDialogProps {
   mode?: 'team' | 'personal-folders' | 'tabbed';
   /** When false (user is not the project owner), hide the personal-space tab
    *  in 'tabbed' mode. Admins can move to other teams but never to personal. */
-  canMoveToPersonal?: boolean;
+ canMoveToPersonal?: boolean;
+  /** When true, the dialog uses copy-to-personal wording (title, description,
+   *  confirm button) instead of move wording. Does not change tree behavior. */
+  copyMode?: boolean;
 }
 
 /** Fetch folders under a workspace (root when folderPid is null). */
@@ -336,7 +339,8 @@ export function MoveToTeamTreeDialog({
   currentWorkspaceId,
   mode = 'team',
   disabledKeys,
-  canMoveToPersonal = true,
+ canMoveToPersonal = true,
+  copyMode = false,
 }: MoveToTeamTreeDialogProps) {
   const t = useT();
   const titleId = useId();
@@ -441,8 +445,8 @@ const showPersonalTab = mode === 'tabbed' && canMoveToPersonal;
       closeOnEscape
       ariaLabelledBy={titleId}
     >
-      <DialogTitle id={titleId}>{showPersonal ? t('recentProjects.moveTo') : t('recentProjects.moveToTeam')}</DialogTitle>
-      <DialogDescription>{showPersonal ? t('recentProjects.moveTreeDesc') : t('recentProjects.moveToTeamTreeDesc')}</DialogDescription>
+      <DialogTitle id={titleId}>{copyMode ? t('recentProjects.copyToPersonal') : showPersonal ? t('recentProjects.moveTo') : t('recentProjects.moveToTeam')}</DialogTitle>
+      <DialogDescription>{copyMode ? t('recentProjects.copyToPersonalDesc') : showPersonal ? t('recentProjects.moveTreeDesc') : t('recentProjects.moveToTeamTreeDesc')}</DialogDescription>
       {mode === 'tabbed' && showPersonalTab ? (
         <div className={styles.tabs}>
           <button
@@ -504,7 +508,7 @@ const showPersonalTab = mode === 'tabbed' && canMoveToPersonal;
           onClick={handleConfirm}
           disabled={!selected || busy}
         >
-          {showPersonal ? t('recentProjects.confirmMove') : t('recentProjects.confirmMoveToTeam')}
+          {copyMode ? t('recentProjects.confirmCopyToPersonal') : showPersonal ? t('recentProjects.confirmMove') : t('recentProjects.confirmMoveToTeam')}
         </button>
       </DialogFooter>
     </Dialog>

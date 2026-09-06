@@ -934,6 +934,60 @@ export async function duplicateProject(
   }
 }
 
+/**
+ * Copy a team-shared project into the caller's personal workspace. Unlike
+ * duplicateProject, this does NOT require the caller to be the project
+ * creator — any active team member may copy a team project to their personal
+ * space. The source project stays in the team workspace untouched.
+ */
+export async function copyProjectToPersonal(
+  projectId: string,
+  workspaceContext: WorkspaceCollabContext | null,
+  options?: { targetFolderId?: string | null },
+): Promise<DuplicateProjectResponse> {
+  if (!workspaceContext) throw new Error('Workspace context is required');
+  const resp = await fetch(
+    `/api/workspaces/${encodeURIComponent(workspaceContext.workspaceId)}/projects/${encodeURIComponent(projectId)}/copy-to-personal`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...workspaceProjectHeaders(workspaceContext),
+      },
+      body: JSON.stringify(
+        options?.targetFolderId
+          ? { targetFolderId: options.targetFolderId }
+          : {},
+      ),
+    },
+  );
+  if (!resp.ok) {
+    let message = 'Could not copy project to personal space';
+    try {
+      const body = await resp.json() as { error?: unknown };
+      if (
+        body.error &&
+        typeof body.error === 'object' &&
+        'message' in body.error &&
+        typeof body.error.message === 'string' &&
+        body.error.message.trim()
+      ) {
+        message = body.error.message;
+      } else if (typeof body.error === 'string' && body.error.trim()) {
+        message = body.error;
+      }
+    } catch {
+      // Keep the generic fallback when the error body is absent or invalid.
+    }
+    throw new Error(message);
+  }
+  const created = (await resp.json()) as DuplicateProjectResponse;
+  // The copy lands in the caller's personal workspace; mark it as created by
+  // the viewer so it shows up in the personal drafts list immediately.
+  markProjectCreatedByViewer(created.project.id, null);
+  return created;
+}
+
 export async function pickLocalFolderPath(): Promise<string | null> {
   const resp = await fetch('/api/dialog/open-folder', {
     method: 'POST',

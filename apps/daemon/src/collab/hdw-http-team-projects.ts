@@ -26,6 +26,9 @@ function toTeamProject(record: HdwTeamProjectRecord): TeamProject | null {
   // The HDW backend may return it as either camelCase or snake_case.
   const folderId = record.folderId ?? record.folder_id ?? null;
   project.folderId = folderId;
+  if (record.ownerDisplayName?.trim()) {
+    project.ownerDisplayName = record.ownerDisplayName.trim();
+  }
   if (record.displayName?.trim()) {
     project.name = record.displayName.trim();
   }

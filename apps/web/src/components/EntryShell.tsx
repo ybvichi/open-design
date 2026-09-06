@@ -477,9 +477,10 @@ interface Props {
   ) => Promise<boolean> | boolean | void;
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
-  onDuplicateProject?: (id: string) => Promise<void> | void;
-  onRenameProject: (id: string, name: string) => void;
-  onProjectsRefresh?: () => Promise<void> | void;
+ onDuplicateProject?: (id: string) => Promise<void> | void;
+ onRenameProject: (id: string, name: string) => void;
+ onProjectsRefresh?: () => Promise<void> | void;
+ onCopyProject?: (id: string) => Promise<void> | void;
   onTeamProjectContentReady?: (
     projectId: string,
     workspaceId: string,
@@ -589,10 +590,11 @@ export function EntryShell({
   onOpenProject,
   onOpenLiveArtifact,
   onDeleteProject,
-  onDuplicateProject,
-  onRenameProject,
-  onProjectsRefresh,
-  onTeamProjectContentReady,
+ onDuplicateProject,
+ onRenameProject,
+ onProjectsRefresh,
+ onTeamProjectContentReady,
+ onCopyProject,
   onChangeDefaultDesignSystem,
   onCreateDesignSystem,
   onOpenDesignSystem,
@@ -2030,9 +2032,10 @@ export function EntryShell({
             designSystems={designSystems}
             onOpenProject={onOpenProject}
             onDeleteProject={onDeleteProject}
-            onDuplicateProject={onDuplicateProject}
-            onRenameProject={onRenameProject}
-           />
+           onDuplicateProject={onDuplicateProject}
+           onRenameProject={onRenameProject}
+           onCopyProject={onCopyProject}
+         />
          ) : null}
          {view === 'personal-folder' ? (
            <PersonalFolderView

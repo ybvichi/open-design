@@ -3479,10 +3479,27 @@ function AppInner() {
         fileName: null,
       });
     },
+   [rememberLocalProject, resolveSourceProjectWorkspaceContext],
+ );
+
+  // Copy (duplicate) a project in the personal-all view without navigating
+  // to the new project. The personal:folders-updated event refreshes the list.
+  const handleCopyProject = useCallback(
+    async (sourceProjectId: string, input: { name?: string } = {}) => {
+      const sourceWorkspaceContext =
+        await resolveSourceProjectWorkspaceContext(sourceProjectId);
+      const result = await duplicateProject(sourceProjectId, input, sourceWorkspaceContext);
+      rememberLocalProject(result.project.id);
+      setProjects((curr) => [
+        result.project,
+        ...curr.filter((p) => p.id !== result.project.id),
+      ]);
+      window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+    },
     [rememberLocalProject, resolveSourceProjectWorkspaceContext],
   );
 
-  const handleCreatePluginShareProject = useCallback(
+ const handleCreatePluginShareProject = useCallback(
     async (
       pluginId: string,
       action: PluginShareAction,
@@ -5413,9 +5430,10 @@ function AppInner() {
         onOpenProject={handleOpenProject}
         onOpenLiveArtifact={handleOpenLiveArtifact}
         onDeleteProject={handleDeleteProject}
-        onDuplicateProject={handleDuplicateProject}
-        onRenameProject={handleRenameProject}
-        onProjectsRefresh={refreshProjectsStrict}
+       onDuplicateProject={handleDuplicateProject}
+       onRenameProject={handleRenameProject}
+       onProjectsRefresh={refreshProjectsStrict}
+       onCopyProject={handleCopyProject}
         onTeamProjectContentReady={handleTeamProjectContentReady}
         onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
         onCreateDesignSystem={() => {

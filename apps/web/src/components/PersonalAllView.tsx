@@ -61,9 +61,10 @@ function PersonalProjectsPanel({
   designSystems,
   onOpenProject,
   onDeleteProject,
-  onDuplicateProject,
-  onRenameProject,
-  controlsPortalTarget,
+ onDuplicateProject,
+ onRenameProject,
+ controlsPortalTarget,
+ onCopyProject,
 }: {
   workspaceId: string | null;
   showCreateGroup: boolean;
@@ -71,9 +72,10 @@ function PersonalProjectsPanel({
   designSystems: DesignSystemSummary[];
   onOpenProject: (id: string) => void;
   onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
-  onDuplicateProject?: (id: string) => Promise<void> | void;
-  onRenameProject: (id: string, name: string) => void;
-  controlsPortalTarget?: HTMLElement | null;
+ onDuplicateProject?: (id: string) => Promise<void> | void;
+ onRenameProject: (id: string, name: string) => void;
+ controlsPortalTarget?: HTMLElement | null;
+ onCopyProject?: (id: string) => Promise<void> | void;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<PersonalFolderItem[]>([]);
@@ -367,7 +369,7 @@ function handleFolderClick(folder: PersonalFolderItem) {
           space="drafts"
          onOpen={(id) => onOpenProject(id)}
          onDelete={onDeleteProject}
-         onDuplicate={onDuplicateProject}
+         onDuplicate={onCopyProject ?? onDuplicateProject}
         onRename={(id, name) => {
           setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
           onRenameProject?.(id, name);
@@ -475,12 +477,14 @@ export function PersonalAllView({
   onDeleteProject,
   onDuplicateProject,
   onRenameProject,
+  onCopyProject,
 }: {
   designSystems?: DesignSystemSummary[];
   onOpenProject: (id: string) => void;
   onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
   onDuplicateProject?: (id: string) => Promise<void> | void;
   onRenameProject: (id: string, name: string) => void;
+  onCopyProject?: (id: string) => Promise<void> | void;
 }) {
   const t = useT();
  const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
@@ -588,6 +592,7 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
          onOpenProject={onOpenProject}
          onDeleteProject={onDeleteProject}
          onDuplicateProject={onDuplicateProject}
+          onCopyProject={onCopyProject}
          onRenameProject={onRenameProject}
         />
         ) : (

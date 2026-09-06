@@ -2048,7 +2048,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             {figmaHelpOpen ? (
               <FigmaHelpModal onClose={() => setFigmaHelpOpen(false)} />
             ) : null}
-            <TemplatePicker
+            {/* <TemplatePicker
               templates={templateChips}
               activeChipId={activeChipId}
               previewChipId={previewTemplateId}
@@ -2056,7 +2056,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               pickDisabled={pluginsLoading || pendingChipId !== null || pendingPluginId !== null}
               labelFor={(id) => homeHeroChipLabel(id, t)}
               onPick={handlePickTaskChip}
-            />
+            /> */}
             {footerInputFields.length > 0 ? (
               <div className="home-hero__footer-options" data-testid="home-hero-footer-options">
                 {footerInputFields.map((field) => (

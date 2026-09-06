@@ -113,7 +113,8 @@ export interface ProjectCollectionClickProps extends TrackingWorkspaceDimensions
     | 'filter'
     | 'sort'
     | 'view_toggle'
-    | 'invite_teammates';
+    | 'invite_teammates'
+    | 'copy_to_personal';
   project_key?: string;
   project_relation?: TrackingProjectRelation;
   selection_count_bucket?: TrackingCountBucket;
@@ -183,6 +184,7 @@ export interface WorkspaceProjectActionResultProps extends TrackingWorkspaceDime
     | 'bulk_move_to_personal'
     | 'bulk_move_to_folder'
     | 'bulk_delete'
+    | 'copy_to_personal'
   result: 'success' | 'partial_success' | 'failed';
   requested_count: number;
   succeeded_count: number;

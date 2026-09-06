@@ -68,7 +68,7 @@ async function fetchFolderProjectIds(
   } catch {
     // Best-effort: folder filtering must not break the project list.
   }
-  return ids;
+ return ids;
 }
 
 /**
@@ -454,10 +454,10 @@ export function registerCollabContextHideSignRoutes(
           );
         }
       }
-    } catch {
-      // Best-effort: if the directory fetch fails, return the original data.
-    }
-    res.json({ projects });
+   } catch {
+     // Best-effort: if the directory fetch fails, return the original data.
+   }
+   res.json({ projects });
 });
 
   app.get('/api/workspace/events', (req: Request, res: Response) => {

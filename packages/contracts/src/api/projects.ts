@@ -387,7 +387,10 @@ export interface Project {
    * creator column) — a client must treat absence as "unknown creator",
    * NOT "created by me".
    */
-  createdByWorkspaceMemberId?: string | null;
+createdByWorkspaceMemberId?: string | null;
+  /** Display name of the owning workspace member, resolved by the daemon
+   *  from the HDW member roster at query time. */
+  ownerDisplayName?: string | null;
 }
 
 export interface ProjectTemplate {

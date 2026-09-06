@@ -42,7 +42,7 @@ import {
   canAccessWorkspaceInviteFlow,
   resolveWorkspaceInviteTarget,
 } from './EntryNavRail';
-import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
+import { copyProjectToPersonal, moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
 import {
   workspaceContextHasTeamIdentity,
   type WorkspaceCollabContext,
@@ -181,6 +181,7 @@ operator?: TeamSpaceOperator | null;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
+const EMPTY_MAP: ReadonlyMap<string, string> = new Map();
 /** Fallback for a caller with no sharing surface (no workspace, no grids). */
 const NOTHING_SHARED: SharedProjectPredicate = () => false;
 /** The chip a design-system project wears. Product name, not a translated
@@ -399,12 +400,54 @@ operator,
   // Real creator resolution (replaces the demo's mock 李娜/张伟 roster): the
   // member directory turns an ownerMemberId into a display name, while the
   // workspace context supplies the signed-in user's own name and profile image.
-  const { resolve: resolveMember } = useTeamMembers();
-  const {
-    context: workspaceContext,
-    loading: workspaceContextLoading,
-  } = useWorkspaceContext();
-  // A cover request captures the complete identity at dispatch. A mutable ref
+ const { resolve: resolveMember } = useTeamMembers();
+ const {
+   context: workspaceContext,
+   loading: workspaceContextLoading,
+ } = useWorkspaceContext();
+  // HDW team members fetched directly from the HDW API so the owner badge
+  // can resolve ownerMemberId → displayname without relying on the Vela
+  // collab-cloud roster (which may use different member IDs). The HDW
+  // /team/{workspaceId}/members endpoint returns workspace_member_id +
+  // displayname, which match the team-project ownerMemberId.
+  const [hdwMemberNames, setHdwMemberNames] = useState<ReadonlyMap<string, string>>(EMPTY_MAP);
+  useEffect(() => {
+    const teamId = workspaceContext?.workspaceId;
+    if (space !== 'team' || !teamId) { setHdwMemberNames(EMPTY_MAP); return; }
+    let cancelled = false;
+    const fetchMembers = async () => {
+      try {
+        const res = await fetch(
+          `/api/hdw/webapi/v1/team/${encodeURIComponent(teamId)}/members`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) { if (!cancelled) setHdwMemberNames(EMPTY_MAP); return; }
+        const body = await res.json();
+        if (cancelled) return;
+        const list: Array<{ workspace_member_id?: string; displayname?: string; username?: string }> = body?.data?.members ?? [];
+        const map = new Map<string, string>();
+        for (const m of list) {
+          const id = m.workspace_member_id?.trim();
+          const name = m.displayname?.trim() || m.username?.trim() || '';
+          if (id && name) map.set(id, name);
+        }
+        if (!cancelled) setHdwMemberNames(map);
+      } catch {
+        if (!cancelled) setHdwMemberNames(EMPTY_MAP);
+      }
+    };
+    void fetchMembers();
+    const onMembersUpdated = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.teamId === teamId) void fetchMembers();
+    };
+    window.addEventListener('hdw:members-updated', onMembersUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hdw:members-updated', onMembersUpdated);
+    };
+  }, [space, workspaceContext?.workspaceId]);
+ // A cover request captures the complete identity at dispatch. A mutable ref
   // keeps the queue callbacks stable without letting an in-flight read drift
   // to whichever Workspace a different render happens to select later.
   const workspaceContextRef = useRef(workspaceContext);
@@ -533,7 +576,7 @@ operator,
   // Whether a card is team-shared is decided upstream, not here — the grids'
   // 全部项目 / 草稿 partition reads the very same predicate, so the badge and the
   // card's grid can no longer disagree.
-  const isShared = isSharedProject ?? NOTHING_SHARED;
+ const isShared = isSharedProject ?? NOTHING_SHARED;
   // Deterministic background colour for the owner avatar circle, derived
   // from the member id so the same person always gets the same hue.
   function ownerAvatarColor(memberId: string | null): string {
@@ -549,7 +592,7 @@ operator,
     }
     return palette[Math.abs(hash) % palette.length] ?? '#1a1917';
   }
-  // The card owner avatar: first character of the owner display name with a
+ // The card owner avatar: first character of the owner display name with a
   // deterministic background colour. The member roster (useTeamMembers),
   // already loaded on team views, resolves the member id to a display name.
   const resolveCreator = (project: Project): {
@@ -564,17 +607,19 @@ operator,
     // In the personal space (default team) the user is the sole member
     // and owner, so every project is theirs — show "我" and grant full
     // operations without a member-ID match.
-    if (workspaceContext?.isDefaultTeam) {
-      return {
-        name: t('recentProjects.selfCreator'),
-        initial: Array.from(t('recentProjects.selfCreator'))[0] ?? 'M',
-        avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
-        ownedBySelf: true,
-        canMutate: true,
-        canAdmin: false,
-        memberId: selfMemberId,
-      };
-    }
+  if (workspaceContext?.isDefaultTeam) {
+    return {
+     name: workspaceContext?.displayName?.trim()
+        || t('recentProjects.selfCreator'),
+     initial: Array.from((workspaceContext?.displayName?.trim()
+       || t('recentProjects.selfCreator')).trim())[0] ?? 'M',
+     avatarUrl: workspaceContext?.avatarUrl?.trim() || null,
+     ownedBySelf: true,
+     canMutate: true,
+     canAdmin: false,
+     memberId: selfMemberId,
+   };
+  }
     // Team projects are single-writer: only the creator can rename, delete,
     // or duplicate. Admins can open the card menu but only see "move to" —
     // they cannot rename, delete, or duplicate another member's project.
@@ -594,8 +639,10 @@ operator,
     const ownerMemberId = project.createdByWorkspaceMemberId
       ?? projectOwnerMemberIds?.get(project.id)
       ?? null;
-    if (ownerMemberId && ownerMemberId === effectiveMemberId) {
-      const name = workspaceContext?.displayName?.trim()
+   if (ownerMemberId && ownerMemberId === effectiveMemberId) {
+      const name = project.ownerDisplayName?.trim()
+        || (ownerMemberId && hdwMemberNames.get(ownerMemberId))
+        || workspaceContext?.displayName?.trim()
         || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
         || t('recentProjects.teamMemberCreator');
       const initial = Array.from(name.trim())[0]?.toUpperCase() ?? 'M';
@@ -609,7 +656,10 @@ operator,
         memberId: ownerMemberId,
       };
     }
-    const name = (ownerMemberId && resolveMember(ownerMemberId)?.displayName) ?? t('recentProjects.teamMemberCreator');
+    const name = project.ownerDisplayName?.trim()
+      || (ownerMemberId && hdwMemberNames.get(ownerMemberId))
+      || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
+      || t('recentProjects.teamMemberCreator');
     const initial = (Array.from(name.trim())[0] ?? 'T').toUpperCase();
     return { name, initial, avatarUrl: null, ownedBySelf: false, canMutate: false, canAdmin: isAdmin, memberId: ownerMemberId ?? null };
   };
@@ -655,8 +705,12 @@ operator,
   // the product remembers the choice).
  const [moveTarget, setMoveTarget] = useState<{ project: Project; action: 'to-team' | 'to-personal' } | null>(null);
  // When set, the tree selector is open for a single-project move to team.
- const [moveToTeamTarget, setMoveToTeamTarget] = useState<Project | null>(null);
- // Tree dialog mode for the current move: 'tabbed' in team space, 'personal-folders'
+const [moveToTeamTarget, setMoveToTeamTarget] = useState<Project | null>(null);
+ // When set, the tree selector is open for a copy-to-personal flow.
+ const [copyToPersonalTarget, setCopyToPersonalTarget] = useState<Project | null>(null);
+ // Project id currently being copied (drives the dialog busy state).
+ const [copyingId, setCopyingId] = useState<string | null>(null);
+// Tree dialog mode for the current move: 'tabbed' in team space, 'personal-folders'
  // for personal-space folder moves, 'team' for the legacy move-to-team flow.
  const [moveToTreeMode, setMoveToTreeMode] = useState<'team' | 'personal-folders' | 'tabbed'>('tabbed');
 const [bulkMoveToTreeMode, setBulkMoveToTreeMode] = useState<'team' | 'personal-folders' | 'tabbed'>('tabbed');
@@ -747,6 +801,69 @@ function commitMove() {
    });
  }
  const actionsAvailable = Boolean(onDelete || onDuplicate || onRename || collaborationAvailable);
+ // Guests have no mutation rights in team spaces — hide the entire card menu
+ // (copy-to-personal, move, rename, delete, share) so a guest never sees
+ // actions they cannot perform. The effective role comes from the HDW
+ // operator (team view) or the OpenDesign collab workspace context.
+ const isGuest = operator
+   ? operator.role === 'guest'
+   : workspaceContext?.role === 'guest';
+ const canShowCardActions = actionsAvailable && !isGuest;
+
+  function requestCopyToPersonal(project: Project) {
+    trackCollection('copy_to_personal', {
+      project_key: project.id,
+      project_relation: resolveCreator(project).ownedBySelf ? 'self' : 'other',
+    });
+    setMenuOpenId(null);
+    setCopyToPersonalTarget(project);
+  }
+
+  async function handleCopyToPersonalConfirm(selection: TeamTreeSelection) {
+    const project = copyToPersonalTarget;
+    setCopyToPersonalTarget(null);
+    if (!project) return;
+    const startedAt = performance.now();
+    setCopyingId(project.id);
+    try {
+      await copyProjectToPersonal(
+        project.id,
+        workspaceContext,
+        { targetFolderId: selection.folderId },
+      );
+      window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+      notifyTeamProjectsChanged();
+      trackWorkspaceProjectActionResult(analytics.track, {
+        page_name: analyticsPage,
+        area: 'project_collection',
+        action: 'copy_to_personal',
+        result: 'success',
+        requested_count: 1,
+        succeeded_count: 1,
+        failed_count: 0,
+        duration_ms: Math.round(performance.now() - startedAt),
+        ...workspaceDimensions,
+      });
+    } catch (err) {
+      console.warn('[RecentProjectsStrip] copy project to personal failed:', err);
+      setShareErrorProjectId(project.id);
+      setShareErrorKind('share');
+      trackWorkspaceProjectActionResult(analytics.track, {
+        page_name: analyticsPage,
+        area: 'project_collection',
+        action: 'copy_to_personal',
+        result: 'failed',
+        requested_count: 1,
+        succeeded_count: 0,
+        failed_count: 1,
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: 'request_failed',
+        ...workspaceDimensions,
+      });
+    } finally {
+      setCopyingId(null);
+    }
+  }
 
   // Bulk-action state for the 多选 bar. Every action below is the batch form of
   // an action the per-card ⋯ menu already offers (move in/out of the team
@@ -2123,25 +2240,28 @@ function requestDelete(project: Project) {
                   </div>
                   <div className="recent-projects__card-footer">
                     <div className="recent-projects__card-time">
+                    {space !== 'drafts' ? (
+                    <>
+                   <span
+                     className="recent-projects__card-owner"
+                     title={creator.name}
+                       style={{ backgroundColor: ownerAvatarColor(creator.memberId) }}
+                     aria-hidden
+                   >
+                       {creator.name}
+                   </span>
+                    {creator.ownedBySelf ? (
                       <span
                         className="recent-projects__card-owner"
-                        title={creator.name}
-                        style={{ backgroundColor: ownerAvatarColor(creator.memberId) }}
+                        style={{ backgroundColor: '#000' }}
                         aria-hidden
                       >
-                        {creator.initial}
-                        {creator.avatarUrl ? (
-                          <img
-                            key={creator.avatarUrl}
-                            src={creator.avatarUrl}
-                            alt=""
-                            onError={(event) => {
-                              event.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        ) : null}
+                        {t('recentProjects.selfCreator')}
                       </span>
-                      <span className="recent-projects__card-sep" aria-hidden>·</span>
+                    ) : null}
+                     <span className="recent-projects__card-sep" aria-hidden>·</span>
+                    </>
+                    ) : null}
                       {relativeTime(project.updatedAt, t)}
                     </div>
                     <div className="design-card-tag-row">
@@ -2154,7 +2274,7 @@ function requestDelete(project: Project) {
                   </div>
                 </div>
               </button>
-              {actionsAvailable && !selectionMode && (creator.canMutate || creator.canAdmin) ? (
+              {canShowCardActions && !selectionMode && (creator.canMutate || creator.canAdmin) ? (
                <div
                  className="recent-projects__card-menu-anchor"
                   ref={menuOpenId === project.id ? menuContainerRef : undefined}
@@ -2285,6 +2405,25 @@ function requestDelete(project: Project) {
                          </span>
                        </button>
                      ))}
+                      {/* Copy to personal: any team member can copy a team
+                          project to their own personal space — this is a read
+                          operation on the source, not a mutation, so it is NOT
+                          gated by canMutate. */}
+                      {space === 'team' ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={copyingId === project.id}
+                          onClick={() => requestCopyToPersonal(project)}
+                        >
+                          <Icon name="copy" size={12} />
+                          <span>
+                            {copyingId === project.id
+                              ? t('recentProjects.copyInProgress')
+                              : t('recentProjects.copyToPersonal')}
+                          </span>
+                        </button>
+                      ) : null}
                       {shareErrorProjectId === project.id ? (
                         <div className="recent-projects__card-menu-error" role="alert">
                           {t(
@@ -2485,6 +2624,15 @@ function requestDelete(project: Project) {
        canMoveToPersonal={resolveCreator(moveToTeamTarget).ownedBySelf}
      />
    ) : null}
+    {copyToPersonalTarget ? (
+      <MoveToTeamTreeDialog
+        onConfirm={handleCopyToPersonalConfirm}
+        onCancel={() => setCopyToPersonalTarget(null)}
+        busy={copyingId === copyToPersonalTarget.id}
+        mode="personal-folders"
+        copyMode
+      />
+    ) : null}
    {bulkMoveToTeamOpen ? (
      <MoveToTeamTreeDialog
        onConfirm={handleBulkMoveToTeamConfirm}
