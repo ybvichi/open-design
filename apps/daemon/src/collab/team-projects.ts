@@ -17,13 +17,13 @@ export interface CreateTeamProjectsListerOptions {
 
 export function createTeamProjectsLister(
   options: CreateTeamProjectsListerOptions,
-): (workspaceId: string) => Promise<TeamProject[]> {
+): (workspaceId: string, folderId?: string | null) => Promise<TeamProject[]> {
   const env = options.env ?? process.env;
-  return async (workspaceId: string) => {
+  return async (workspaceId: string, folderId?: string | null) => {
     const scopedWorkspaceId = workspaceId.trim();
     if (!scopedWorkspaceId) return [];
-    if (options.teamProjectCatalog) return options.teamProjectCatalog.list(workspaceId);
+    if (options.teamProjectCatalog) return options.teamProjectCatalog.list(workspaceId, folderId);
     if (!shouldUseVelaCliTeamProjectCatalog(env)) return [];
-    return createVelaCliTeamProjectCatalog().list(scopedWorkspaceId);
+    return createVelaCliTeamProjectCatalog().list(scopedWorkspaceId, folderId);
   };
 }

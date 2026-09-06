@@ -37,14 +37,25 @@ class TeamProjectController extends Controller {
   async list() {
     const { ctx } = this;
     const workspaceId = ctx.params.workspaceId;
+    // 可选 folder_id 过滤:
+    //   不传          → 全部项目
+    //   folder_id=xxx → 该文件夹下的项目
+    //   folder_id=root → 根目录项目 (folder_id IS NULL)
+    const folderFilter = ctx.query.folder_id;
 
     try {
       const k = this.getKnex();
-      const rows = await k('team_projects as tp')
+      const query = k('team_projects as tp')
         .join('resources as r', 'r.id', 'tp.resource_id')
         .where({ 'tp.workspace_id': workspaceId })
         .select('tp.*', 'r.metadata as resource_metadata')
         .orderBy('tp.updated_at', 'desc');
+      if (folderFilter === 'root') {
+        query.whereNull('tp.folder_id');
+      } else if (folderFilter) {
+        query.where({ 'tp.folder_id': folderFilter });
+      }
+      const rows = await query;
 
       const projects = rows.map(row => this._toRecord(row));
       ctx.body = { projects };
@@ -124,6 +135,7 @@ class TeamProjectController extends Controller {
       if (body.syncState) mergeObj.sync_state = body.syncState;
       if (body.lastSyncedVersionId !== undefined) mergeObj.last_synced_version_id = body.lastSyncedVersionId;
       if (body.metadata) mergeObj.metadata = JSON.stringify(body.metadata);
+      if (body.folderId !== undefined) mergeObj.folder_id = body.folderId;
 
       const row = await k('team_projects')
         .insert({
@@ -136,6 +148,7 @@ class TeamProjectController extends Controller {
           sync_state: body.syncState || 'pending_upload',
           last_synced_version_id: body.lastSyncedVersionId || null,
           metadata: body.metadata ? JSON.stringify(body.metadata) : null,
+          folder_id: body.folderId !== undefined ? body.folderId : null,
         })
         .onConflict(['workspace_id', 'project_id'])
         .merge(mergeObj)
@@ -378,6 +391,7 @@ class TeamProjectController extends Controller {
       displayName: row.display_name || null,
       syncState: row.sync_state,
       lastSyncedVersionId: row.last_synced_version_id || null,
+      folderId: row.folder_id || null,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
       access,

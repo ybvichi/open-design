@@ -279,10 +279,18 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
     },
 
     /** List team projects for a workspace. */
-    async listTeamProjects(workspaceId: string): Promise<HdwTeamProjectRecord[]> {
+    async listTeamProjects(
+      workspaceId: string,
+      folderId?: string | null,
+    ): Promise<HdwTeamProjectRecord[]> {
+      const qs = folderId === null
+        ? '?folder_id=root'
+        : folderId
+          ? `?folder_id=${encodeURIComponent(folderId)}`
+          : '';
       const { payload } = await request<{ projects: HdwTeamProjectRecord[] }>(
         'GET',
-        `/api/workspaces/${encodeURIComponent(workspaceId)}/team-projects`,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/team-projects${qs}`,
         undefined,
         { 'x-hdw-workspace-id': workspaceId },
       );
@@ -356,6 +364,32 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       );
       return payload;
     },
+
+    /** Move a team project to a folder (or to the workspace root when
+     *  folderId is null). Uses the lightweight HDW folder/project/move
+     *  endpoint — a single UPDATE on team_projects.folder_id — instead
+     *  of the full catalog upsert path. */
+    async moveProjectFolder(
+      workspaceId: string,
+      projectId: string,
+      folderId: string | null,
+      operatorMemberId?: string,
+    ): Promise<void> {
+      const { payload } = await request<HdwFolderWebapiResponse>(
+        'POST',
+        '/webapi/v1/folder/project/move',
+        {
+          folder_id: folderId,
+          project_id: projectId,
+          workspace_id: workspaceId,
+          ...(operatorMemberId ? { operator_member_id: operatorMemberId } : {}),
+        },
+        { 'x-hdw-workspace-id': workspaceId },
+      );
+      if (payload.code !== 0) {
+        throw new HdwCloudError(200, 'folder_move_failed', payload.error || payload.msg);
+      }
+    },
   };
 }
 
@@ -419,6 +453,11 @@ export interface HdwTeamProjectRecord {
     frozen: boolean;
   };
   metadata?: Record<string, unknown> | null;
+  /** Folder this project belongs to (from the `folder_id` column on
+   *  `team_projects`). Null/absent = root-level. The HDW backend may
+   *  return this as `folder_id` (snake_case). */
+  folderId?: string | null;
+  folder_id?: string | null;
 }
 
 export interface HdwUpsertTeamProjectInput {
@@ -428,6 +467,7 @@ export interface HdwUpsertTeamProjectInput {
   lastSyncedVersionId?: string | null;
   metadata?: Record<string, unknown> | null;
   ownerMemberId?: string;
+  folderId?: string | null;
 }
 
 export interface HdwTransferResult {
@@ -439,4 +479,13 @@ export interface HdwTransferResult {
    * resolves this by looking up the source member's username and deriving
    * the target workspace_member_id deterministically. */
   targetOwnerMemberId?: string;
+}
+
+/** Response shape for HDW webapi/v1 endpoints (folder controllers). These
+ *  return HTTP 200 with a code field: 0 = success, -1 = failure. */
+export interface HdwFolderWebapiResponse {
+  code: number;
+  msg: string;
+  data?: unknown;
+  error?: string;
 }

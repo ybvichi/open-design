@@ -47,6 +47,7 @@ interface TeamProjectCatalogSink {
       syncState?: TeamProjectCatalogSyncState;
       lastSyncedVersionId?: string | null;
       metadata?: Record<string, unknown> | null;
+      folderId?: string | null;
     },
     principal?: ResourceHubPrincipal | null,
   ): Promise<unknown>;

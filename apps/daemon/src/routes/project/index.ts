@@ -3686,6 +3686,27 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
     } else if (visibility === 'personal') {
       setProjectFolder(db, responseWorkspaceId, project.id, null);
     }
+   // Push the folder assignment to the HDW team-projects catalog so
+   // teammates see the project in the right folder. The local SQLite
+   // row is already updated above; this syncs the remote catalog entry.
+   // Only meaningful for team projects (visibility === 'team').
+  if (visibility === 'team' && targetFolderId !== undefined) {
+    try {
+      const operatorMemberId = resolvedTargetWorkspaceId && resolvedTargetWorkspaceId !== ctx.workspaceId
+        ? (targetMemberId ?? ctx.workspaceMemberId)
+        : ctx.workspaceMemberId;
+      await collabSync.moveProjectFolder?.(
+         responseWorkspaceId,
+         project.id,
+         targetFolderId,
+         operatorMemberId,
+       );
+       collabSync.invalidateTeamProjectCatalog?.();
+     } catch {
+       // Best-effort: the local folder assignment already committed;
+       // a remote catalog sync failure should not fail the whole move.
+     }
+    }
     const updatedRow = listWorkspaceProjects(db, responseWorkspaceId).find((item: any) => item.id === project.id);
     res.json({ project: normalizeWorkspaceProjectRow(updatedRow, ctx) });
     } catch (err: any) {
@@ -3838,15 +3859,37 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
      // Assign all batch-moved projects to the selected folder (or clear
      // for the workspace root) when targetFolderId is provided.
      const batchResponseWorkspaceId = batchResolvedTargetWorkspaceId || batchTargetWorkspaceId || ctx.workspaceId;
-      if (batchTargetFolderId !== undefined) {
-        for (const id of projectIds) {
-          setProjectFolder(db, batchResponseWorkspaceId, id, batchTargetFolderId);
-        }
-      } else if (visibility === 'personal') {
-        for (const id of projectIds) {
-          setProjectFolder(db, batchResponseWorkspaceId, id, null);
-        }
-      }
+     if (batchTargetFolderId !== undefined) {
+       for (const id of projectIds) {
+         setProjectFolder(db, batchResponseWorkspaceId, id, batchTargetFolderId);
+       }
+     } else if (visibility === 'personal') {
+       for (const id of projectIds) {
+         setProjectFolder(db, batchResponseWorkspaceId, id, null);
+       }
+     }
+      // Push the folder assignment to the HDW team-projects catalog so
+      // teammates see the projects in the right folder. Best-effort: the
+      // local rows already committed; a remote sync failure should not
+      // fail the whole batch move.
+     if (visibility === 'team' && batchTargetFolderId !== undefined) {
+       for (const id of projectIds) {
+         try {
+           const batchOperatorMemberId = batchIsCrossWorkspace
+             ? (batchTargetMemberId ?? ctx.workspaceMemberId)
+             : ctx.workspaceMemberId;
+           await collabSync.moveProjectFolder?.(
+             batchResponseWorkspaceId,
+             id,
+             batchTargetFolderId,
+             batchOperatorMemberId,
+           );
+         } catch {
+           // Best-effort per-project; continue with the rest.
+         }
+       }
+       collabSync.invalidateTeamProjectCatalog?.();
+     }
       const updatedRows = listWorkspaceProjects(db, batchResponseWorkspaceId);
       const projects = projectIds.map((id: string) => normalizeWorkspaceProjectRow(updatedRows.find((row: any) => row.id === id), ctx));
       res.json({ ok: true, projects });

@@ -36,6 +36,7 @@ export interface UpsertVelaTeamProjectInput {
   displayName?: string | null;
   syncState?: VelaTeamProjectSyncState;
   lastSyncedVersionId?: string | null;
+  folderId?: string | null;
 }
 
 export interface VelaTeamProjectCatalogClient {

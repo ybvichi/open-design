@@ -118,6 +118,18 @@ class FolderController extends Controller {
         }
       }
 
+      // 递归收集所有子文件夹 ID(含自身),连同关联的 team_projects 一起删除。
+      const folderIds = [folderId];
+      let pending = [folderId];
+      while (pending.length > 0) {
+        const children = await k('folders')
+          .whereIn('folder_pid', pending)
+          .pluck('folder_id');
+        if (children.length === 0) break;
+        folderIds.push(...children);
+        pending = children;
+      }
+      await k('team_projects').whereIn('folder_id', folderIds).del();
       await k('folders').where({ folder_id: folderId }).del();
       ctx.body = { code: 0, msg: 'SUCCESS', data: { deleted: true } };
     } catch (err) {
@@ -178,8 +190,22 @@ class FolderController extends Controller {
         .select(
           'folder_id', 'folder_pid', 'workspace_id', 'folder_name', 'created_at',
           k.raw('(SELECT COUNT(*) FROM folders sub WHERE sub.folder_pid = folders.folder_id) AS subfolder_count'),
-          k.raw('(SELECT COUNT(*) FROM folder_projects fp WHERE fp.folder_id = folders.folder_id) AS project_count'),
-          k.raw("(SELECT json_agg(sub.folder_name) FROM (SELECT folder_name FROM folders AS inner_f WHERE inner_f.folder_pid = folders.folder_id ORDER BY inner_f.created_at ASC LIMIT 4) sub) AS subfolder_preview"),
+          k.raw('(SELECT COUNT(*) FROM team_projects tp WHERE tp.folder_id = folders.folder_id) AS project_count'),
+          k.raw(`(
+            SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (
+              SELECT name, kind FROM (
+                SELECT COALESCE(display_name, project_id) AS name, 'project' AS kind, 0 AS sort_group, created_at
+                FROM team_projects
+                WHERE folder_id = folders.folder_id AND workspace_id = folders.workspace_id AND sync_state = 'synced'
+                UNION ALL
+                SELECT folder_name AS name, 'folder' AS kind, 1 AS sort_group, created_at
+                FROM folders AS inner_f
+                WHERE inner_f.folder_pid = folders.folder_id
+              ) AS combined
+              ORDER BY sort_group ASC, created_at ASC
+              LIMIT 4
+            ) AS t
+          ) AS subfolder_preview`)
         )
         .orderBy('created_at', 'asc');
 
@@ -264,21 +290,17 @@ class FolderController extends Controller {
         }
       }
 
-      const now = new Date();
-      await k('folder_projects').insert({
-        folder_id: folderId,
-        project_id: projectId,
-        workspace_id: workspaceId,
-        created_at: now,
-      });
+      // folder_id 现在直接在 team_projects 上,不再使用 folder_projects 表
+      const updated = await k('team_projects')
+        .where({ project_id: projectId, workspace_id: workspaceId })
+        .update({ folder_id: folderId });
+      if (updated === 0) {
+        ctx.body = { code: -1, msg: 'FAIL', error: '该项目不存在或不在该团队中' };
+        return;
+      }
 
       ctx.body = { code: 0, msg: 'SUCCESS', data: { folder_id: folderId, project_id: projectId } };
     } catch (err) {
-      // 主键冲突 = 项目已在该文件夹中
-      if (err.code === '23505') {
-        ctx.body = { code: -1, msg: 'FAIL', error: '该项目已在该文件夹中' };
-        return;
-      }
       ctx.logger.error('Folder addProject error:', err);
       ctx.body = { code: -1, msg: 'FAIL', error: err.message };
     }
@@ -288,29 +310,33 @@ class FolderController extends Controller {
   // body: { folder_id, project_id, operator_member_id? }
   async removeProject() {
     const { ctx } = this;
-    const { folder_id: folderId, project_id: projectId, operator_member_id: operatorId } = ctx.request.body;
+    const { folder_id: folderId, project_id: projectId, workspace_id: workspaceId, operator_member_id: operatorId } = ctx.request.body;
 
-    if (!folderId || !projectId) {
-      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id 或 project_id' };
+    if (!folderId || !projectId || !workspaceId) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id, project_id 或 workspace_id' };
       return;
     }
 
     try {
       const k = this.getKnex();
-      const link = await k('folder_projects').where({ folder_id: folderId, project_id: projectId }).first();
-      if (!link) {
+      const tp = await k('team_projects')
+        .where({ project_id: projectId, folder_id: folderId, workspace_id: workspaceId })
+        .first();
+      if (!tp) {
         ctx.body = { code: -1, msg: 'FAIL', error: '该项目不在该文件夹中' };
         return;
       }
       if (operatorId) {
-        const check = await this._checkOperator(operatorId, link.workspace_id, ['owner', 'admin']);
+        const check = await this._checkOperator(operatorId, workspaceId, ['owner', 'admin']);
         if (check.error) {
           ctx.body = { code: -1, msg: 'FAIL', error: check.error };
           return;
         }
       }
 
-      await k('folder_projects').where({ folder_id: folderId, project_id: projectId }).del();
+      await k('team_projects')
+        .where({ project_id: projectId, folder_id: folderId, workspace_id: workspaceId })
+        .update({ folder_id: null });
       ctx.body = { code: 0, msg: 'SUCCESS', data: { removed: true } };
     } catch (err) {
       ctx.logger.error('Folder removeProject error:', err);
@@ -322,18 +348,18 @@ class FolderController extends Controller {
   // query: folder_id
   async listProjects() {
     const { ctx } = this;
-    const { folder_id: folderId } = ctx.query;
+    const { folder_id: folderId, workspace_id: workspaceId } = ctx.query;
 
-    if (!folderId) {
-      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id' };
+    if (!folderId || !workspaceId) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id 或 workspace_id' };
       return;
     }
 
     try {
       const k = this.getKnex();
-      const projects = await k('folder_projects')
-        .where({ folder_id: folderId })
-        .select('folder_id', 'project_id', 'workspace_id', 'created_at')
+      const projects = await k('team_projects')
+        .where({ folder_id: folderId, workspace_id: workspaceId })
+        .select('project_id', 'folder_id', 'workspace_id', 'created_at', 'updated_at')
         .orderBy('created_at', 'asc');
 
       ctx.body = { code: 0, msg: 'SUCCESS', data: { projects } };
@@ -355,18 +381,24 @@ class FolderController extends Controller {
       operator_member_id: operatorId,
     } = ctx.request.body;
 
-    if (!folderId || !projectId || !workspaceId) {
-      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 folder_id, project_id 或 workspace_id' };
+    if (!projectId || !workspaceId) {
+      ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 project_id 或 workspace_id' };
       return;
     }
 
+    // folder_id 为 null 或 'root' 表示移到根目录
+    const isRoot = !folderId || folderId === 'root';
+    const targetFolderId = isRoot ? null : folderId;
+
     try {
       const k = this.getKnex();
-      // 校验目标文件夹存在且属于该团队
-      const folder = await k('folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
-      if (!folder) {
-        ctx.body = { code: -1, msg: 'FAIL', error: '目标文件夹不存在或不属于该团队' };
-        return;
+      // 校验目标文件夹存在且属于该团队 (根目录跳过校验)
+      if (!isRoot) {
+        const folder = await k('folders').where({ folder_id: folderId, workspace_id: workspaceId }).first();
+        if (!folder) {
+          ctx.body = { code: -1, msg: 'FAIL', error: '目标文件夹不存在或不属于该团队' };
+          return;
+        }
       }
       if (operatorId) {
         const check = await this._checkOperator(operatorId, workspaceId, ['owner', 'admin', 'member']);
@@ -376,34 +408,13 @@ class FolderController extends Controller {
         }
       }
 
-      const now = new Date();
-      await k.transaction(async trx => {
-        // 从源文件夹移除(若指定了 from_folder_id)
-        if (fromFolderId) {
-          await trx('folder_projects')
-            .where({ folder_id: fromFolderId, project_id: projectId })
-            .del();
-        } else {
-          // 未指定源文件夹,从该团队下任意文件夹移除
-          await trx('folder_projects')
-            .where({ project_id: projectId, workspace_id: workspaceId })
-            .del();
-        }
-        // 加入目标文件夹
-        await trx('folder_projects').insert({
-          folder_id: folderId,
-          project_id: projectId,
-          workspace_id: workspaceId,
-          created_at: now,
-        });
-      });
+      // folder_id 现在直接在 team_projects 上,移动 = 更新 folder_id
+      await k('team_projects')
+        .where({ project_id: projectId, workspace_id: workspaceId })
+        .update({ folder_id: targetFolderId });
 
-      ctx.body = { code: 0, msg: 'SUCCESS', data: { folder_id: folderId, project_id: projectId } };
+      ctx.body = { code: 0, msg: 'SUCCESS', data: { folder_id: targetFolderId, project_id: projectId } };
     } catch (err) {
-      if (err.code === '23505') {
-        ctx.body = { code: -1, msg: 'FAIL', error: '该项目已在目标文件夹中' };
-        return;
-      }
       ctx.logger.error('Folder moveProject error:', err);
       ctx.body = { code: -1, msg: 'FAIL', error: err.message };
     }

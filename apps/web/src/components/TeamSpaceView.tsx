@@ -1,6 +1,6 @@
 import { Fragment, useId, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
-import type { WorkspaceDirectoryItem } from '@open-design/contracts';
+import type { TeamProject, WorkspaceDirectoryItem } from '@open-design/contracts';
 import { navigate } from '../router';
 import { createPortal } from 'react-dom';
 import { getStoredUsername } from '../auth/auth';
@@ -257,6 +257,36 @@ interface TeamFolderItem {
   createdAt: string;
 }
 
+/** Fetch all team projects for a workspace from the daemon's team-projects
+ *  endpoint. Each project carries a `folderId` (null = root-level, string =
+ *  in that folder). The caller filters client-side, avoiding N+1 requests
+ *  to the deprecated folder/project/list API. */
+async function fetchTeamProjects(workspaceId: string): Promise<TeamProject[]> {
+  const res = await fetch('/api/workspace/projects/team', {
+    headers: { 'x-od-workspace-id': workspaceId },
+    cache: 'no-store',
+  });
+  if (!res.ok) return [];
+  const body = await res.json() as { projects?: TeamProject[] };
+  return body.projects ?? [];
+}
+
+/** Convert a TeamProject (from the team-projects catalog) to the local
+ *  Project shape that RecentProjectsStrip expects. */
+function teamProjectToProject(tp: TeamProject): Project {
+  const sharedAtMs = Date.parse(tp.sharedAt);
+  const fallback = Number.isFinite(sharedAtMs) ? sharedAtMs : 0;
+  return {
+    id: tp.projectId,
+    name: tp.name?.trim() || '',
+    skillId: tp.skillId ?? null,
+    designSystemId: tp.designSystemId ?? null,
+    createdAt: typeof tp.createdAt === 'number' ? tp.createdAt : fallback,
+    updatedAt: typeof tp.updatedAt === 'number' ? tp.updatedAt : fallback,
+    createdByWorkspaceMemberId: tp.ownerMemberId ?? null,
+    ...(tp.metadata ? { metadata: tp.metadata } : {}),
+  };
+}
 
 function ProjectsPanel({
   teamId,
@@ -298,40 +328,35 @@ function ProjectsPanel({
   const [renamingFolder, setRenamingFolder] = useState(false);
   const renameFolderTitleId = useId();
 
- // Fetch the team's project folders from the HDW folder API, and refresh
- // when a create/delete dispatches the `hdw:folders-updated` event.
-  useEffect(() => {
-    if (!teamId) { setFolders([]); return; }
-    let cancelled = false;
-    const loadFolders = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(
-          `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) { if (!cancelled) setFolders([]); return; }
-        const body = await res.json();
-        if (cancelled) return;
-        const list: any[] = body?.data?.folders ?? [];
-        // The HDW folder list doesn't include project_count, so fetch local
-        // batch counts and merge them into the folder items.
-        let counts: Record<string, number> = {};
-        try {
-          const countsRes = await fetch(
-            `/api/folders/counts?workspace_id=${encodeURIComponent(teamId)}`,
-          { cache: 'no-store' },
-          );
-          if (countsRes.ok) {
-            const countsBody = await countsRes.json();
-            counts = countsBody?.data?.counts ?? {};
-          }
-        } catch { /* counts stay empty */ }
-        if (cancelled) return;
-        setFolders(list.map((f) => ({
-          folderId: f.folder_id || f.id || '',
-          folderName: f.folder_name || f.name || '',
-          projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
+// Fetch the team's project folders from the HDW folder API, and refresh
+// when a create/delete dispatches the `hdw:folders-updated` event.
+ useEffect(() => {
+   if (!teamId) { setFolders([]); return; }
+   let cancelled = false;
+   const loadFolders = async () => {
+     setLoading(true);
+     try {
+       const res = await fetch(
+         `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}`,
+         { cache: 'no-store' },
+       );
+       if (!res.ok) { if (!cancelled) setFolders([]); return; }
+       const body = await res.json();
+       if (cancelled) return;
+       const list: any[] = body?.data?.folders ?? [];
+        // Compute project counts per folder from the team-projects list
+        // (folder_id is now on team_projects, so one fetch covers all folders).
+        const teamProjects = await fetchTeamProjects(teamId);
+       if (cancelled) return;
+        const counts: Record<string, number> = {};
+        for (const tp of teamProjects) {
+          const fid = tp.folderId ?? null;
+          if (fid) counts[fid] = (counts[fid] ?? 0) + 1;
+        }
+       setFolders(list.map((f) => ({
+         folderId: f.folder_id || f.id || '',
+         folderName: f.folder_name || f.name || '',
+         projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
           subfolderCount: Number(f.subfolder_count) || 0,
           subfolderPreview: Array.isArray(f.subfolder_preview)
             ? f.subfolder_preview.map((p: any) =>
@@ -360,8 +385,8 @@ function ProjectsPanel({
     };
   }, [teamId]);
 
-  // Fetch root-level team projects (folder_id IS NULL) from the local
-  // SQLite workspace_projects table. Refreshes alongside folders on the
+  // Fetch root-level team projects (folderId = null) from the
+  // team-projects catalog. Refreshes alongside folders on the
   // `hdw:folders-updated` event so a move/create stays in sync.
   useEffect(() => {
     if (!teamId) { setProjects([]); return; }
@@ -369,15 +394,12 @@ function ProjectsPanel({
     const loadProjects = async () => {
       setProjectsLoading(true);
       try {
-        const res = await fetch(
-          `/api/folders/root/projects?workspace_id=${encodeURIComponent(teamId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) { if (!cancelled) setProjects([]); return; }
-        const body = await res.json();
+        const allProjects = await fetchTeamProjects(teamId);
+        const projects = allProjects
+          .filter((tp) => !tp.folderId)
+          .map(teamProjectToProject);
         if (cancelled) return;
-        const list: any[] = body?.data?.projects ?? [];
-        setProjects(list);
+        setProjects(projects);
       } catch {
         if (!cancelled) setProjects([]);
       } finally {
@@ -599,6 +621,7 @@ function ProjectsPanel({
             }}
             hideTitle
             controlsPortalTarget={controlsPortalTarget}
+            operator={operator}
           />
         )}
       </div>
@@ -1198,39 +1221,34 @@ function FoldersPanel({
   const [renamingFolder, setRenamingFolder] = useState(false);
   const renameFolderTitleId = useId();
 
- // Fetch subfolders whose folder_pid equals the current folderId.
-  useEffect(() => {
-    if (!teamId || !folderId) { setFolders([]); return; }
-    let cancelled = false;
-    const loadFolders = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(
-          `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}&folder_pid=${encodeURIComponent(folderId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) { if (!cancelled) setFolders([]); return; }
-        const body = await res.json();
-        if (cancelled) return;
-        const list: any[] = body?.data?.folders ?? [];
-        // The HDW folder list doesn't include project_count, so fetch local
-        // batch counts and merge them into the folder items.
-        let counts: Record<string, number> = {};
-        try {
-          const countsRes = await fetch(
-            `/api/folders/counts?workspace_id=${encodeURIComponent(teamId)}`,
-          { cache: 'no-store' },
-          );
-          if (countsRes.ok) {
-            const countsBody = await countsRes.json();
-            counts = countsBody?.data?.counts ?? {};
-          }
-        } catch { /* counts stay empty */ }
-        if (cancelled) return;
-        setFolders(list.map((f) => ({
-          folderId: f.folder_id || f.id || '',
-          folderName: f.folder_name || f.name || '',
-          projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
+// Fetch subfolders whose folder_pid equals the current folderId.
+ useEffect(() => {
+   if (!teamId || !folderId) { setFolders([]); return; }
+   let cancelled = false;
+   const loadFolders = async () => {
+     setLoading(true);
+     try {
+       const res = await fetch(
+         `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}&folder_pid=${encodeURIComponent(folderId)}`,
+         { cache: 'no-store' },
+       );
+       if (!res.ok) { if (!cancelled) setFolders([]); return; }
+       const body = await res.json();
+       if (cancelled) return;
+       const list: any[] = body?.data?.folders ?? [];
+        // Compute project counts per folder from the team-projects list
+        // (folder_id is now on team_projects, so one fetch covers all folders).
+        const teamProjects = await fetchTeamProjects(teamId);
+       if (cancelled) return;
+        const counts: Record<string, number> = {};
+        for (const tp of teamProjects) {
+          const fid = tp.folderId ?? null;
+          if (fid) counts[fid] = (counts[fid] ?? 0) + 1;
+        }
+       setFolders(list.map((f) => ({
+         folderId: f.folder_id || f.id || '',
+         folderName: f.folder_name || f.name || '',
+         projectCount: counts[f.folder_id || f.id || ''] ?? Number(f.project_count) ?? 0,
           subfolderCount: Number(f.subfolder_count) || 0,
           subfolderPreview: Array.isArray(f.subfolder_preview)
             ? f.subfolder_preview.map((p: any) =>
@@ -1259,24 +1277,21 @@ function FoldersPanel({
     };
   }, [teamId, folderId]);
 
-  // Fetch projects directly inside this folder (folder_id = folderId)
-  // from the local SQLite workspace_projects table. Refreshes alongside
-  // subfolders on the `hdw:subfolders-updated` event.
+  // Fetch projects directly inside this folder (folderId matches) from
+  // the team-projects catalog. Refreshes alongside subfolders on the
+  // `hdw:subfolders-updated` event.
   useEffect(() => {
     if (!teamId || !folderId) { setProjects([]); return; }
     let cancelled = false;
     const loadProjects = async () => {
       setProjectsLoading(true);
       try {
-        const res = await fetch(
-          `/api/folders/${encodeURIComponent(folderId)}/projects?workspace_id=${encodeURIComponent(teamId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) { if (!cancelled) setProjects([]); return; }
-        const body = await res.json();
+        const allProjects = await fetchTeamProjects(teamId);
+        const projects = allProjects
+          .filter((tp) => tp.folderId === folderId)
+          .map(teamProjectToProject);
         if (cancelled) return;
-        const list: any[] = body?.data?.projects ?? [];
-        setProjects(list);
+        setProjects(projects);
       } catch {
         if (!cancelled) setProjects([]);
       } finally {
@@ -1527,6 +1542,7 @@ function FoldersPanel({
               onRenameProject?.(id, name);
             }}
             hideTitle
+            operator={operator}
           />
         )}
       </div>

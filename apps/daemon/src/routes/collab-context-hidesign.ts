@@ -281,15 +281,22 @@ export function registerCollabContextHideSignRoutes(
       res.json({ projects: [] });
       return;
     }
-    const wsId = req.header('x-od-workspace-id') ?? '';
-    if (!wsId) {
-      res.json({ projects: [] });
-      return;
-    }
-   let projects: TeamProject[];
-   try {
-     projects = await catalog.list(wsId);
-   } catch {
+  const wsId = req.header('x-od-workspace-id') ?? '';
+  if (!wsId) {
+    res.json({ projects: [] });
+    return;
+  }
+  // 可选 folder_id 过滤:
+  //   不传          → 全部项目
+  //   folder_id=xxx → 该文件夹下的项目
+  //   folder_id=root → 根目录项目 (folder_id IS NULL)
+  const folderFilter = typeof req.query.folder_id === 'string'
+    ? req.query.folder_id
+    : undefined;
+  let projects: TeamProject[];
+  try {
+    projects = await catalog.list(wsId, folderFilter === 'root' ? null : folderFilter);
+  } catch {
      res.status(503).json({
        error: 'UPSTREAM_UNAVAILABLE',
        message: 'team project catalog is temporarily unavailable',

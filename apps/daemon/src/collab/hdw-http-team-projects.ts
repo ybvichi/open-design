@@ -22,6 +22,10 @@ function toTeamProject(record: HdwTeamProjectRecord): TeamProject | null {
     ownerMemberId: record.ownerMemberId,
     sharedAt: record.createdAt,
   };
+  // folder_id is now on team_projects itself (replaces folder_projects).
+  // The HDW backend may return it as either camelCase or snake_case.
+  const folderId = record.folderId ?? record.folder_id ?? null;
+  project.folderId = folderId;
   if (record.displayName?.trim()) {
     project.name = record.displayName.trim();
   }
@@ -105,8 +109,8 @@ export function createHdwHttpTeamProjectCatalog(
   client: HdwCloudClient,
 ): VelaTeamProjectCatalog {
   return {
-    async list(workspaceId: string): Promise<TeamProject[]> {
-      const records = await client.listTeamProjects(workspaceId);
+    async list(workspaceId: string, folderId?: string | null): Promise<TeamProject[]> {
+      const records = await client.listTeamProjects(workspaceId, folderId);
       return records
         .map(toTeamProject)
         .filter((p): p is TeamProject => p != null);
@@ -121,17 +125,18 @@ export function createHdwHttpTeamProjectCatalog(
     async upsert(input, principal): Promise<void> {
       const workspaceId = principal?.teamId?.trim();
       if (!workspaceId) throw new Error('explicit workspace scope is required');
-     await client.upsertTeamProject(workspaceId, input.projectId, {
-       resourceId: input.resourceId ?? projectResourceId(input.projectId),
-       ...(input.displayName?.trim() ? { displayName: input.displayName.trim() } : {}),
-       ...(input.syncState ? { syncState: input.syncState } : {}),
-       ...(input.lastSyncedVersionId?.trim()
-         ? { lastSyncedVersionId: input.lastSyncedVersionId.trim() }
-         : {}),
+    await client.upsertTeamProject(workspaceId, input.projectId, {
+      resourceId: input.resourceId ?? projectResourceId(input.projectId),
+      ...(input.displayName?.trim() ? { displayName: input.displayName.trim() } : {}),
+      ...(input.syncState ? { syncState: input.syncState } : {}),
+      ...(input.lastSyncedVersionId?.trim()
+        ? { lastSyncedVersionId: input.lastSyncedVersionId.trim() }
+        : {}),
       ...(input.metadata && Object.keys(input.metadata).length > 0
         ? { metadata: input.metadata }
         : {}),
       ...(principal?.memberId ? { ownerMemberId: principal.memberId } : {}),
+      ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
     });
     },
 
@@ -164,14 +169,15 @@ export function createHdwHttpTeamProjectCatalogClient(
     ): Promise<VelaTeamProjectRecord | null> {
       const workspaceId = principal.teamId.trim();
       if (!workspaceId) throw new Error('explicit workspace scope is required');
-     const record = await client.upsertTeamProject(workspaceId, input.projectId, {
-       resourceId: input.resourceId,
-       ...(input.displayName?.trim() ? { displayName: input.displayName.trim() } : {}),
-       ...(input.syncState ? { syncState: input.syncState } : {}),
+    const record = await client.upsertTeamProject(workspaceId, input.projectId, {
+      resourceId: input.resourceId,
+      ...(input.displayName?.trim() ? { displayName: input.displayName.trim() } : {}),
+      ...(input.syncState ? { syncState: input.syncState } : {}),
       ...(input.lastSyncedVersionId?.trim()
         ? { lastSyncedVersionId: input.lastSyncedVersionId.trim() }
         : {}),
       ...(principal.memberId ? { ownerMemberId: principal.memberId } : {}),
+      ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
     });
       if (!record) return null;
       return toVelaTeamProjectRecord(record);

@@ -84,6 +84,14 @@ import type { ProjectCollectionClickProps } from '@open-design/contracts/analyti
  *  = home's mixed private/shared, 'drafts' = the member's own private list,
  *  'team' = the全部项目 grid where every card is a team-shared project. */
 export type SpaceKind = 'recent' | 'drafts' | 'team';
+/** Operator identity for HDW-backed team spaces. When provided, resolveCreator
+ *  uses this memberId/role instead of the OpenDesign workspace-collab context,
+ *  because HDW team projects carry HDW member IDs that do not match the
+ *  OpenDesign collab workspace member ID. */
+export interface TeamSpaceOperator {
+  memberId: string;
+  role: 'owner' | 'admin' | 'member' | 'guest';
+}
 import {
   coverFromProjectFile,
   projectCoverUrl,
@@ -165,6 +173,11 @@ currentFolderId?: string | null;
  *  own header. Used by full-page views (personal-all, team) to place
  *  controls inline with the type tabs row. */
 controlsPortalTarget?: HTMLElement | null;
+/** HDW team-space operator identity (member ID + role). When provided,
+ *  resolveCreator uses this instead of the OpenDesign workspace-collab context
+ *  to determine ownership and mutation rights, because HDW team projects carry
+ *  HDW member IDs that do not match the OpenDesign collab member ID. */
+operator?: TeamSpaceOperator | null;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
@@ -377,6 +390,7 @@ externalSearchQuery,
 currentWorkspaceId,
 currentFolderId,
 controlsPortalTarget,
+operator,
 }: Props) {
   const t = useT();
   const analytics = useAnalytics();
@@ -561,7 +575,14 @@ controlsPortalTarget,
     }
     // Admins can rename, delete, duplicate, and move team projects to other
     // teams, but only the project owner can move it back to personal space.
-    const isAdmin = workspaceContext?.role === 'admin';
+    // When an HDW team-space operator is provided, use its memberId/role
+    // instead of the OpenDesign workspace-collab context: HDW team projects
+    // carry HDW member IDs that do not match the collab workspace member ID,
+    // and the operator role distinguishes owner from admin.
+    const effectiveMemberId = operator?.memberId ?? selfMemberId;
+    const isAdmin = operator
+      ? operator.role === 'admin' || operator.role === 'owner'
+      : workspaceContext?.role === 'admin';
     // Team view: strict ownership — only mark as self-owned when the
     // project's createdByWorkspaceMemberId actually matches the current
     // user's workspace member ID. The optimistic owner map (team catalog
@@ -571,7 +592,7 @@ controlsPortalTarget,
     const ownerMemberId = project.createdByWorkspaceMemberId
       ?? projectOwnerMemberIds?.get(project.id)
       ?? null;
-    if (ownerMemberId && ownerMemberId === selfMemberId) {
+    if (ownerMemberId && ownerMemberId === effectiveMemberId) {
       const name = workspaceContext?.displayName?.trim()
         || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
         || t('recentProjects.teamMemberCreator');

@@ -196,6 +196,10 @@ export interface TeamProject {
   createdAt?: number;
   updatedAt?: number;
   metadata?: ProjectMetadata;
+  /** Folder this team project belongs to. Null = root-level (no folder).
+   *  Sourced from the `folder_id` column on `team_projects`, which replaces
+   *  the deprecated `folder_projects` join table. */
+  folderId?: string | null;
 }
 
 /**

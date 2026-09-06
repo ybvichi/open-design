@@ -8440,11 +8440,15 @@ export async function startServer({
         }
       },
       refreshTeamProjectMetadata: (projectId) => collab.refreshTeamProjectMetadata(projectId),
-      invalidateTeamProjectCatalog: () => {
-        teamProjectsDisplayCache.invalidate();
-        workspaceTeamProjectCatalog?.invalidate();
-      },
-    },
+     invalidateTeamProjectCatalog: () => {
+       teamProjectsDisplayCache.invalidate();
+       workspaceTeamProjectCatalog?.invalidate();
+     },
+     moveProjectFolder: async (workspaceId, projectId, folderId, operatorMemberId) => {
+       if (!hdwCloudClient) return;
+       await hdwCloudClient.moveProjectFolder(workspaceId, projectId, folderId, operatorMemberId);
+     },
+   },
     ...(workspaceTeamProjectCatalog ? { teamProjectCatalog: workspaceTeamProjectCatalog } : {}),
     // Second witness for the team-share invariant: refuse a team share aimed at
     // a workspace the directory says is personal, even if the caller's headers

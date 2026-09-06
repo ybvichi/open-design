@@ -30,7 +30,7 @@ interface VelaCliTeamProjectCatalogOptions {
 }
 
 export interface VelaTeamProjectCatalog {
-  list(workspaceId: string): Promise<TeamProject[]>;
+  list(workspaceId: string, folderId?: string | null): Promise<TeamProject[]>;
   get(projectId: string, workspaceId: string): Promise<TeamProject | null>;
   upsert(input: {
     projectId: string;
@@ -39,6 +39,7 @@ export interface VelaTeamProjectCatalog {
     syncState?: 'pending_upload' | 'syncing' | 'synced' | 'failed';
     lastSyncedVersionId?: string | null;
     metadata?: Record<string, unknown> | null;
+    folderId?: string | null;
   }, principal?: ResourceHubPrincipal | null): Promise<void>;
   remove(projectId: string, principal?: ResourceHubPrincipal | null): Promise<void>;
 }
@@ -110,7 +111,7 @@ export function createVelaCliTeamProjectCatalog(
     return JSON.parse(trimmed) as T;
   }
 
-  async function list(workspaceId: string): Promise<TeamProject[]> {
+  async function list(workspaceId: string, _folderId?: string | null): Promise<TeamProject[]> {
     const resolvedWorkspaceId = requireWorkspaceId(workspaceId);
     if (!(await supportsTeamProjects(resolvedWorkspaceId))) {
       const resources = await listSharedProjectResources(

@@ -247,9 +247,20 @@ export interface ServerContext {
      * — so a project the user just shared did not appear in 全部项目 until some
      * later poll (acceptance #53). Fire-and-forget.
      */
-    invalidateTeamProjectCatalog?(): void;
-  };
-  lifecycle: {
+   invalidateTeamProjectCatalog?(): void;
+
+    /** Move a team project to a folder (or to the workspace root when
+     *  folderId is null) on the HDW backend. Uses the lightweight
+     *  folder/project/move endpoint — a single UPDATE on
+     *  team_projects.folder_id — instead of the full catalog upsert. */
+    moveProjectFolder?(
+      workspaceId: string,
+      projectId: string,
+      folderId: string | null,
+      operatorMemberId?: string,
+    ): Promise<void>;
+ };
+ lifecycle: {
     isDaemonShuttingDown: () => boolean;
   };
 }
