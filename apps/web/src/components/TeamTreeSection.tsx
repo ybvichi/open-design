@@ -562,14 +562,21 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
                </div>
              );
            }
-           return (
-              <button
+          return (
+              <div
                 key={folder.id}
-                type="button"
                 className={`${styles.folderRow}${isActiveFolder ? ` ${styles.isActive}` : ''}`}
                 onClick={() => handleFolderClick(folder)}
                 onDoubleClick={canRename ? (e) => startFolderEdit(folder, e) : undefined}
                 title={folder.name}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleFolderClick(folder);
+                  }
+                }}
               >
                 <Icon name="folder-filled" size={13} className={styles.folderIcon} />
                 <span className={styles.folderName}>{folder.name}</span>
@@ -586,7 +593,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
                     </button>
                   </span>
                 ) : null}
-              </button>
+              </div>
             );
           })}
         </div>

@@ -249,7 +249,7 @@ export function UpdaterPopup({
     };
   }, []);
 
-  const ready = true;//model.environment === 'desktop' && model.shouldShowControl;
+  const ready = model.environment === 'desktop' && model.shouldShowControl;
   const installBusy = installState === 'opening' || installState === 'handoff' || installState === 'quitting';
   const quitRecoverable = installState === 'recoverable' || installState === 'quitting';
   const canStartInstall = ready || installState === 'recoverable';
