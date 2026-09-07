@@ -3,7 +3,7 @@
  *
  * This is the English translation of the PM-approved Chinese charter.
  * Selected via `ComposeInput.promptCoreVariant: 'slim'` (daemon:
- * OD_PROMPT_CORE=slim); classic remains the fallback.
+ * OD_PROMPT_CORE=slim); native CLI + skill delegation is the product default.
  *
  * Runtime-owned conditional layers stay outside this document:
  * - The od-default task-type router form lives in its active skill.

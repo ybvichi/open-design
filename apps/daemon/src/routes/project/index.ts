@@ -18,7 +18,6 @@ import {
 } from '@open-design/contracts/runtime/preview-guards';
 import {
   automaticStrategyTaskProfileForProjectMetadata,
-  defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
   type LocalCatalogScope,
   type PluginManifest,
@@ -4361,25 +4360,9 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
               : {}),
             ...(exampleBinding ? { exampleBinding } : {}),
           }
-        : baseProjectMetadata;
-      const defaultScenarioPluginId = defaultScenarioPluginIdForProjectMetadata(
-        projectMetadata && typeof projectMetadata.kind === 'string'
-          ? projectMetadata as Parameters<
-              typeof defaultScenarioPluginIdForProjectMetadata
-            >[0]
-          : null,
-      );
-      const automaticDefaultRouting = initialSessionMode === 'design'
-        && Boolean(defaultScenarioPluginId)
-        && !explicitPlugin
-        && !automaticStrategyBinding;
-      let resolveBody =
+       : baseProjectMetadata;
+      const resolveBody =
         explicitPlugin ? (req.body as Record<string, unknown>) : null;
-      if (!resolveBody && initialSessionMode === 'design' && !automaticStrategyBinding) {
-        if (defaultScenarioPluginId && getInstalledPlugin(db, defaultScenarioPluginId)) {
-          resolveBody = { ...(req.body || {}), pluginId: defaultScenarioPluginId };
-        }
-      }
       let project;
       const pluginResolutionState: {
         snapshot: ResolveSnapshotOk | null;
@@ -4465,30 +4448,13 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
                 typeof normalizedDesignSystemId === 'string' && normalizedDesignSystemId.length > 0
                   ? { id: normalizedDesignSystemId }
                   : undefined,
-              connectorProbe: buildConnectorProbe(connectorService),
-              ...(pluginForSnapshot ? { plugin: pluginForSnapshot } : {}),
-              ...(automaticDefaultRouting && defaultScenarioPluginId
-                ? {
-                    projectBinding: {
-                      provenance: 'automatic_default' as const,
-                      taskProfile: automaticScenarioTaskProfile({
-                        metadata: projectMetadata as ProjectMetadata | null,
-                        pluginId: defaultScenarioPluginId,
-                      }),
-                    },
-                  }
-                : {}),
-            });
-            if (resolved && !resolved.ok) {
-              if (!explicitPlugin) {
-                console.warn(
-                  `[plugins] default-scenario fallback skipped for project ${id}: ${resolved.body?.error?.code ?? 'unknown'}`,
-                );
-              } else {
-                pluginResolutionState.failure = resolved;
-                throw new Error('explicit plugin resolution failed');
-              }
-            } else {
+             connectorProbe: buildConnectorProbe(connectorService),
+             ...(pluginForSnapshot ? { plugin: pluginForSnapshot } : {}),
+           });
+           if (resolved && !resolved.ok) {
+              pluginResolutionState.failure = resolved;
+              throw new Error('explicit plugin resolution failed');
+           } else {
               pluginResolutionState.snapshot = resolved;
               if (resolved) createdProject = getProject(db, id) ?? createdProject;
             }
@@ -4673,8 +4639,8 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
       return res.json(body);
     }
 
-    const defaultPluginId = defaultScenarioPluginIdForProjectMetadata(project.metadata);
-    if (!defaultPluginId || !getInstalledPlugin(db, defaultPluginId)) {
+    const defaultPluginId: string | null = null;
+    if (!defaultPluginId) {
       return sendApiError(
         res,
         409,

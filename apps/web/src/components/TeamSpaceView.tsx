@@ -150,9 +150,11 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
     return () => { cancelled = true; };
   }, [teamId]);
 
-  const title = teamName?.trim() || t('teamSpace.defaultTitle');
+ const title = teamName?.trim() || t('teamSpace.defaultTitle');
+  const operatorRole = operator?.role ?? null;
+  const canManageFolders = operatorRole === 'owner' || operatorRole === 'admin';
 
-  if (loading) {
+ if (loading) {
     return (
       <section className={styles.view}>
         <div className={styles.loading}>
@@ -174,27 +176,27 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
            {t('teamSpace.subtitle')}
          </span>
        </div>
-       <div className={styles.headerActions}>
-         {activeTab === 'projects' || activeTab === 'members' ? (
-           <button
-             type="button"
-             className={styles.inviteBtn}
-             onClick={onInvite}
-           >
-             <Icon name="plus" size={15} aria-hidden />
-             <span>{t('teamSpace.inviteMember')}</span>
-           </button>
-         ) : null}
-         {activeTab === 'projects' ? (
-           <button
-             type="button"
-             className={styles.inviteBtn}
-             onClick={() => setShowCreateGroup(true)}
-           >
-             <Icon name="plus" size={15} aria-hidden />
-             <span>{t('teamSpace.newProjectGroup')}</span>
-           </button>
-         ) : null}
+      <div className={styles.headerActions}>
+        {canManageFolders && (activeTab === 'projects' || activeTab === 'members') ? (
+          <button
+            type="button"
+            className={styles.inviteBtn}
+            onClick={onInvite}
+          >
+            <Icon name="plus" size={15} aria-hidden />
+            <span>{t('teamSpace.inviteMember')}</span>
+          </button>
+        ) : null}
+        {canManageFolders && activeTab === 'projects' ? (
+          <button
+            type="button"
+            className={styles.inviteBtn}
+            onClick={() => setShowCreateGroup(true)}
+          >
+            <Icon name="plus" size={15} aria-hidden />
+            <span>{t('teamSpace.newProjectGroup')}</span>
+          </button>
+        ) : null}
          <button
            type="button"
            className={styles.refreshBtn}
@@ -621,25 +623,28 @@ function ProjectsPanel({
         ) : projects.length === 0 ? (
           null
         ) : (
-          <RecentProjectsStrip
-            projects={projects}
-            designSystems={designSystems}
-            limit={1000}
-            heading={t('entry.navDrafts')}
-            space="team"
-            onOpen={(id) => onOpenProject?.(id)}
-            onDelete={onDeleteProject}
-            onRename={(id, name) => {
-              setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
-              onRenameProject?.(id, name);
-            }}
-            hideTitle
-            controlsPortalTarget={controlsPortalTarget}
-            operator={operator}
-          />
-        )}
-      </div>
-     {showCreateGroup ? (
+         <RecentProjectsStrip
+           projects={projects}
+           designSystems={designSystems}
+           limit={1000}
+           heading={t('entry.navDrafts')}
+           space="team"
+           onOpen={(id) => onOpenProject?.(id)}
+           onDelete={onDeleteProject}
+           onRename={(id, name) => {
+             setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+             onRenameProject?.(id, name);
+           }}
+          hideTitle
+          controlsPortalTarget={controlsPortalTarget}
+          operator={operator}
+          canManageProjectCollection={canManage}
+          currentWorkspaceId={teamId}
+          currentFolderId={null}
+        />
+       )}
+     </div>
+    {showCreateGroup ? (
         createPortal(
           <div className={styles.confirmOverlay} onClick={() => onShowCreateGroupChange(false)}>
             <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>
@@ -1117,10 +1122,12 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
     return () => { cancelled = true; };
   }, [teamId]);
 
-  const currentFolderName = breadcrumb.length > 0 ? (breadcrumb[breadcrumb.length - 1]?.folderName ?? '').trim() : '';
-  const title = currentFolderName || t('teamSpace.folderSubtitle');
+ const currentFolderName = breadcrumb.length > 0 ? (breadcrumb[breadcrumb.length - 1]?.folderName ?? '').trim() : '';
+ const title = currentFolderName || t('teamSpace.folderSubtitle');
+  const operatorRole = operator?.role ?? null;
+  const canManageFolders = operatorRole === 'owner' || operatorRole === 'admin';
 
-  if (loading) {
+ if (loading) {
     return (
       <section className={styles.view}>
         <div className={styles.loading}>
@@ -1142,16 +1149,18 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
            {t('teamSpace.folderSubtitle')}
          </span>
        </div>
-      <div className={styles.headerActions}>
-        <button
-          type="button"
-          className={styles.inviteBtn}
-          onClick={() => setShowCreateFolder(true)}
-        >
-          <Icon name="plus" size={15} aria-hidden />
-          <span>{t('teamSpace.newSubFolder')}</span>
-        </button>
-        <button
+     <div className={styles.headerActions}>
+        {canManageFolders ? (
+       <button
+         type="button"
+         className={styles.inviteBtn}
+         onClick={() => setShowCreateFolder(true)}
+       >
+         <Icon name="plus" size={15} aria-hidden />
+         <span>{t('teamSpace.newSubFolder')}</span>
+       </button>
+        ) : null}
+       <button
           type="button"
           className={styles.refreshBtn}
           title={t('recentProjects.refresh')}
@@ -1537,25 +1546,28 @@ function FoldersPanel({
         ) : projects.length === 0 ? (
           null
         ) : (
-          <RecentProjectsStrip
-            projects={projects}
-            designSystems={designSystems}
-            limit={1000}
-            heading={t('entry.navDrafts')}
-            space="team"
-            onOpen={(id) => onOpenProject?.(id)}
-            onDelete={onDeleteProject}
-            onRename={(id, name) => {
-              setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
-              onRenameProject?.(id, name);
-            }}
-            hideTitle
-            operator={operator}
-            controlsPortalTarget={controlsEl}
-          />
-        )}
-      </div>
-      {showCreateFolder ? (
+         <RecentProjectsStrip
+           projects={projects}
+           designSystems={designSystems}
+           limit={1000}
+           heading={t('entry.navDrafts')}
+           space="team"
+           onOpen={(id) => onOpenProject?.(id)}
+           onDelete={onDeleteProject}
+           onRename={(id, name) => {
+             setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+             onRenameProject?.(id, name);
+           }}
+          hideTitle
+          operator={operator}
+          controlsPortalTarget={controlsEl}
+          canManageProjectCollection={canManage}
+          currentWorkspaceId={teamId}
+          currentFolderId={folderId}
+        />
+       )}
+     </div>
+     {showCreateFolder ? (
         createPortal(
           <div className={styles.confirmOverlay} onClick={() => onShowCreateFolderChange(false)}>
             <div className={styles.confirmDialog} onClick={(e) => e.stopPropagation()}>

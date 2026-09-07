@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildWorkspacePermissions,
   buildWorkspaceSeatSummary,
-  DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
   type DesignSystemSummary,
   type InstalledPluginRecord,
   type ConnectorDetail,
@@ -36,6 +35,10 @@ let workspaceContextState: {
 
 vi.mock('../../src/components/home-hero/PlaceholderCarousel', () => ({
   PlaceholderCarousel: () => null,
+}));
+
+vi.mock('lottie-react', () => ({
+  default: () => null,
 }));
 
 vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => {
@@ -293,7 +296,7 @@ describe('HomeView context picker', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: '',
-      pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: null,
       attachments: [file],
     }));
   });
@@ -365,7 +368,7 @@ describe('HomeView context picker', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: 'Build @Chart Plugin @Deck Plugin',
-      pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: null,
       contextPlugins: [
         expect.objectContaining({ id: 'chart-plugin', title: 'Chart Plugin' }),
         expect.objectContaining({ id: 'deck-plugin', title: 'Deck Plugin' }),
@@ -420,7 +423,7 @@ describe('HomeView context picker', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: '@Prototype Lab',
-      pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: null,
       skillId: SKILL.id,
       projectKind: 'prototype',
     }));
@@ -613,7 +616,7 @@ describe('HomeView context picker', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: '@Linear @Slack',
-      pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: null,
       contextMcpServers: [
         expect.objectContaining({ id: 'linear', label: 'Linear', transport: 'stdio' }),
       ],
@@ -860,7 +863,7 @@ describe('HomeView context picker', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       prompt: 'Summarize @Slack, then draft follow-ups',
-      pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: null,
       contextConnectors: [
         expect.objectContaining({ id: 'slack', name: 'Slack' }),
       ],

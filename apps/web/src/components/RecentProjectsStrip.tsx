@@ -2240,29 +2240,30 @@ function requestDelete(project: Project) {
                   </div>
                   <div className="recent-projects__card-footer">
                     <div className="recent-projects__card-time">
-                    {space !== 'drafts' ? (
-                    <>
-                   <span
-                     className="recent-projects__card-owner"
+                   {space !== 'drafts' ? (
+                   <>
+                  {creator.ownedBySelf ? (
+                    <span
+                      className="recent-projects__card-owner"
+                      style={{ backgroundColor: '#000' }}
+                      aria-hidden
+                    >
+                      {t('recentProjects.selfCreator')}
+                    </span>
+                  ) : (
+                    <span
+                      className="recent-projects__card-owner"
                      title={creator.name}
-                       style={{ backgroundColor: ownerAvatarColor(creator.memberId) }}
-                     aria-hidden
-                   >
-                       {creator.name}
-                   </span>
-                    {creator.ownedBySelf ? (
-                      <span
-                        className="recent-projects__card-owner"
-                        style={{ backgroundColor: '#000' }}
-                        aria-hidden
-                      >
-                        {t('recentProjects.selfCreator')}
-                      </span>
-                    ) : null}
-                     <span className="recent-projects__card-sep" aria-hidden>·</span>
-                    </>
-                    ) : null}
-                      {relativeTime(project.updatedAt, t)}
+                    style={{ backgroundColor: ownerAvatarColor(creator.memberId) }}
+                      aria-hidden
+                    >
+                      {creator.name}
+                    </span>
+                  )}
+                   <span className="recent-projects__card-sep" aria-hidden>·</span>
+                  </>
+                  ) : null}
+                     {relativeTime(project.updatedAt, t)}
                     </div>
                     <div className="design-card-tag-row">
                       {designSystemProject ? (
@@ -2618,10 +2619,10 @@ function requestDelete(project: Project) {
        onConfirm={handleMoveToTeamConfirm}
        onCancel={() => setMoveToTeamTarget(null)}
        busy={sharingId === moveToTeamTarget.id}
-        mode={moveToTreeMode}
-       currentWorkspaceId={workspaceContext?.workspaceId ?? null}
-       disabledKeys={moveToTreeMode === 'personal-folders' ? disabledKeys : undefined}
-       canMoveToPersonal={resolveCreator(moveToTeamTarget).ownedBySelf}
+       mode={moveToTreeMode}
+       currentWorkspaceId={currentWorkspaceId ?? workspaceContext?.workspaceId ?? null}
+       disabledKeys={disabledKeys}
+      canMoveToPersonal={resolveCreator(moveToTeamTarget).ownedBySelf}
      />
    ) : null}
     {copyToPersonalTarget ? (
@@ -2637,10 +2638,10 @@ function requestDelete(project: Project) {
      <MoveToTeamTreeDialog
        onConfirm={handleBulkMoveToTeamConfirm}
        onCancel={() => setBulkMoveToTeamOpen(false)}
-        mode={bulkMoveToTreeMode}
-       currentWorkspaceId={workspaceContext?.workspaceId ?? null}
-       disabledKeys={bulkMoveToTreeMode === 'personal-folders' ? disabledKeys : undefined}
-       canMoveToPersonal={!selectedProjects.some(({ creator }) => !creator.ownedBySelf)}
+       mode={bulkMoveToTreeMode}
+       currentWorkspaceId={currentWorkspaceId ?? workspaceContext?.workspaceId ?? null}
+       disabledKeys={disabledKeys}
+      canMoveToPersonal={!selectedProjects.some(({ creator }) => !creator.ownedBySelf)}
      />
    ) : null}
      {bulkDeleteOpen ? (

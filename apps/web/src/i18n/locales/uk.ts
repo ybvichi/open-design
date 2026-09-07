@@ -1003,7 +1003,7 @@ export const uk: Dict = {
   'homeHero.subtitlePrefix': 'Альтернатива Claude Design з доступним вихідним кодом.',
   'homeHero.placeholder': 'Опишіть, що ви хочете згенерувати…',
   'homeHero.placeholderActive': 'Відредагуйте приклад запиту або напишіть власний…',
-  'homeHero.carousel.hint': 'Прикріпіть файл, підключіть дизайн-систему або опишіть, що хочете створити',
+  'homeHero.carousel.hint': 'Прикріпіть файл або опішіть, що хочете створити',
   'homeHero.carousel.onePageBrief': 'Скласти односторінковий бриф проєкту',
   'homeHero.carousel.notesToDeck': 'Перетворити мої нотатки на презентацію',
   'homeHero.carousel.signupFlow': 'Зробити макет процесу реєстрації',

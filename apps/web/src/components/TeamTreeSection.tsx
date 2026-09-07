@@ -140,8 +140,8 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     }
   }, [isActiveTeam, activeFolderId]);
 
-  const canRename = team.role === 'admin' || team.role === 'owner';
-  const canDelete = team.role === 'owner';
+  const canManageTeam = team.role === 'owner';
+  const canManageFolders = team.role === 'admin' || team.role === 'owner';
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(team.workspaceName);
   const [renaming, setRenaming] = useState(false);
@@ -225,12 +225,12 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     }
   }, [showCreateFolder]);
 
-  const startEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canRename) return;
-    setEditValue(team.workspaceName);
-    setEditing(true);
-  };
+ const startEdit = (e: React.MouseEvent) => {
+   e.stopPropagation();
+    if (!canManageTeam) return;
+   setEditValue(team.workspaceName);
+   setEditing(true);
+ };
 
   const commitRename = async () => {
     const trimmed = editValue.trim();
@@ -313,12 +313,12 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
    });
  };
 
-  const startFolderEdit = (folder: TeamFolder, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canRename) return;
-    setFolderEditValue(folder.name);
-    setEditingFolderId(folder.id);
-  };
+ const startFolderEdit = (folder: TeamFolder, e: React.MouseEvent) => {
+   e.stopPropagation();
+    if (!canManageFolders) return;
+   setFolderEditValue(folder.name);
+   setEditingFolderId(folder.id);
+ };
 
   const commitFolderRename = async (folder: TeamFolder) => {
     const trimmed = folderEditValue.trim();
@@ -455,9 +455,9 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
           <>
             <div
               className={styles.teamLabel}
-              onClick={handleTeamClick}
-              onDoubleClick={canRename ? startEdit : undefined}
-              title={team.workspaceName}
+             onClick={handleTeamClick}
+              onDoubleClick={canManageTeam ? startEdit : undefined}
+             title={team.workspaceName}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -485,30 +485,30 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
               <TeamIcon workspaceId={team.workspaceId} className={styles.teamIcon} />
               <span className={styles.teamName}>{team.workspaceName}</span>
             </div>
-            <span className={styles.actions}>
-              {canDelete ? (
-                <button
-                  type="button"
-                  className={styles.deleteBtn}
-                  onClick={(e) => { e.stopPropagation(); setShowCreateFolder(true); }}
-                  aria-label="add folder"
-                  tabIndex={-1}
-                >
-                  <Icon name="plus" size={13} />
-                </button>
-              ) : null}
-              {canDelete ? (
-                <button
-                  type="button"
-                  className={styles.deleteBtn}
-                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
-                  aria-label="delete"
-                  tabIndex={-1}
-                >
-                  <Icon name="trash" size={13} />
-                </button>
-              ) : null}
-            </span>
+           <span className={styles.actions}>
+              {canManageFolders ? (
+               <button
+                 type="button"
+                 className={styles.deleteBtn}
+                 onClick={(e) => { e.stopPropagation(); setShowCreateFolder(true); }}
+                 aria-label="add folder"
+                 tabIndex={-1}
+               >
+                 <Icon name="plus" size={13} />
+               </button>
+             ) : null}
+              {canManageTeam ? (
+               <button
+                 type="button"
+                 className={styles.deleteBtn}
+                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+                 aria-label="delete"
+                 tabIndex={-1}
+               >
+                 <Icon name="trash" size={13} />
+               </button>
+             ) : null}
+           </span>
           </>
         )}
       </div>
@@ -566,22 +566,22 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
               <div
                 key={folder.id}
                 className={`${styles.folderRow}${isActiveFolder ? ` ${styles.isActive}` : ''}`}
-                onClick={() => handleFolderClick(folder)}
-                onDoubleClick={canRename ? (e) => startFolderEdit(folder, e) : undefined}
-                title={folder.name}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleFolderClick(folder);
-                  }
-                }}
-              >
-                <Icon name="folder-filled" size={13} className={styles.folderIcon} />
-                <span className={styles.folderName}>{folder.name}</span>
-                {canDelete ? (
-                  <span className={styles.actions}>
+               onClick={() => handleFolderClick(folder)}
+                onDoubleClick={canManageFolders ? (e) => startFolderEdit(folder, e) : undefined}
+               title={folder.name}
+               role="button"
+               tabIndex={0}
+               onKeyDown={(e) => {
+                 if (e.key === 'Enter' || e.key === ' ') {
+                   e.preventDefault();
+                   handleFolderClick(folder);
+                 }
+               }}
+             >
+               <Icon name="folder-filled" size={13} className={styles.folderIcon} />
+               <span className={styles.folderName}>{folder.name}</span>
+                {canManageFolders ? (
+                 <span className={styles.actions}>
                     <button
                       type="button"
                       className={styles.deleteBtn}

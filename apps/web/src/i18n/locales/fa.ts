@@ -1003,7 +1003,7 @@ export const fa: Dict = {
   'homeHero.subtitlePrefix': 'جایگزین Claude Design با کد منبع در دسترس.',
   'homeHero.placeholder': 'آنچه می‌خواهید تولید کنید را توصیف کنید…',
   'homeHero.placeholderActive': 'کوئری نمونه را ویرایش کنید یا کوئری خود را بنویسید…',
-  'homeHero.carousel.hint': 'یک فایل پیوست کنید، سیستم طراحی خود را متصل کنید، یا آنچه می‌خواهید بسازید را توصیف کنید',
+  'homeHero.carousel.hint': 'یک فایل پیوست کنید یا آنچه می‌خواهید بسازید را توصیف کنید',
   'homeHero.carousel.onePageBrief': 'نوشتن خلاصه‌ی یک‌صفحه‌ای پروژه',
   'homeHero.carousel.notesToDeck': 'تبدیل یادداشت‌هایم به ارائه',
   'homeHero.carousel.signupFlow': 'طراحی ماکت فرایند ثبت‌نام',

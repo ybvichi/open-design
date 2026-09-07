@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const workspaceContextMock = vi.hoisted(() => ({
@@ -15,6 +15,10 @@ const workspaceContextMock = vi.hoisted(() => ({
 
 vi.mock('../../src/components/home-hero/PlaceholderCarousel', () => ({
   PlaceholderCarousel: () => null,
+}));
+
+vi.mock('lottie-react', () => ({
+  default: () => null,
 }));
 
 vi.mock('../../src/collab/useWorkspaceContext', async (importOriginal) => {
@@ -109,29 +113,20 @@ describe('HomeView media composer options', () => {
     });
   });
 
-  it('renders the design-system popover outside the prompt editor (not clipped by it)', async () => {
+  it('does not render a design-system picker or popover', async () => {
     stubFetch();
     renderHome();
 
     await clickHomeRailChip('image');
-    await openOption('designSystem');
-
-    // The shared DesignSystemPicker portals its popover to document.body, so it
-    // can never be clipped by the prompt editor's (or footer row's) overflow.
-    const popover = screen.getByTestId('project-ds-picker-popover');
-    expect(screen.getByTestId('home-hero-input').contains(popover)).toBe(false);
-    expect(document.body.contains(popover)).toBe(true);
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
+    expect(screen.queryByTestId('project-ds-picker-popover')).toBeNull();
   });
 
-  it('surfaces the persistent design-system picker and no footer pills for Image/Video or HyperFrames/Audio', async () => {
+  it('shows no design-system or footer options for Image/Video or HyperFrames/Audio', async () => {
     stubFetch();
     renderHome();
 
-    // The design-system picker is now the persistent row below the composer, so
-    // it is present for every kind and no longer a footer pill. Image/Video add
-    // no inline footer pills either; ratio / duration / model / resolution are
-    // asked for during the run (mirroring prototype/deck).
-    expect(screen.getByTestId('home-hero-design-system-trigger')).toBeTruthy();
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
 
     await clickHomeRailChip('image');
     await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
@@ -171,7 +166,7 @@ describe('HomeView media composer options', () => {
     expect(screen.queryByTestId('home-hero-prompt-slot-voice')).toBeNull();
   });
 
-  it('includes only published user-created design systems in the Home style picker', async () => {
+  it('keeps supplied design systems out of the Home composer', async () => {
     stubFetch();
     renderHome({
       designSystems: [
@@ -182,18 +177,11 @@ describe('HomeView media composer options', () => {
     });
 
     await clickHomeRailChip('image');
-    await openOption('designSystem');
-
-    // The shared picker is a flat searchable list (no group headers). Home still
-    // filters to selectable systems: a published user system shows, a draft one
-    // does not, and built-in presets show.
-    const popover = screen.getByTestId('project-ds-picker-popover');
-    expect(within(popover).getByRole('option', { name: /Acme Published System/i })).toBeTruthy();
-    expect(within(popover).queryByRole('option', { name: /Acme Draft System/i })).toBeNull();
-    expect(within(popover).getByRole('option', { name: /Neutral Modern/i })).toBeTruthy();
+    expect(screen.queryByTestId('home-hero-design-system-trigger')).toBeNull();
+    expect(screen.queryByTestId('project-ds-picker-popover')).toBeNull();
   });
 
-  it('opens the Home style picker without duplicate group key warnings', async () => {
+  it('does not render hidden design-system groups', async () => {
     stubFetch();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
@@ -206,7 +194,6 @@ describe('HomeView media composer options', () => {
       });
 
       await clickHomeRailChip('image');
-      await openOption('designSystem');
 
       const messages = consoleError.mock.calls.map((call) => call.map(String).join(' '));
       expect(messages.some((message) => message.includes('Encountered two children with the same key'))).toBe(false);
@@ -332,7 +319,7 @@ describe('HomeView media composer options', () => {
     });
   });
 
-  it('includes the selected design system in the submitted payload and omits asked-for media fields', async () => {
+  it('submits null designSystemId and omits asked-for media fields', async () => {
     stubFetch();
     const onSubmit = vi.fn();
     renderHome({
@@ -345,14 +332,13 @@ describe('HomeView media composer options', () => {
 
     await clickHomeRailChip('video');
     await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
-    await chooseOption('designSystem', 'brand-alpha', 'Brand Alpha');
     setHomePrompt('Create a launch teaser.');
     await submitHome();
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         prompt: 'Create a launch teaser.',
-        designSystemId: 'brand-alpha',
+        designSystemId: null,
         // ratio / duration are no longer seeded into metadata — the agent asks.
         projectMetadata: expect.not.objectContaining({
           videoAspect: expect.anything(),
@@ -692,20 +678,6 @@ function stubFetch(options: {
   return fetchMock;
 }
 
-async function openOption(name: string) {
-  // The design-system picker moved out of the footer to the persistent row
-  // below the composer; it renders the shared DesignSystemPicker, whose popover
-  // is portaled to document.body as `project-ds-picker-popover`. Any other
-  // footer field still opens from the inline FooterSelectOption `-menu`.
-  if (name === 'designSystem') {
-    fireEvent.click(await screen.findByTestId('home-hero-design-system-trigger'));
-    await waitFor(() => expect(screen.getByTestId('project-ds-picker-popover')).toBeTruthy());
-    return;
-  }
-  fireEvent.click(await screen.findByTestId(`home-hero-footer-option-${name}`));
-  await waitFor(() => expect(screen.getByTestId(`home-hero-footer-option-${name}-menu`)).toBeTruthy());
-}
-
 async function clickHomeRailChip(id: string) {
   // #5517 removed the inline template rail from Home: every scenario template
   // is picked from the composer footer's radial Template picker. Wait until the
@@ -743,30 +715,6 @@ async function submitHome() {
 // textarea's `.value === ''`).
 function promptIsEmpty(): boolean {
   return homeHeroPromptText().trim() === '';
-}
-
-async function chooseOption(name: string, value: string, label = value) {
-  await openOption(name);
-  if (name === 'designSystem') {
-    // The shared DesignSystemPicker selects on mouseDown from its portaled list.
-    const popover = screen.getByTestId('project-ds-picker-popover');
-    const option = within(popover).getAllByRole('option').find((item) => {
-      const text = item.textContent ?? '';
-      return text.includes(label) || text.includes(value);
-    });
-    if (!option) throw new Error(`No option "${label}" for ${name}`);
-    fireEvent.mouseDown(option);
-    return;
-  }
-  // The inline `<select>` prompt-widget path (home-hero-prompt-option-*-select)
-  // is gone; selection now always happens via the footer options menu.
-  const menu = screen.getByTestId(`home-hero-footer-option-${name}-menu`);
-  const option = within(menu).getAllByRole('option').find((item) => {
-    const text = item.textContent ?? '';
-    return text.includes(label) || text.includes(value);
-  });
-  if (!option) throw new Error(`No option "${label}" for ${name}`);
-  fireEvent.click(option);
 }
 
 function pluginRecord(id: string, title: string) {

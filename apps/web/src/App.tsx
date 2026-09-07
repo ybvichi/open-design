@@ -39,7 +39,6 @@ import type {
   WorkspaceActiveResponse,
   WorkspaceDirectoryItem,
 } from '@open-design/contracts';
-import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type { ProjectTitleHint } from './components/EntryShell';
 import type { IntegrationTab } from './components/IntegrationsView';
@@ -2378,26 +2377,9 @@ function AppInner() {
     agents,
     config.agentId,
     config.onboardingCompleted,
-  ]);
+ ]);
 
-  // Auto-pick the default design system the same way — only after daemon
-  // config has merged so we never overwrite a daemon-stored selection.
-  useEffect(() => {
-    if (!daemonConfigLoaded || dsLoading) return;
-    if (config.designSystemId) return;
-    if (designSystems.length === 0) return;
-    const id =
-      designSystems.find((d) => d.id === 'default')?.id ?? designSystems[0]!.id;
-    setConfig((prev) => {
-      if (prev.designSystemId) return prev;
-      const next: AppConfig = { ...prev, designSystemId: id };
-      saveConfig(next);
-      void syncConfigToDaemon(next);
-      return next;
-    });
-  }, [daemonConfigLoaded, dsLoading, designSystems, config.designSystemId]);
-
-  // One-shot self-healing migration for pets adopted before the
+ // One-shot self-healing migration for pets adopted before the
   // overlay learned atlas-row switching. If the stored pet is a
   // custom / codex pet whose imageUrl is a single-row strip
   // (no atlas), we silently re-download the full spritesheet so
@@ -3065,13 +3047,13 @@ function AppInner() {
         }
         result = await createProject({
           ...(optimisticProjectId ? { id: optimisticProjectId } : {}),
-          name: input.name,
-          skillId: input.skillId,
-          ...(input.skillCatalogScope
-            ? { skillCatalogScope: input.skillCatalogScope }
-            : {}),
-          designSystemId: input.designSystemId,
-          ...(input.designSystemCatalogScope
+         name: input.name,
+         skillId: input.skillId,
+         ...(input.skillCatalogScope
+           ? { skillCatalogScope: input.skillCatalogScope }
+           : {}),
+          designSystemId: null,
+         ...(input.designSystemCatalogScope
             ? { designSystemCatalogScope: input.designSystemCatalogScope }
             : {}),
           pendingPrompt: derivedPendingPrompt,
@@ -3366,39 +3348,9 @@ function AppInner() {
       return true;
     },
     [analytics.track, clearLocalProject, rememberLocalProject],
-  );
+ );
 
-  const handleCreateProjectFromDesignSystem = useCallback(
-    async (designSystemId: string, designSystemTitle: string) => {
-      // "Create with this design system" must NOT assume a prototype. Route
-      // the click through the hidden default design router (od-default) —
-      // exactly like a free-form Home prompt. The preset prompt seeds the
-      // conversation and is auto-sent so the router can infer the task type
-      // from the brief, asking only when the route remains ambiguous. `kind`
-      // stays the neutral 'other' so no surface-specific default leaks back
-      // in on the daemon side.
-      const presetPrompt = t('nextStep.brandCreateDesignPrompt', {
-        designSystem: designSystemTitle,
-      });
-      await handleCreateProject({
-        name: t('common.untitled'),
-        skillId: null,
-        designSystemId,
-        pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
-        pluginInputs: { prompt: presetPrompt },
-        pendingPrompt: presetPrompt,
-        autoSendFirstMessage: true,
-        conversationMode: 'design',
-        metadata: {
-          kind: 'other',
-          nameSource: 'generated',
-        },
-      });
-    },
-    [handleCreateProject, t],
-  );
-
-  const resolveSourceProjectWorkspaceContext = useCallback(async (
+ const resolveSourceProjectWorkspaceContext = useCallback(async (
     sourceProjectId: string,
   ): Promise<WorkspaceCollabContext | null> => {
     const routeProject = routeProjectSnapshotRef.current?.project;
@@ -5355,9 +5307,8 @@ function AppInner() {
           onProjectsRefresh={refreshProjects}
           onDeleteProject={handleDeleteProject}
           onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
-          onDesignSystemsRefresh={refreshDesignSystems}
-          onCreateProjectFromDesignSystem={handleCreateProjectFromDesignSystem}
-          onCreateDesignSystemFromProject={handleCreateDesignSystemFromProject}
+         onDesignSystemsRefresh={refreshDesignSystems}
+         onCreateDesignSystemFromProject={handleCreateDesignSystemFromProject}
           onDuplicateProject={handleDuplicateProject}
           onRunActivityChange={handleProjectRunActivityChange}
         />

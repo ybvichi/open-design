@@ -16548,16 +16548,17 @@ async function openReviewListModal() {
                   handoff button's own dismiss listener). */}
              <div className="share-menu chrome-share-menu">
                 <div ref={reviewMenuRef} className="share-menu-inner">
-               <button
-                 type="button"
-                 className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
-                 aria-haspopup="menu"
-                 aria-expanded={reviewMenuOpen}
-                 disabled={exportToast ? true : undefined}
-                 onClick={openReviewMenu}
-               >
-                 <span>评审</span>
-               </button>
+              <button
+                type="button"
+                className="chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only"
+                aria-haspopup="menu"
+                aria-expanded={reviewMenuOpen}
+                disabled={viewerOnly || Boolean(exportToast)}
+                title={viewerOnly ? viewerOnlyDisabledTitle : undefined}
+                onClick={openReviewMenu}
+              >
+                <span>评审</span>
+              </button>
                {reviewMenuOpen ? (
                  <div className="share-menu-popover" role="menu">
                    <button

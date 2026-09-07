@@ -5,7 +5,6 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   composeOdNextStrategyContinuationV2,
-  defaultScenarioPluginIdForProjectMetadata,
   RUN_RESULT_PACKAGE_SCHEMA,
   type AppliedPluginSnapshot,
   type ArtifactManifest,
@@ -120,8 +119,6 @@ import {
 import { odNextRolloutAnalyticsProperties } from '../strategies/od-next/rollout-analytics.js';
 import {
   buildConnectorProbe,
-  automaticScenarioTaskProfile,
-  getInstalledPlugin,
   readVerifiedProjectScenarioBinding,
   readVerifiedProjectStrategyBinding,
   resolvePluginFolder,
@@ -914,32 +911,6 @@ function toProjectFiles(value: unknown): ProjectFileEntry[] {
         Boolean(item && typeof item === 'object' && typeof (item as JsonRecord).name === 'string'),
       )
     : [];
-}
-
-// Intents the scenario-plugin fallback resolver is allowed to see. Mirrors the
-// `ProjectMetadata['intent']` contract union so an unknown/legacy string in a
-// stored project row never gets cast into the union.
-const SCENARIO_PROJECT_INTENTS: readonly NonNullable<ContractProjectMetadata['intent']>[] = [
-  'live-artifact',
-  'web-clone',
-  'document',
-  'marketing',
-  'hyperframes',
-];
-
-function toScenarioProjectIntent(value: unknown): ContractProjectMetadata['intent'] | undefined {
-  return SCENARIO_PROJECT_INTENTS.find((intent) => intent === value);
-}
-
-function toScenarioProjectMetadata(
-  metadata: ProjectMetadata,
-): Pick<ContractProjectMetadata, 'kind' | 'intent'> | null {
-  if (!metadata || typeof metadata.kind !== 'string') return null;
-  const intent = toScenarioProjectIntent(metadata.intent);
-  return {
-    kind: metadata.kind as ContractProjectMetadata['kind'],
-    ...(intent ? { intent } : {}),
-  };
 }
 
 type DesignSystemSelectionSource = 'request' | 'plugin' | 'project' | 'app-default' | 'none';
@@ -1912,9 +1883,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         typeof requestBody.conversationId === 'string' && requestBody.conversationId
           ? requestBody.conversationId
           : getFirstProjectConversation(db, requestBody.projectId)?.id ?? null;
-      const defaultPluginId = defaultScenarioPluginIdForProjectMetadata(
-        toScenarioProjectMetadata(rolloutProject?.metadata),
-      );
+      const defaultPluginId: string | null = null;
       const suppliedSnapshotWasNamed = typeof requestBody.appliedPluginSnapshotId === 'string'
         && requestBody.appliedPluginSnapshotId.trim().length > 0;
       const suppliedPluginWasNamed = typeof requestBody.pluginId === 'string'
@@ -2110,12 +2079,6 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
             pluginId: 'od-next-strategy',
             appliedPluginSnapshotId: undefined,
           };
-        } else if (!hasPin) {
-          const fallbackPluginId = defaultPluginId;
-          if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
-            runResolveBody = { ...requestBody, pluginId: fallbackPluginId };
-            synthesizedAutomaticDefault = true;
-          }
         }
       }
       const activatingStrategy = strategyRolloutDecision?.effectiveMode === 'active'
@@ -2156,31 +2119,14 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         return res.status(500).json({ error: String(err) });
       }
       if (!explicitUserPlugin && strategyRolloutDecision?.effectiveMode === 'active') {
-        automaticOrdinaryFallbackPluginId = defaultPluginId;
-        const fallbackBody = !projectHasExplicitPin && defaultPluginId
-          && getInstalledPlugin(db, defaultPluginId)
-          ? { ...requestBody, pluginId: defaultPluginId }
-          : requestBody;
         resolveAutomaticOrdinaryFallback = () => resolvePluginSnapshot({
           db,
-          body: fallbackBody,
+          body: requestBody,
           projectId: requestBody.projectId as string,
           conversationId: snapshotConversationId,
           registry: registryView,
           connectorProbe: buildConnectorProbe(connectorService),
           requireSnapshotProjectMatch: true,
-          ...(defaultPluginId
-            ? {
-                projectBinding: {
-                  provenance: 'automatic_default' as const,
-                  taskProfile: verifiedScenarioBinding?.taskProfile
-                    ?? automaticScenarioTaskProfile({
-                      metadata: rolloutProject?.metadata as ContractProjectMetadata,
-                      pluginId: defaultPluginId,
-                    }),
-                },
-              }
-            : {}),
         });
       }
       const resolved = resolvePluginSnapshot({
@@ -2191,20 +2137,6 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         registry: registryView,
         connectorProbe: buildConnectorProbe(connectorService),
         requireSnapshotProjectMatch: true,
-        ...(!activatingStrategy && !explicitExecutablePlugin
-          && (projectPinIsAutomaticDefault || synthesizedAutomaticDefault)
-          && defaultPluginId
-          ? {
-              projectBinding: {
-                provenance: 'automatic_default' as const,
-                taskProfile: verifiedScenarioBinding?.taskProfile
-                  ?? automaticScenarioTaskProfile({
-                    metadata: rolloutProject?.metadata as ContractProjectMetadata,
-                    pluginId: defaultPluginId,
-                  }),
-              },
-            }
-          : {}),
         ...(activatingStrategy && strategyRolloutDecision?.taskType
           ? {
               internalStrategyActivation: {

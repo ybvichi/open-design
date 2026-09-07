@@ -61,8 +61,13 @@
 
 /* Disabled (greyed-out, not selectable) row. */
 .disabled {
-  opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Only the label text is greyed out; the expand chevron and folder
+   icon stay at full opacity so the row remains browsable. */
+.disabled .rowLabel {
+  opacity: 0.4;
 }
 
 .disabled:hover {

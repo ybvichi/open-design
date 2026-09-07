@@ -23,7 +23,6 @@ import {
 } from 'react';
 import {
   automaticStrategyTaskProfileForProjectMetadata,
-  defaultScenarioPluginIdForProjectMetadata,
   type AmrWalletSnapshot,
   type ChatSessionMode,
   type ConnectorDetail,
@@ -311,84 +310,6 @@ type EntryCreateProjectInput = Omit<CreateInput, 'metadata'> & {
  onboardingEntry?: OnboardingEntry;
   folderId?: string;
 };
-
-function defaultPluginIdForMetadata(metadata: ProjectMetadata): string | null {
-  return defaultScenarioPluginIdForProjectMetadata(metadata);
-}
-
-function defaultPluginInputsForCreate(
-  input: CreateInput,
-  pluginId: string | null,
-): Record<string, unknown> | null {
-  const kind = input.metadata.kind;
-  const projectName = input.name.trim();
-
-  if (pluginId === 'example-web-prototype') {
-    return {
-      artifactKind: input.metadata.includeLandingPage
-        ? 'landing page'
-        : 'web prototype',
-      fidelity: input.metadata.fidelity ?? 'high-fidelity',
-      audience: 'product evaluators',
-      designSystem: 'the active project design system',
-      template: input.metadata.templateLabel ?? 'the bundled web prototype seed',
-    };
-  }
-
-  if (pluginId === 'example-simple-deck') {
-    return {
-      deckType: 'pitch deck',
-      topic: projectName || 'the user brief',
-      audience: 'decision makers',
-      slideCount: '10-15 pages',
-      speakerNotes: input.metadata.speakerNotes
-        ? 'include speaker notes'
-        : 'no speaker notes',
-      designSystem: 'the active project design system',
-    };
-  }
-
-  if (pluginId === 'od-new-generation') {
-    const templateLabel = input.metadata.templateLabel?.trim();
-    const artifactKind =
-      kind === 'template'
-        ? 'artifact based on a saved template'
-        : kind === 'other'
-          ? 'custom design artifact'
-          : `${kind} artifact`;
-    return {
-      artifactKind,
-      audience: 'product and design reviewers',
-      topic: templateLabel || projectName || 'the user brief',
-    };
-  }
-
-  if (pluginId !== 'od-media-generation') return null;
-  if (kind !== 'image' && kind !== 'video' && kind !== 'audio') return null;
-
-  const promptTemplate = input.metadata.promptTemplate;
-  const subject =
-    promptTemplate?.prompt?.trim()
-    || projectName
-    || promptTemplate?.title?.trim()
-    || `${kind} concept`;
-  const style =
-    promptTemplate?.summary?.trim()
-    || 'cinematic, high-quality, on-brand';
-  const aspect =
-    kind === 'image'
-      ? input.metadata.imageAspect
-      : kind === 'video'
-        ? input.metadata.videoAspect
-        : undefined;
-
-  return {
-    mediaKind: kind,
-    subject,
-    style,
-    ...(aspect ? { aspect } : {}),
-  };
-}
 
 export interface ProjectTitleHint {
   name: string;
@@ -1292,15 +1213,6 @@ export function EntryShell({
   }
 
   function handleCreate(input: CreateInput) {
-    // The NewProjectModal no longer asks the user to pick a plugin.
-    // Each project kind is silently bound to its default scenario
-    // pipeline at creation time so the user lands in a running flow
-    // without having to reason about pipeline internals. The mapping
-    // is intentionally explicit so future kind-specific scenarios
-    // (e.g. a deck- or image-specialized pipeline) can take over a
-    // single row without touching the form.
-    const pluginId = defaultPluginIdForMetadata(input.metadata);
-    const pluginInputs = defaultPluginInputsForCreate(input, pluginId);
     const { skillSelectionProvenance, ...projectInput } = input;
     const automaticStrategyRoute = skillSelectionProvenance === 'explicit-user'
       ? null
@@ -1318,9 +1230,7 @@ export function EntryShell({
         : {}),
       ...(automaticStrategyRoute
         ? { automaticStrategyTaskProfile: automaticStrategyRoute }
-        : pluginInputs
-          ? { pluginInputs }
-          : {}),
+        : {}),
     });
   }
 
@@ -1334,10 +1244,9 @@ export function EntryShell({
   //
   // Stage B of plugin-driven-flow-plan: the rail can stamp a
   // `projectKind` on the payload so the created project records the
-  // chosen surface (image / video / audio, etc.). Free-form Home
-  // submits now arrive with the hidden od-default router plugin and
-  // projectKind='other', so the agent infers the task type and asks only
-  // when the brief cannot be routed reliably.
+  // chosen surface (image / video / audio, etc.). Free-form Home submits
+  // use projectKind='other' and remain unbound unless the user selected a
+  // plugin or skill.
   async function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
     if (amrAuthRequired) {
       navigate({ kind: 'home', view: 'onboarding' }, { replace: true });
@@ -1473,7 +1382,7 @@ export function EntryShell({
       ...(strategyRoutingFields.skillId && payload.skillCatalogScope
         ? { skillCatalogScope: payload.skillCatalogScope }
         : {}),
-      designSystemId: payload.designSystemId ?? null,
+      designSystemId: null,
       ...(payload.designSystemCatalogScope
         ? { designSystemCatalogScope: payload.designSystemCatalogScope }
         : {}),

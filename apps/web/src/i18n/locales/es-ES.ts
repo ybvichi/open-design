@@ -1003,7 +1003,7 @@ export const esES: Dict = {
   'homeHero.subtitlePrefix': 'La alternativa a Claude Design con código fuente disponible.',
   'homeHero.placeholder': 'Describe lo que quieres generar…',
   'homeHero.placeholderActive': 'Edita la consulta de ejemplo o escribe la tuya…',
-  'homeHero.carousel.hint': 'Adjunta un archivo, vincula tu design system o describe lo que quieres crear',
+  'homeHero.carousel.hint': 'Adjunta un archivo o describe lo que quieres crear',
   'homeHero.carousel.onePageBrief': 'Redactar un brief de proyecto de una página',
   'homeHero.carousel.notesToDeck': 'Convertir mis notas en una presentación',
   'homeHero.carousel.signupFlow': 'Diseñar un flujo de registro',
