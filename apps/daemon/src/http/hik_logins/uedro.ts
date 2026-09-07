@@ -223,7 +223,7 @@ export async function uedroLogin(
     // if (step4) {
     //   mergedCookies = step4.cookies;
     // }
-    userInfo = JSON.parse(step4.body).data?.list?.[0];
+    userInfo = JSON.parse(step4.body).data?.list?.find((n:any)=>n.email===`${username}@hikvision.com.cn`)
   } catch(err) {
     // 取用户信息失败不阻断主流程
     userInfo = {
