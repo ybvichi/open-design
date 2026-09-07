@@ -2727,7 +2727,11 @@ function VerifiedHtmlCoverFrame({
   diagnostic: string;
 }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+    setVerified(false);
+  }, [src]);
   // The iframe document load is deferred until the card is near the viewport
   // and one of the shared thumbnail load slots is free, so a large grid
   // cannot flood the daemon with background document loads (Batch A §4.2).
@@ -2735,10 +2739,43 @@ function VerifiedHtmlCoverFrame({
     rootMargin: THUMBNAIL_OVERSCAN_MARGIN,
   });
   const { canLoad, settle } = useThumbnailLoadSlot(inView && !failed);
+  // HEAD-probe before committing to an iframe document load. An <iframe>
+  // fires onLoad (not onError) for HTTP 404/500 responses, so the browser
+  // treats the error body as a successful document. The upstream
+  // loadProjectCover probe can be bypassed by stale snapshot cache entries
+  // when a project is deleted between probe and render; this per-card probe
+  // closes that gap. It runs inside the thumbnail load slot budget, so it
+  // does not add unbounded concurrency.
+  useEffect(() => {
+    if (!canLoad || failed || verified) return;
+    let cancelled = false;
+    fetch(src, { method: 'HEAD', cache: 'no-store' })
+      .then((response) => {
+        if (cancelled) return;
+        if (response.ok || response.status === 304) {
+          setVerified(true);
+        } else {
+          console.warn(
+            `[project-cover] HTML cover unavailable (${response.status} ${response.statusText}):`,
+            diagnostic,
+          );
+          settle();
+          setFailed(true);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        console.warn('[project-cover] failed to verify HTML cover:', diagnostic, err);
+        settle();
+        setFailed(true);
+      });
+    return () => { cancelled = true; };
+  }, [canLoad, failed, verified, src, diagnostic, settle]);
   if (failed) {
     return <span className="recent-projects__card-glyph">{initial}</span>;
   }
-  if (!canLoad) {
+  if (!canLoad || !verified) {
     return (
       <span ref={inViewRef} className="recent-projects__card-glyph">
         {initial}
