@@ -1197,9 +1197,15 @@ export interface Dict {
   'personalScope.tabSkill': string;
   'personalScope.tabMcp': string;
   'personalScope.tabExperts': string;
-  'personalScope.emptyNotePersonal': string;
-  'personalScope.emptyNoteShared': string;
-  'teamSpace.defaultTitle': string;
+ 'personalScope.emptyNotePersonal': string;
+ 'personalScope.emptyNoteShared': string;
+ 'squareScope.subtitle': string;
+ 'squareScope.tabProjects': string;
+ 'squareScope.tabSkill': string;
+ 'squareScope.tabMcp': string;
+ 'squareScope.tabTool': string;
+ 'squareScope.emptyNote': string;
+ 'teamSpace.defaultTitle': string;
   'teamSpace.subtitle': string;
   'teamSpace.tabProjects': string;
   'teamSpace.tabMembers': string;
