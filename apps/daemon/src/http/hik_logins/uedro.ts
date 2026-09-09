@@ -212,30 +212,30 @@ export async function uedroLogin(
   // 仅凭门户会话 cookie 鉴权，不带 token 头。
   let userInfo: any;
   try {
-    const step4 = await rawRequest('POST', UEDRO_USER_INFO_URL, mergedCookies, {
-      body:JSON.stringify({
-        pageNo: 1,
-        pageSize: 15,
-        userName: username
-      }),
+    const step4 = await rawRequest('GET', UEDRO_IS_LOGIN_URL, mergedCookies, {
+      // body:JSON.stringify({
+      //   pageNo: 1,
+      //   pageSize: 15,
+      //   userName: username
+      // }),
       extraHeaders: uedroHeaders(mergedCookies),
     });
-    // if (step4) {
-    //   mergedCookies = step4.cookies;
-    // }
-    userInfo = JSON.parse(step4.body).data?.list?.find((n:any)=>n.email===`${username}@hikvision.com.cn`)
+    if (step4) {
+      mergedCookies = step4.cookies;
+    }
+    userInfo = JSON.parse(step4.body)?.data//?.list?.find((n:any)=>n.email===`${username}@hikvision.com.cn`)
   } catch(err) {
     // 取用户信息失败不阻断主流程
     userInfo = {
       err
     };
   }
-  if(!userInfo.displayName){
+  if(userInfo&&!userInfo.displayName){
      userInfo.displayName = userInfo.name;
   }
-  if(!userInfo.departmentDetail){
-    userInfo.departmentDetail = userInfo.userDeptPath.replace(/(\\)/g,'/');
-  }
+  // if(!userInfo.departmentDetail){
+  //   userInfo.departmentDetail = userInfo.userDeptPath.replace(/(\\)/g,'/');
+  // }
   return {
     ok: true,
     username,
