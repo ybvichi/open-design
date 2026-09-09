@@ -324,8 +324,17 @@ export interface WorkspaceCollabContext {
   seatSummary: WorkspaceSeatSummary;
   permissions: WorkspacePermissions;
   billingRecovery?: WorkspaceBillingRecovery;
-  /**
-   * URL of the team's settings/management console on the cloud web app. Team
+  /** True when this context is the global Shared Space team.
+   *  The shared space is a special team where every logged-in user is
+   *  automatically a member. Grants read + comment only (no write). */
+ isSharedSpace?: boolean;
+  /** Cross-team stable collaborator ID for the current user in the shared
+   *  space. Used as `author_member_id` on comments so a commenter who is NOT
+   *  a member of the project's home workspace gets a stable, namespaced ID
+   *  that display layers can badge as "协作者". */
+  collaboratorMemberId?: string;
+ /**
+  * URL of the team's settings/management console on the cloud web app. Team
    * management (members, billing, dashboard) lives there — the local client only
    * links out to it; it does not embed those views. Absent for a personal
    * workspace or when the console URL is not resolvable.
@@ -381,6 +390,11 @@ export interface WorkspaceDirectoryItem {
    * without a separate context fetch. */
   displayName?: string;
   isDefaultTeam?: boolean;
+  /** True when this directory item is the global Shared Space team.
+   *  The shared space is a special team where every logged-in user is
+   *  automatically a member. Projects are not stored in it — instead,
+   *  they are projected via share references. */
+  isSharedSpace?: boolean;
 }
 
 /** GET /api/workspace/directory. OD's local workspace switcher data source. */

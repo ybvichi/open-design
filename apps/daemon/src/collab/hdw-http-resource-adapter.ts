@@ -248,20 +248,21 @@ export function createHdwHttpResourceAdapter(
       }, undefined);
     },
 
-    async transferToWorkspace({ projectId, principal, sourceWorkspaceId, targetWorkspaceId }) {
-      return gated(principal, async () => {
-        const result = await options.client.transferProject(
-          sourceWorkspaceId,
-          projectId,
-          targetWorkspaceId,
-        );
-        return {
-          version: result.version,
-          ...(result.versionId ? { versionId: result.versionId } : {}),
-          ...(result.targetOwnerMemberId ? { targetOwnerMemberId: result.targetOwnerMemberId } : {}),
-        };
-      }, null);
-    },
+   async transferToWorkspace({ projectId, principal, sourceWorkspaceId, targetWorkspaceId }) {
+     return gated(principal, async () => {
+       const result = await options.client.transferProject(
+         sourceWorkspaceId,
+         projectId,
+         targetWorkspaceId,
+          principal?.memberId,
+       );
+       return {
+         version: result.version,
+         ...(result.versionId ? { versionId: result.versionId } : {}),
+         ...(result.targetOwnerMemberId ? { targetOwnerMemberId: result.targetOwnerMemberId } : {}),
+       };
+     }, null);
+   },
   };
 }
 

@@ -943,3 +943,200 @@
 .createInput:disabled {
   opacity: 0.6;
 }
+
+/* --- Community plugin grid (SquareView "项目" tab) --- */
+
+.pluginGrid {
+  display: grid;
+  container: pluginGrid / inline-size;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--spacing-16);
+}
+
+@container pluginGrid (max-width: 947px) {
+  .pluginGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container pluginGrid (max-width: 755px) {
+  .pluginGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container pluginGrid (max-width: 563px) {
+  .pluginGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container pluginGrid (max-width: 371px) {
+  .pluginGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pluginCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  position: relative;
+  min-height: 180px;
+  transition:
+    border-color 140ms var(--ease-out),
+    box-shadow 140ms var(--ease-out);
+}
+
+.pluginCard:hover {
+  border-color: var(--border-strong, var(--border));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.pluginCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pluginCardDesc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pluginCardTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pluginCardTag {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.pluginCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: auto;
+}
+
+.pluginCardMetaDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.pluginCardActions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated, #fff) 92%, transparent);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms var(--ease-out);
+}
+
+.pluginCard:hover .pluginCardActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pluginCardAction {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated, #fff);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+.pluginCardAction:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong, var(--border));
+}
+
+.pluginCardAction:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.pluginCardAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pluginCardActionPrimary {
+  background: var(--text-strong);
+  color: var(--accent-contrast, #fff);
+  border-color: var(--text-strong);
+}
+
+.pluginCardActionPrimary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 88%, #fff);
+}
+
+.pluginCardError {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--red, #dc2626);
+}
+
+.pluginCardRetry {
+  margin-top: 8px;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pluginCardRetry:hover {
+  background: var(--bg-subtle);
+  color: var(--text-strong);
+}

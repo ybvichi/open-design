@@ -61,7 +61,7 @@ interface FolderRow {
 }
 
 /**
- * Local folder CRUD routes. Unlike the HDW proxy (`/api/hdw/webapi/v1/folder/*`)
+ * Local folder CRUD routes. Unlike the HDW proxy (`/api/hdw/api/folder/*`)
  * which forwards to the upstream backend, these routes operate directly on the
  * daemon's local SQLite `folders` table. They are used by the personal-all
  * scope view where folders belong to the user's personal workspace.
@@ -159,17 +159,24 @@ export function registerFolderRoutes(app: Express, deps: RegisterFolderRoutesDep
  // folderId is the special value "root"). GET /api/folders/:folderId/projects
  // ?workspace_id=<id>  — returns { projects: Project[] } shaped the same as
  // GET /api/projects so the web client can reuse the same card rendering.
- app.get('/api/folders/:folderId/projects', async (req, res) => {
-    const folderIdRaw = String(req.params.folderId ?? '').trim();
-    const workspaceId = String(req.query.workspace_id ?? '').trim();
-    if (!workspaceId) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'Missing workspace_id');
-    }
-    // "root" is a sentinel for the workspace root (folder_id IS NULL).
-    const folderId = folderIdRaw && folderIdRaw !== 'root' ? folderIdRaw : null;
- try {
-   const rows = listProjectsInFolder(db, workspaceId, folderId);
-   const projects: RemoteTeamProjectSummary[] = rows.map((row) => ({
+app.get('/api/folders/:folderId/projects', async (req, res) => {
+   const folderIdRaw = String(req.params.folderId ?? '').trim();
+   const workspaceId = String(req.query.workspace_id ?? '').trim();
+   if (!workspaceId) {
+     return sendApiError(res, 400, 'BAD_REQUEST', 'Missing workspace_id');
+   }
+   // "root" is a sentinel for the workspace root (folder_id IS NULL).
+   const folderId = folderIdRaw && folderIdRaw !== 'root' ? folderIdRaw : null;
+try {
+   // Extract the workspace member ID from the request context headers so
+   // personal projects are filtered by creator, not just by workspace.
+   // Without this, every member of a shared space sees every other
+   // member's personal (visibility='personal') projects.
+   const headerMemberId = typeof req.get === 'function'
+     ? (req.get('x-od-workspace-member-id') || '').trim() || null
+     : null;
+   const rows = listProjectsInFolder(db, workspaceId, folderId, headerMemberId);
+  const projects: RemoteTeamProjectSummary[] = rows.map((row) => ({
      ...normalizeProject(row),
      workspaceId: row.workspaceId ?? null,
      createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,

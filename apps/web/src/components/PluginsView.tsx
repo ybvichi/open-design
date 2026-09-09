@@ -213,6 +213,18 @@ const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
       'Run the official contribution action plugin against the local daemon.',
     ],
   },
+  'publish-hdw': {
+    eyebrow: 'HDW community',
+    fallbackTitle: 'Share Plugin to Community',
+    fallbackDescription:
+      'Packs this plugin and uploads it to the HDW community marketplace for others to discover, reference, and remix.',
+    confirmLabel: 'Start sharing',
+    steps: [
+      'Create a new HiDesign project for the share-to-community workflow.',
+      'Copy this plugin into that project as isolated source context.',
+      'Run the official share action plugin against the local daemon.',
+    ],
+  },
 };
 
 interface PluginsViewProps {
@@ -650,7 +662,12 @@ export function PluginsView({
               trackPluginsInstalledTabClick(analytics.track, {
                 page_name: 'plugins',
                 area: 'installed_tab',
-                element: action === 'publish-github' ? 'templates_publish' : 'templates_contribute',
+               element:
+                  action === 'publish-github'
+                    ? 'templates_publish'
+                    : action === 'publish-hdw'
+                      ? 'templates_share_community'
+                      : 'templates_contribute',
                 template_id: record.id,
                 template_type: record.sourceKind,
               });

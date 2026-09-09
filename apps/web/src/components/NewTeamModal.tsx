@@ -3,7 +3,7 @@
 // Replaces the old `teamConsoleUrl('create-team')` external link with an
 // in-client modal so the user can create a team workspace without leaving
 // the app. The form collects name, description, and invitees, then POSTs
-// to the HDW backend via the daemon proxy at `/api/hdw/webapi/v1/team/add`.
+// to the HDW backend via the daemon proxy at `/api/hdw/api/team/add`.
 // The HDW API expects `workspace_name`, `owner_username`, `owner_displayname`,
 // `owner_email`, and `members[]` (each `{ username, displayname, email }`).
 
@@ -93,7 +93,7 @@ function NewTeamModalBody({
     setError(null);
 
     try {
-      const resp = await fetch('/api/hdw/webapi/v1/team/add', {
+      const resp = await fetch('/api/hdw/api/team/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

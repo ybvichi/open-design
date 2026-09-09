@@ -1631,7 +1631,16 @@ export function listProjectsInFolder(
   db: SqliteDb,
   workspaceId: string,
   folderId: string | null,
+  createdByWorkspaceMemberId?: string | null,
 ) {
+  // When a member ID is provided, filter personal-visibility projects to
+  // only those created by that member. Team-visibility projects remain
+  // visible to all members of the workspace.
+  const memberFilter = createdByWorkspaceMemberId
+    ? `AND (wp.visibility != 'personal' OR wp.created_by_workspace_member_id = ?)`
+    : '';
+  const params: unknown[] = [workspaceId, folderId];
+  if (createdByWorkspaceMemberId) params.push(createdByWorkspaceMemberId);
   return db
     .prepare(
       `SELECT p.id,
@@ -1659,10 +1668,11 @@ export function listProjectsInFolder(
               wp.updated_at AS workspaceUpdatedAt
          FROM workspace_projects wp
          JOIN projects p ON p.id = wp.project_id
-        WHERE wp.workspace_id = ? AND wp.folder_id IS ?
+       WHERE wp.workspace_id = ? AND wp.folder_id IS ?
+       ${memberFilter}
         ORDER BY MAX(p.updated_at, wp.updated_at) DESC`,
     )
-    .all(workspaceId, folderId) as DbRow[];
+   .all(...params) as DbRow[];
 }
 
 /** Direct project count for a folder (or root). Useful for folder badges. */

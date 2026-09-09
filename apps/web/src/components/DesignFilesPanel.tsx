@@ -1746,6 +1746,17 @@ export function DesignFilesPanel({
                           >
                             {sharingFolder === `contribute:${folder.path}` ? 'Sending…' : 'HiDesign PR'}
                           </button>
+                          <button
+                            type="button"
+                            className="df-plugin-install"
+                            data-testid={`design-plugin-folder-publish-hdw-${folder.path}`}
+                            disabled={actionBusy || installingFolder !== null || sharingFolder !== null}
+                            onClick={() =>
+                              void handlePluginFolderAgentAction(folder.path, 'publish-hdw')
+                            }
+                          >
+                            {sharingFolder === `publish-hdw:${folder.path}` ? 'Sending…' : '分享到社区'}
+                          </button>
                         </div>
                       ) : null}
                     </div>

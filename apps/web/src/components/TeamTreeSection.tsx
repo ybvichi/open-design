@@ -7,7 +7,7 @@
 // placeholders for now — this component is the navigation entry point.
 //
 // Root-level folders are fetched from the HDW folder API
-// (`GET /api/hdw/webapi/v1/folder/list?workspace_id=<teamId>`) and refreshed
+// (`GET /api/hdw/api/folder/list?workspace_id=<teamId>`) and refreshed
 // when a create/delete dispatches the `hdw:folders-updated` event.
 
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -171,7 +171,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
       if (expanded) setFoldersLoading(true);
       try {
         const res = await fetch(
-          `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(team.workspaceId)}`,
+          `/api/hdw/api/folder/list?workspace_id=${encodeURIComponent(team.workspaceId)}`,
           { cache: 'no-store' },
         );
         if (!res.ok) { if (!cancelled) setFolders([]); return; }
@@ -240,7 +240,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     }
     setRenaming(true);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/team/rename', {
+      const res = await fetch('/api/hdw/api/team/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -280,7 +280,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     setDeleting(true);
     try {
       const res = await fetch(
-        `/api/hdw/webapi/v1/team/${team.workspaceId}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
+        `/api/hdw/api/team/${team.workspaceId}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
         { method: 'DELETE' },
       );
       const body = await res.json().catch(() => null);
@@ -328,7 +328,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     }
     setRenamingFolder(true);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+      const res = await fetch('/api/hdw/api/folder/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -365,7 +365,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     if (!name) return;
     setCreatingFolder(true);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/folder/add', {
+      const res = await fetch('/api/hdw/api/folder/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -407,7 +407,7 @@ function TeamNode({ team, activeTeamId, activeFolderId, onRenameTeam, onDeleteTe
     setDeletingFolder(true);
     try {
       const res = await fetch(
-        `/api/hdw/webapi/v1/folder/${folder.id}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
+        `/api/hdw/api/folder/${folder.id}?operator_member_id=${encodeURIComponent(team.workspaceMemberId)}`,
         { method: 'DELETE' },
       );
       const body = await res.json().catch(() => null);

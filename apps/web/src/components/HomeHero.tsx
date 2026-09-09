@@ -187,6 +187,11 @@ interface Props {
   contextOnlyMcpServers?: McpServerConfig[];
   contextOnlyConnectors?: ConnectorDetail[];
   contextWorkspaceItems?: WorkspaceContextItem[];
+  // Community reference chip: surfaced when the user picks "参考" from Hi广场.
+  // Shows the project title as a context chip so the reference origin is
+  // visible and removable, matching the UX of other context chips.
+  communityReference?: { title: string } | null;
+  onClearCommunityReference?: () => void;
   onRemovePluginContext?: (pluginId: string) => void;
   onRemoveMcpContext?: (serverId: string) => void;
   onRemoveConnectorContext?: (connectorId: string) => void;
@@ -373,8 +378,10 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     contextOnlyPlugins = EMPTY_PLUGIN_CONTEXTS,
     contextOnlyMcpServers = EMPTY_MCP_OPTIONS,
     contextOnlyConnectors = EMPTY_CONNECTOR_OPTIONS,
-    contextWorkspaceItems = EMPTY_WORKSPACE_ITEMS,
-    onRemovePluginContext = () => undefined,
+   contextWorkspaceItems = EMPTY_WORKSPACE_ITEMS,
+   communityReference = null,
+   onClearCommunityReference = () => undefined,
+   onRemovePluginContext = () => undefined,
     onRemoveMcpContext = () => undefined,
     onRemoveConnectorContext = () => undefined,
     onAddWorkspaceContext = () => undefined,
@@ -1326,14 +1333,15 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // in the editor. This row should mount only for content that has a visible chip
   // here; the aggregate context count is just an aria label when the row exists.
   const showActivePluginRow = Boolean(showActivePluginChip && activePluginTitle);
-  const showActiveContextRow =
-    stagedFiles.length > 0 ||
-    showActivePluginRow ||
-    Boolean(activeSkillTitle) ||
-    contextOnlyPlugins.length > 0 ||
-    contextOnlyMcpServers.length > 0 ||
-    contextOnlyConnectors.length > 0 ||
-    contextWorkspaceItems.length > 0;
+ const showActiveContextRow =
+   stagedFiles.length > 0 ||
+   showActivePluginRow ||
+   Boolean(activeSkillTitle) ||
+   Boolean(communityReference) ||
+   contextOnlyPlugins.length > 0 ||
+   contextOnlyMcpServers.length > 0 ||
+   contextOnlyConnectors.length > 0 ||
+   contextWorkspaceItems.length > 0;
   let optionRenderIndex = 0;
 
   return (
@@ -1673,9 +1681,42 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                   <Icon name="close" size={9} />
                 </button>
               </ContextChipHoverCard>
-            ))}
-          </div>
-        ) : null}
+           ))}
+           {communityReference ? (
+             <span
+               className="home-hero__active-chip home-hero__active-chip--context"
+               data-testid="home-hero-community-reference"
+             >
+               <span className="home-hero__active-chip-body">
+                 <span className="home-hero__active-icon" aria-hidden>
+                   <Icon name="globe" size={12} />
+                 </span>
+                 <span className="home-hero__active-label">{communityReference.title}</span>
+               </span>
+               <button
+                 type="button"
+                 className="home-hero__active-clear od-tooltip"
+                 onClick={() => {
+                   trackHomeChatComposerClick(analytics.track, {
+                     page_name: 'home',
+                     area: 'chat_composer',
+                     element: 'context_remove',
+                     resource_kind: 'community-reference',
+                     resource_id: communityReference.title,
+                   });
+                   onClearCommunityReference();
+                 }}
+                 aria-label={t('chat.removeAria', { name: communityReference.title })}
+                 title={t('common.close')}
+                 data-tooltip={t('common.close')}
+                 data-testid="home-hero-community-reference-clear"
+               >
+                 <Icon name="close" size={9} />
+               </button>
+             </span>
+           ) : null}
+         </div>
+       ) : null}
         <div className="home-hero__prompt-surface">
           <div ref={promptEditorRef} className="home-hero__prompt-editor home-hero__lexical">
             <LexicalComposerInput

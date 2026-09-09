@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { safeExternalFetch } from './plugin-asset-cache.js';
+import { fetchHdwMarketplaceManifestText } from '../http/hdw.js';
 import path from 'node:path';
 
 export const OFFICIAL_MARKETPLACE_ID = 'official';
@@ -38,6 +39,10 @@ export interface MarketplaceSeedHelperDeps {
   marketplaceManifestUrlForRegistry(id: string): string;
   marketplaceRegistryIdFromUrl(url: string): string | null;
   fetchImpl?: typeof fetch;
+  /** Lazy data-dir accessor — RUNTIME_DATA_DIR is resolved after the
+   *  helpers factory is called in server.ts, so the fetcher reads it
+   *  at call time (during addMarketplace / refreshMarketplace). */
+  getDataDir?: () => string;
 }
 
 export function createMarketplaceSeedHelpers(deps: MarketplaceSeedHelperDeps): MarketplaceSeedHelpers {
@@ -87,6 +92,14 @@ export function createMarketplaceSeedHelpers(deps: MarketplaceSeedHelperDeps): M
             status: 200,
             text: async () => manifestText,
           };
+        }
+      }
+      // HDW marketplace — fetch manifest with SSO auth. The default
+      // safeExternalFetch would 401 without a session cookie.
+      if (deps.getDataDir) {
+        const hdwText = await fetchHdwMarketplaceManifestText(url, deps.getDataDir());
+        if (hdwText != null) {
+          return { ok: true, status: 200, text: async () => hdwText };
         }
       }
       const response = await safeExternalFetch(url, {}, fetchImpl);

@@ -971,6 +971,10 @@ export function registerProjectPluginRoutes(app: Express, deps: RegisterPluginRo
     if (!await authorizeWrite(req, res, req.params.id)) return;
     return helpers.handleProjectPluginCli(req, res, 'publish-github');
   });
+  app.post('/api/projects/:id/plugins/publish-hdw', async (req, res) => {
+    if (!await authorizeWrite(req, res, req.params.id)) return;
+    return helpers.handleProjectPluginCli(req, res, 'publish-hdw');
+  });
   app.get('/api/projects/:id/plugin-candidates', async (req, res) => {
     try {
       const project = helpers.getProject(db, req.params.id);

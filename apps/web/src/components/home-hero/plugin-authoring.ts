@@ -27,7 +27,14 @@ export type HomePromptHandoff =
     skill: SkillSummary;
     focus: boolean;
     source: 'skill-use';
-  };
+  }
+| {
+    id: number;
+    prompt: string;
+    title: string;
+    focus: boolean;
+    source: 'community-reference';
+  }
 
 export const PLUGIN_AUTHORING_GOAL_INPUT = 'pluginGoal';
 export const PLUGIN_AUTHORING_DEFAULT_GOAL = "a reusable workflow described by the user's prompt";
@@ -114,6 +121,19 @@ export function createSkillUseHandoff(
   skill: SkillSummary,
 ): HomePromptHandoff {
   return { id, skill, focus: true, source: 'skill-use' };
+}
+/**
+ * Hands a community plugin's prompt (from the HDW marketplace manifest) to the
+ * home composer. The prompt text is pre-filled without activating the plugin
+ * authoring flow or binding an installed plugin — the user can edit it freely
+ * and start a conversation to explore the shared project's approach.
+ */
+export function createCommunityReferenceHandoff(
+  id: number,
+  prompt: string,
+  title: string,
+): HomePromptHandoff {
+  return { id, prompt, title, focus: true, source: 'community-reference' };
 }
 
 export function createPluginUseHandoff(

@@ -1700,7 +1700,7 @@ export function EntryNavRail({
           <Icon name="sparkles" size={16} />
         </NavButton>
 
-        {false&&context ? (
+        {context ? (
           <div className="entry-nav-rail__team-section">
             <NavButton
               active={view === 'drafts'}

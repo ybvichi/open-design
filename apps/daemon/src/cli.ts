@@ -2,6 +2,7 @@
 // @ts-nocheck
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
@@ -18,6 +19,7 @@ import { resolveDaemonUrl } from './daemon-url.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS } from '@open-design/contracts';
+import { HDW_BASE } from './http/hdw.js';
 import type { ArtifactLintFinding, LintArtifactCliResultEnvelope, LintArtifactResponse, LintFailOn } from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
@@ -427,7 +429,8 @@ const SUBCOMMAND_MAP = {
   doctor: runDoctor,
   config: runConfig,
   library: runLibrary,
-  figma: runFigma,
+ figma: runFigma,
+ 'shared-space': runSharedSpace,
 };
 
 function printStrategyHelp() {
@@ -2772,6 +2775,7 @@ async function runPlugin(args) {
     case 'publish':  return runPluginPublish(rest);
     case 'publish-repo': return runPluginPublishRepo(rest);
     case 'open-design-pr': return runPluginOpenDesignPr(rest);
+    case 'publish-hdw': return runPluginPublishHdw(rest);
     case 'yank':     return runPluginYank(rest);
     default:
       console.error(`unknown subcommand: od plugin ${sub}`);
@@ -5660,6 +5664,454 @@ function extractFirstUrl(text) {
   return match ? match[0].replace(/[)\].,]+$/, '') : null;
 }
 
+// Upload a generated plugin to the HDW community marketplace.
+//
+// Packs the folder into a .tgz, computes the sha256 digest, uploads the
+// blob via PUT /community/blobs/:digest, then publishes metadata via
+// POST /community/plugins. Requires an active SSO session (cookies are
+// read from the daemon data dir). The publisher username comes from
+// --publisher-username, SSO session, or 'unknown' in that order.
+
+// Compare two semver-like strings (major.minor.patch). Returns -1, 0, or 1.
+// Non-numeric or missing segments are treated as 0.
+function compareSemver(a: string, b: string): number {
+  const pa = a.split('.');
+  const pb = b.split('.');
+  for (let i = 0; i < 3; i++) {
+    const na = parseInt(pa[i] ?? '0', 10) || 0;
+    const nb = parseInt(pb[i] ?? '0', 10) || 0;
+    if (na < nb) return -1;
+    if (na > nb) return 1;
+  }
+  return 0;
+}
+
+async function runPluginPublishHdw(rest) {
+ const flags = parseFlags(rest, {
+// cover-digest is set by the server when it pre-generates a cover screenshot.
+// The CLI passes it through to the HDW publish payload as coverDigest.
+   string: new Set(['out', 'data-dir', 'publisher-username', 'publisher-displayname', 'publisher-github', 'publisher-url', 'changelog', 'title', 'description', 'entry', 'cover-digest']),
+  boolean: new Set(['help', 'h', 'json', 'dry-run']),
+  });
+  if (rest.length === 0 || flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin publish-hdw <folder> [--out <path>] [--data-dir <path>]
+                  [--publisher-username <name>] [--publisher-displayname <name>]
+                  [--publisher-github <login>] [--publisher-url <url>]
+                  [--publisher-url <url>] [--title <title>] [--description <text>]
+                  [--entry <filename>] [--changelog <text>] [--dry-run] [--json]
+
+Packs the plugin folder, uploads the archive to HDW, and publishes
+metadata to the community marketplace.
+SSO cookies are attached when available but not required.
+The publisher username defaults to --publisher-username, SSO session, or 'unknown'.
+--title and --description override the auto-generated values when
+open-design.json is missing (e.g. sharing a raw project folder).
+--entry sets the HTML preview entry file (auto-detected when omitted).
+
+Exit codes:
+  0  published
+  2  CLI usage error
+  4  pack/upload/publish error`);
+    process.exit(rest.length === 0 ? 2 : 0);
+  }
+
+  const folder = rest.find((a) => !a.startsWith('-') && a !== flags.out && a !== flags['data-dir'] && a !== flags['publisher-username'] && a !== flags['publisher-displayname'] && a !== flags['publisher-github'] && a !== flags['publisher-url'] && a !== flags.changelog && a !== flags.title && a !== flags.description && a !== flags.entry);
+  const overrideTitle = typeof flags['title'] === 'string' ? flags['title'].trim() : '';
+  const overrideDesc = typeof flags['description'] === 'string' ? flags['description'].trim() : '';
+  const entryFile = typeof flags['entry'] === 'string' ? flags['entry'].trim() : '';
+  if (!folder) {
+    console.error('Usage: od plugin publish-hdw <folder>');
+    process.exit(2);
+  }
+
+  const [{ resolve, basename }, { readFile, writeFile, unlink, readdir }] = await Promise.all([
+    import('node:path'),
+    import('node:fs/promises'),
+  ]);
+  const absFolder = resolve(process.cwd(), folder);
+
+  // Read manifest for metadata. If open-design.json is missing, auto-generate
+  // a minimal manifest from the folder name so the whole project can be
+  // shared without the agent scenario having run first.
+  let manifest;
+  let manifestExisted = true;
+  const manifestPath = resolve(absFolder, 'open-design.json');
+  try {
+    const raw = await readFile(manifestPath, 'utf8');
+    manifest = JSON.parse(raw);
+    // Apply --title / --description overrides to an existing manifest
+    // so re-publishing a project picks up the real project name.
+    if (overrideTitle) {
+      manifest.title = overrideTitle;
+    }
+   if (overrideDesc) {
+     manifest.description = overrideDesc;
+   }
+    // Apply --entry override to an existing manifest so re-publishing
+    // a project picks up the current entry HTML file.
+    if (entryFile) {
+      if (!manifest.od) manifest.od = {};
+      if (!manifest.od.preview) manifest.od.preview = {};
+      manifest.od.preview.entry = entryFile;
+    }
+ } catch (err) {
+   if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+     manifestExisted = false;
+      const folderBase = basename(absFolder);
+      // Prefer --title for a human-readable name; fall back to folder name.
+      const titleSource = overrideTitle || folderBase;
+      const slug = titleSource
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'untitled-project';
+      // When the slug is too short (< 12 chars), the original title likely
+      // contained non-ASCII characters (e.g. Chinese) that were stripped,
+      // leaving a collision-prone generic name. Append a short hash of
+      // the folder name (project UUID) to guarantee uniqueness.
+      const derivedName = slug.length >= 12
+        ? slug
+        : slug + '-' + createHash('md5').update(folderBase).digest('hex').slice(0, 8);
+     // Detect entry HTML file: prefer --entry, then index.html, then
+     // the first .html file in the folder root alphabetically.
+     let detectedEntry = entryFile;
+     if (!detectedEntry) {
+       try {
+         const dirEntries = await readdir(absFolder);
+         const htmlFiles = dirEntries.filter((f) => f.endsWith('.html')).sort();
+         if (htmlFiles.includes('index.html')) {
+           detectedEntry = 'index.html';
+         } else if (htmlFiles.length > 0) {
+           detectedEntry = htmlFiles[0];
+         }
+        // Also check dist/ — design projects often keep their built
+        // HTML output there.
+        if (!detectedEntry) {
+          try {
+            const distEntries = await readdir(resolve(absFolder, 'dist'));
+            const distHtml = distEntries.filter((f) => f.endsWith('.html')).sort();
+            if (distHtml.includes('index.html')) {
+              detectedEntry = 'dist/index.html';
+            } else if (distHtml.length > 0) {
+              detectedEntry = 'dist/' + distHtml[0];
+            }
+          } catch { /* dist/ may not exist */ }
+        }
+       } catch { /* best-effort; entry may be absent */ }
+     }
+      // Author name from flags (server route passes SSO display name).
+      const authorName = (typeof flags['publisher-displayname'] === 'string' ? flags['publisher-displayname'] : '').trim()
+        || (typeof flags['publisher-username'] === 'string' ? flags['publisher-username'] : '').trim()
+        || 'unknown';
+      manifest = {
+        $schema: 'https://open-design.ai/schemas/plugin.v1.json',
+        specVersion: '1.0.0',
+        name: derivedName,
+        version: '0.0.0',
+        title: overrideTitle || titleSource,
+        description: overrideDesc || 'Shared from ' + titleSource,
+        license: 'MIT',
+        publishedAt: new Date().toISOString(),
+        author: { name: authorName },
+        tags: ['project', 'community'],
+        compat: { agentSkills: [{ path: './SKILL.md' }] },
+        od: {
+          kind: 'scenario',
+          taskKind: 'new-generation',
+          scenario: 'web-design',
+          mode: 'prototype',
+          platform: 'desktop',
+          surface: 'web',
+          ...(detectedEntry ? { preview: { type: 'html', entry: detectedEntry } } : {}),
+          pipeline: {
+            stages: [
+              { id: 'generate', atoms: ['file-write', 'live-artifact'] },
+            ],
+          },
+          capabilities: ['prompt:inject', 'fs:write'],
+          useCase: {
+            query: {
+              en: 'Use the ' + (overrideTitle || titleSource) + ' template to create a similar design. Preserve the template visual style, use real content and data, and avoid lorem ipsum or placeholder images.',
+              'zh-CN': '用「' + (overrideTitle || titleSource) + '」模板把我的内容做成类似的设计。保持模板的视觉风格，使用真实内容和数据，避免 lorem ipsum 和占位图片。',
+            },
+            ...(detectedEntry ? { exampleOutputs: [{ path: './' + detectedEntry, title: overrideTitle || titleSource }] } : {}),
+          },
+          context: {
+            skills: [{ path: './SKILL.md' }],
+            ...(detectedEntry ? { assets: ['./' + detectedEntry] } : {}),
+          },
+        },
+      };
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+      if (!flags.json) {
+        console.log('[publish-hdw] auto-generated open-design.json (name: ' + derivedName + (detectedEntry ? ', entry: ' + detectedEntry : '') + ')');
+      }
+    } else {
+      console.error('[publish-hdw] failed to read open-design.json: ' + (err?.message ?? err));
+      process.exit(4);
+    }
+  }
+
+  // Auto-generate a minimal SKILL.md when missing so the packed archive
+  // contains both open-design.json and SKILL.md. This ensures remix->install
+  // can resolve the plugin folder, and the reference flow has a prompt.
+  let skillExisted = true;
+  const skillPath = resolve(absFolder, 'SKILL.md');
+  try {
+    await readFile(skillPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      skillExisted = false;
+      const skillTitle = manifest.title || manifest.name || basename(absFolder);
+      const skillDesc = manifest.description || 'Shared from ' + (overrideTitle || basename(absFolder));
+      const skillEntry = manifest?.od?.preview?.entry || '';
+      const frontmatter = [
+        '---',
+        'name: ' + (manifest.name || derivedName),
+        'description: ' + skillDesc.replace(/\n/g, ' '),
+        'od:',
+        '  mode: prototype',
+        '  scenario: web-design',
+        ...(skillEntry ? ['  preview:', '    type: html', '    entry: ' + skillEntry] : []),
+        '---',
+        '',
+      ].join('\n');
+      const skillContent = frontmatter
+        + '# ' + skillTitle + '\n\n'
+        + skillDesc + '\n\n'
+        + '## What this template is\n\n'
+        + 'A self-contained HTML design shared from the HiDesign community. '
+        + 'Open the entry file to view the design, then customize content, colors, and layout for your needs.\n\n'
+        + '## Workflow\n\n'
+        + '1. Open ' + (skillEntry ? '`' + skillEntry + '`' : 'the HTML file') + ' to view the design.\n'
+        + '2. Customize the content, colors, and layout for your needs.\n'
+        + '3. All assets are bundled \u2014 no external dependencies required.\n';
+      await writeFile(skillPath, skillContent, 'utf8');
+      if (!flags.json) {
+        console.log('[publish-hdw] auto-generated SKILL.md');
+      }
+    }
+  }
+
+  // Clean up auto-generated files so the original project folder is not
+  // polluted. Called at every exit point after packing succeeds.
+  const cleanupAutoGenerated = async () => {
+    if (!manifestExisted) { try { await unlink(manifestPath); } catch {} }
+    if (!skillExisted) { try { await unlink(skillPath); } catch {} }
+  };
+
+  const pluginName = manifest.name;
+  let pluginVersion = manifest.version ?? '0.0.0';
+  if (!pluginName) {
+    console.error('[publish-hdw] manifest missing required field: name');
+    process.exit(4);
+  }
+
+  // Resolve data dir for SSO cookies. Cookies are optional — HDW community
+  // endpoints work without them, but if an SSO session exists we attach it.
+  const dataDir = typeof flags['data-dir'] === 'string'
+    ? resolve(process.cwd(), flags['data-dir'])
+    : process.env.OD_DATA_DIR || resolve(process.cwd(), '.tmp/daemon');
+
+  // Publisher username: prefer --publisher-username, fall back to SSO session
+  // username, then 'unknown'. No error when SSO session is absent.
+  const { readSsoConfigFile } = await import('./http/hik_logins/hicoo.js');
+  const session = readSsoConfigFile(dataDir);
+  const publisherUsername = String(flags['publisher-username'] ?? session?.username ?? 'unknown').trim();
+
+  // Auto-increment version when re-publishing the same plugin.
+  // If the plugin already exists on HDW with the same version, bump
+  // the patch number so the publish does not fail with 'already exists'.
+  const { fetchHdwCommunityPluginDetail } = await import('./http/hdw.js');
+  const existingDetail = await fetchHdwCommunityPluginDetail(pluginName, dataDir);
+  if (existingDetail && existingDetail.version) {
+    const hdwVersion = existingDetail.version;
+    // Bump when the HDW version is >= the current version, so
+    // re-publishing a project whose auto-generated manifest resets
+    // to 0.0.0 still picks up the next free patch number.
+    if (compareSemver(hdwVersion, pluginVersion) >= 0) {
+      let parts = hdwVersion.split('.');
+      let bumped;
+      if (parts.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+        bumped = parts[0] + '.' + parts[1] + '.' + (parseInt(parts[2], 10) + 1);
+      } else {
+        bumped = hdwVersion + '-1';
+      }
+      manifest.version = bumped;
+      // Only write the bumped version back when the manifest was
+      // auto-generated; never mutate a user's existing open-design.json.
+      if (!manifestExisted) {
+        await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+      }
+      pluginVersion = bumped;
+      if (!flags.json) {
+        console.log('[publish-hdw] version ' + hdwVersion + ' already exists, bumped to ' + bumped);
+      }
+    }
+  }
+
+  const steps = [];
+
+  // Step 1: Pack the folder into a .tgz archive.
+  let archivePath;
+  try {
+    const { packPlugin, PackPluginError } = await import('./plugins/pack.js');
+    const packResult = await packPlugin({
+      folder: absFolder,
+      ...(typeof flags.out === 'string' ? { out: flags.out } : {}),
+    });
+    archivePath = packResult.outPath;
+    steps.push({ label: 'pack', ok: true, archivePath, bytes: packResult.bytes, fileCount: packResult.files.length });
+  } catch (err) {
+    const payload = {
+      ok: false,
+      action: 'publish-hdw',
+      folder: absFolder,
+      pluginName,
+      pluginVersion,
+      publisherUsername,
+      steps,
+      error: { label: 'pack', message: err?.message ?? String(err) },
+    };
+    if (flags.json) process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    else console.error(`[publish-hdw] pack failed: ${err?.message ?? err}`);
+    await cleanupAutoGenerated();
+    process.exit(4);
+  }
+
+  if (flags['dry-run']) {
+    const payload = {
+      ok: true,
+      action: 'publish-hdw',
+      folder: absFolder,
+      pluginName,
+      pluginVersion,
+      publisherUsername,
+      archivePath,
+      steps,
+      dryRun: true,
+    };
+    if (flags.json) process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    else {
+      console.log(`[publish-hdw] dry-run: packed ${pluginName}@${pluginVersion}`);
+      console.log(`[publish-hdw] archive: ${archivePath}`);
+      console.log(`[publish-hdw] would upload to HDW as ${publisherUsername}`);
+    }
+    await cleanupAutoGenerated();
+    return;
+  }
+
+  // Step 2: Upload the archive blob.
+  const { uploadHdwCommunityBlob, publishHdwCommunityPluginDetailed } = await import('./http/hdw.js');
+  const blobResult = await uploadHdwCommunityBlob(archivePath, dataDir);
+  if (!blobResult) {
+    const payload = {
+      ok: false,
+      action: 'publish-hdw',
+      folder: absFolder,
+      pluginName,
+      pluginVersion,
+      publisherUsername,
+      archivePath,
+      steps,
+      error: { label: 'upload-blob', message: 'blob upload failed (no SSO session, network error, or digest mismatch)' },
+    };
+    if (flags.json) process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    else console.error('[publish-hdw] blob upload failed');
+    await cleanupAutoGenerated();
+    process.exit(4);
+  }
+  steps.push({ label: 'upload-blob', ok: true, digest: blobResult.digest, size: blobResult.size });
+
+  // Step 3: Publish metadata.
+  const manifestDigest = createHash('sha256')
+    .update(await readFile(resolve(absFolder, 'open-design.json'), 'utf8'))
+    .digest('hex');
+
+  // Read prompt from SKILL.md if present.
+  let promptText;
+  try {
+    promptText = await readFile(resolve(absFolder, 'SKILL.md'), 'utf8');
+  } catch {
+    promptText = undefined;
+  }
+
+  const publishInput = {
+    name: pluginName,
+    version: pluginVersion,
+    archiveDigest: blobResult.digest,
+    archiveSize: blobResult.size,
+    archiveIntegrity: `sha256-${blobResult.digest}`,
+    manifestDigest,
+    ...(promptText ? { prompt: promptText } : {}),
+    ...(manifest.title ? { title: manifest.title } : {}),
+    ...(manifest.description ? { description: manifest.description } : {}),
+    ...(manifest.icon ? { icon: manifest.icon } : {}),
+    ...(Array.isArray(manifest.tags) ? { tags: manifest.tags } : { tags: ['project'] }),
+    ...(Array.isArray(manifest.capabilitiesSummary) ? { capabilitiesSummary: manifest.capabilitiesSummary }
+    : Array.isArray(manifest.od?.capabilities) ? { capabilitiesSummary: manifest.od.capabilities }
+    : {}),
+    ...(manifest.homepage ? { homepage: manifest.homepage } : {}),
+    ...(manifest.license ? { license: manifest.license } : {}),
+    publisherUsername,
+    publisherDisplayname:
+      (typeof flags['publisher-displayname'] === 'string' ? flags['publisher-displayname'] : '').trim()
+      || (typeof session?.userInfo?.displayName === 'string' ? session.userInfo.displayName : '').trim()
+      || (typeof session?.username === 'string' ? session.username : '').trim()
+      || publisherUsername,
+   ...(typeof flags['publisher-github'] === 'string' ? { publisherGithub: flags['publisher-github'] } : {}),
+    ...(typeof flags['publisher-url'] === 'string' ? { publisherUrl: flags['publisher-url'] } : {}),
+  ...(typeof flags.changelog === 'string' ? { changelog: flags.changelog } : {}),
+  ...(typeof flags['cover-digest'] === 'string' ? { coverDigest: flags['cover-digest'] } : {}),
+ };
+
+  // All file reads are done — clean up auto-generated files so the
+  // original project folder is not polluted.
+  await cleanupAutoGenerated();
+
+  const publishDetail = await publishHdwCommunityPluginDetailed(publishInput, dataDir);
+  if (!publishDetail.ok || !publishDetail.result) {
+    const payload = {
+      ok: false,
+      action: 'publish-hdw',
+      folder: absFolder,
+      pluginName,
+      pluginVersion,
+      publisherUsername,
+      archivePath,
+      steps,
+      error: { label: 'publish', message: publishDetail.errorMsg ? 'publish failed: ' + publishDetail.errorMsg + (publishDetail.errorCode != null ? ' (code ' + publishDetail.errorCode + ')' : '') : 'publish request failed (version may already exist, or publisher mismatch)' },
+    };
+    if (flags.json) process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    else console.error('[publish-hdw] ' + (publishDetail.errorMsg || 'publish failed'));
+    process.exit(4);
+  }
+  const publishResult = publishDetail.result;
+  steps.push({ label: 'publish', ok: true, pluginId: publishResult.pluginId, versionId: publishResult.versionId });
+
+  const payload = {
+    ok: true,
+    action: 'publish-hdw',
+    folder: absFolder,
+    pluginName,
+    pluginVersion,
+    publisherUsername,
+    archivePath,
+    pluginId: publishResult.pluginId,
+    versionId: publishResult.versionId,
+    marketplaceUrl: `${HDW_BASE.replace('/hdw/api', '')}/hdw/api/community/plugins/${encodeURIComponent(pluginName)}`,
+    steps,
+  };
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  } else {
+    console.log(`[publish-hdw] published ${pluginName}@${pluginVersion}`);
+    console.log(`[publish-hdw] pluginId: ${publishResult.pluginId}`);
+    console.log(`[publish-hdw] archive:  ${archivePath} (${blobResult.size} bytes, sha256:${blobResult.digest.slice(0, 12)}…)`);
+    console.log(`\nNext: the plugin is now visible in Hi广场 under the HDW community marketplace.`);
+  }
+}
+
 async function runPluginYank(rest) {
   const flags = parseFlags(rest, {
     string: new Set(['daemon-url', 'reason', 'to']),
@@ -6979,6 +7431,124 @@ async function postImportFolderToDaemon(base, body, baseDir, workspaceHeaders = 
     headers['x-od-desktop-import-token'] = importToken;
   }
   return postJsonToDaemon(base, '/api/import/folder', body, headers);
+}
+
+// `od shared-space` mirrors the Shared Space tab in the web UI. Same
+// /api/shared-space/* and /api/workspace/projects/shared-with-me routes.
+// The CLI form is the embeddability contract: external agents can list
+// shared projects, share, and unshare without going through the web UI.
+const SHARED_SPACE_STRING_FLAGS = new Set([
+  'daemon-url', 'project', 'workspace', 'recipient', 'name',
+]);
+const SHARED_SPACE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+async function runSharedSpace(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od shared-space list [--json]
+                        List projects shared TO you in the shared space.
+  od shared-space share --project <id> --workspace <home-workspace-id>
+                        --recipient <username> [--recipient <username> ...]
+                        [--name "<display name>"] [--json]
+                        Share a project to specific recipients in the shared
+                        space. The daemon resolves the SSO username
+                        server-side as the sharer.
+  od shared-space unshare <shareId> [--json]
+                        Remove a specific share.
+
+Common options:
+  --daemon-url <url>   HiDesign daemon HTTP base.
+  --json               Emit raw JSON.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, {
+    string: SHARED_SPACE_STRING_FLAGS,
+    boolean: SHARED_SPACE_BOOLEAN_FLAGS,
+  });
+  const base = (await cliDaemonBaseUrl(flags)).replace(/\/$/, '');
+
+  if (sub === 'list') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/workspace/projects/shared-with-me`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      console.error(`GET /api/workspace/projects/shared-with-me failed: ${resp.status} ${JSON.stringify(data)}`);
+      process.exit(1);
+    }
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    const projects = Array.isArray(data?.projects) ? data.projects : [];
+    if (projects.length === 0) {
+      console.log('No projects shared with you.');
+      return;
+    }
+    for (const p of projects) {
+      const name = p.displayName ?? p.projectId;
+      const sharedBy = p.sharedByUsername ?? '?';
+      console.log(`${p.projectId}\t${name}\tshared by ${sharedBy}`);
+    }
+    return;
+  }
+
+  if (sub === 'share') {
+    const projectId = typeof flags.project === 'string' ? flags.project.trim() : '';
+    const homeWorkspaceId = typeof flags.workspace === 'string' ? flags.workspace.trim() : '';
+    const recipients = repeatableFlagValues(rest, 'recipient');
+    if (!projectId || !homeWorkspaceId || recipients.length === 0) {
+      console.error(
+        'Usage: od shared-space share --project <id> --workspace <home-ws-id> --recipient <username> [--recipient ...]',
+      );
+      process.exit(2);
+    }
+    const body = {
+      project_id: projectId,
+      home_workspace_id: homeWorkspaceId,
+      recipients: recipients.map((username) => ({
+        username,
+        ...(typeof flags.name === 'string' && flags.name.trim()
+          ? { displayname: flags.name.trim() }
+          : {}),
+      })),
+    };
+    const data = await postJsonToDaemon(base, '/api/shared-space/share', body);
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    console.log(`Shared to ${data?.shared ?? 0} recipient(s)${data?.skipped ? `, skipped ${data.skipped}` : ''}.`);
+    return;
+  }
+
+  if (sub === 'unshare') {
+    const shareId = positionalArgs(rest, SHARED_SPACE_STRING_FLAGS)[0];
+    if (!shareId) {
+      console.error('Usage: od shared-space unshare <shareId>');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/shared-space/${encodeURIComponent(shareId)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      console.error(`DELETE /api/shared-space/${shareId} failed: ${resp.status} ${JSON.stringify(data)}`);
+      process.exit(1);
+    }
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    console.log('Unshared.');
+    return;
+  }
+
+  console.error(`unknown subcommand: od shared-space ${sub}`);
+  process.exit(2);
 }
 
 async function runProject(args) {

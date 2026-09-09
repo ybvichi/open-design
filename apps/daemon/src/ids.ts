@@ -127,3 +127,48 @@ export function getTestTeamId(): string {
   const username = user?.username ?? '';
   return createTeamId(`test_team_${username}`);
 }
+
+/**
+ * Get the global Shared Space team ID.
+ *
+ * This is a single constant team ID shared by ALL users — every logged-in
+ * user is automatically a `member` of this team. Derived from a fixed seed
+ * so it is identical across devices and accounts.
+ */
+export function getSharedSpaceTeamId(): string {
+  return createTeamId('shared_space_team_global');
+}
+
+/**
+ * Derive a user's member ID within the Shared Space team.
+ *
+ * Deterministic per account: the same user always gets the same Shared Space
+ * member ID, derived from `shared_space_member_${username}`. This ID is
+ * stable across devices and is used as `recipient_member_id` in the
+ * `workspace_project_shares` table.
+ */
+export function getSharedSpaceMemberId(username?: string): string {
+  if (username === undefined) {
+    const user = getSsoUser(runtimeDataDir);
+    username = user?.username ?? '';
+  }
+  return generateDeterministicId(`shared_space_member_${username}`);
+}
+
+/**
+ * Derive a cross-team collaborator member ID from a username.
+ *
+ * Used as `author_member_id` on comments when the commenter is NOT a member
+ * of the project's home workspace (e.g. commenting via the Shared Space).
+ * The ID is stable across teams and devices, and is namespaced separately
+ * from `getSharedSpaceMemberId` (`collaborator_` prefix) so the two cannot
+ * collide. Display layers can detect this prefix pattern to show a
+ * "协作者" (Collaborator) badge.
+ */
+export function getCollaboratorMemberId(username?: string): string {
+  if (username === undefined) {
+    const user = getSsoUser(runtimeDataDir);
+    username = user?.username ?? '';
+  }
+  return generateDeterministicId(`collaborator_${username}`);
+}

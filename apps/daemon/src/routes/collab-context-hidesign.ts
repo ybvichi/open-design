@@ -1,8 +1,16 @@
 import type { Express, Request, Response } from 'express';
-import { getDefaultTeamId, getTeamMemberId } from '../ids.js';
-import { fetchHdwTeams, hdwGet } from '../http/hdw.js';
+import { getDefaultTeamId, getTeamMemberId, getSharedSpaceMemberId, getSharedSpaceTeamId } from '../ids.js';
+import {
+  fetchHdwTeams,
+  fetchSharedSpaceInfo,
+  fetchSharedWithMe,
+  hdwGet,
+  shareToSharedSpace,
+  unshareFromSharedSpace,
+} from '../http/hdw.js';
 import { readSsoConfigFile } from '../http/hik_logins/hicoo.js';
 import type { VelaTeamProjectCatalog } from '../collab/vela-cli-team-projects.js';
+import type { ResourceHubPrincipal } from '../collab/resource-principal.js';
 import type { TeamProject } from '@open-design/contracts';
 import type { SqliteDb } from '../db.js';
 
@@ -30,6 +38,9 @@ export interface RegisterCollabContextHideSignRoutesDeps {
    *  `ownerMemberId` with the local DB's authoritative
    *  `created_by_workspace_member_id` after cross-workspace transfers. */
   db?: SqliteDb | null;
+  /** Publishes a project to the team resource hub before sharing. Best-effort:
+   *  wrapped in try/catch so a hub failure does not block the HDW share write. */
+  requestTeamShare?: (projectId: string, share?: string | ResourceHubPrincipal) => Promise<{ version: number | null; versionId?: string }>;
 }
 
 interface HdwFolderProjectRow {
@@ -38,7 +49,7 @@ interface HdwFolderProjectRow {
 }
 
 /**
- * Fetch project IDs for a folder via the HDW webapi `folder/project/list`
+ * Fetch project IDs for a folder via the HDW api `folder/project/list`
  * endpoint. The HDW cloud team-projects catalog does not return `folder_id`,
  * so this is the authoritative source for folder-project associations.
  *
@@ -196,23 +207,25 @@ function makeBilling(workspaceId: string, workspaceMemberId: string) {
  */
 async function buildMockData(dataDir?: string) {
 
-
-  const TEAM_WORKSPACE_ID = getDefaultTeamId();
-  const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
-  const MOCK_TEAM_WORKSPACE_NAME = '个人空间';
+  // Fetch the shared space info from HDW (or local fallback).
+  // All users are members of the shared space team.
+  const sharedSpaceInfo = await fetchSharedSpaceInfo(dataDir);
+  const SHARED_SPACE_ID = sharedSpaceInfo?.workspace_id || getSharedSpaceTeamId();
+  const SHARED_SPACE_MEMBER_ID = sharedSpaceInfo?.workspace_member_id || getSharedSpaceMemberId();
+  const SHARED_SPACE_NAME = sharedSpaceInfo?.workspace_name || '共享空间';
 
   const hdwTeams = await fetchHdwTeams(dataDir);
 
   const directory = {
     items: [
       {
-        workspaceId: TEAM_WORKSPACE_ID,
-        workspaceName: MOCK_TEAM_WORKSPACE_NAME,
+        workspaceId: SHARED_SPACE_ID,
+        workspaceName: SHARED_SPACE_NAME,
         workspaceIconKey: 'spark',
-        workspaceType: 'personal' as const,
-        workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
+        workspaceType: 'team' as const,
+        workspaceMemberId: SHARED_SPACE_MEMBER_ID,
         isDefaultTeam: true,
-        role: 'owner' as const,
+        role: 'member' as const,
         memberStatus: 'active' as const,
         lifecycleState: 'active' as const,
       },
@@ -226,33 +239,17 @@ async function buildMockData(dataDir?: string) {
         lifecycleState: 'active' as const,
       })),
     ],
-    activeWorkspaceId: TEAM_WORKSPACE_ID,
+    activeWorkspaceId: SHARED_SPACE_ID,
   };
 
   const contexts: Record<string, { context: Record<string, unknown> }> = {
-    // [personalWorkspaceId]: {
-    //   context: {
-    //     workspaceId: personalWorkspaceId,
-    //     workspaceType: 'personal',
-    //     workspaceMemberId: personalMemberId,
-    //     role: 'owner',
-    //     memberStatus: 'active',
-    //     lifecycleState: 'active',
-    //     billingState: 'active',
-    //     planId: 'team_max',
-    //     providerMode: 'platform_credits',
-    //     seatSummary: { seatLimit: 1, usedSeats: 1, availableSeats: 0, isSeatFull: true },
-    //     permissions: ALL_PERMISSIONS,
-    //     workspaceName: personalWorkspaceName,
-    //   },
-    // },
-   [TEAM_WORKSPACE_ID]: {
-     context: {
-       workspaceId: TEAM_WORKSPACE_ID,
-       workspaceType: 'personal',
-       workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
-       isDefaultTeam: true,
-        role: 'owner',
+    [SHARED_SPACE_ID]: {
+      context: {
+        workspaceId: SHARED_SPACE_ID,
+        workspaceType: 'team',
+        workspaceMemberId: SHARED_SPACE_MEMBER_ID,
+        isDefaultTeam: true,
+        role: 'member',
         memberStatus: 'active',
         lifecycleState: 'active',
         billingState: 'active',
@@ -260,10 +257,9 @@ async function buildMockData(dataDir?: string) {
         providerMode: 'platform_credits',
         seatSummary: { seatLimit: 10, usedSeats: 1, availableSeats: 9, isSeatFull: false },
         permissions: ALL_PERMISSIONS,
-        workspaceName: MOCK_TEAM_WORKSPACE_NAME,
-        teamId: TEAM_WORKSPACE_ID,
-        teamName: MOCK_TEAM_WORKSPACE_NAME,
-        //workspaceSettingsUrl: 'https://amr-api.open-design.ai/team/settings',
+        workspaceName: SHARED_SPACE_NAME,
+        teamId: SHARED_SPACE_ID,
+        teamName: SHARED_SPACE_NAME,
       },
     },
   };
@@ -292,7 +288,7 @@ async function buildMockData(dataDir?: string) {
   }
 
   const billing: Record<string, ReturnType<typeof makeBilling>> = {
-    [TEAM_WORKSPACE_ID]: makeBilling(TEAM_WORKSPACE_ID, TEAM_WORKSPACE_MEMBER_ID),
+    [SHARED_SPACE_ID]: makeBilling(SHARED_SPACE_ID, SHARED_SPACE_MEMBER_ID),
   };
 
   for (const t of hdwTeams) {
@@ -393,7 +389,7 @@ export function registerCollabContextHideSignRoutes(
     // The HDW cloud team-projects API does not support folder_id filtering
     // and does not return folder_id on project records. When a folder_id is
     // requested, fetch the authoritative folder-project associations from
-    // the HDW webapi folder/project/list endpoint and filter server-side so
+    // the HDW api folder/project/list endpoint and filter server-side so
     // the frontend never needs to load the entire workspace catalog.
     const folderFilter = typeof req.query.folder_id === 'string'
       ? req.query.folder_id
@@ -411,7 +407,7 @@ export function registerCollabContextHideSignRoutes(
     }
    if (folderFilter !== undefined) {
       if (folderFilter === 'root') {
-        // Root: projects NOT in any folder. The HDW webapi
+        // Root: projects NOT in any folder. The HDW api
         // `folder/project/list?folder_id=root` returns empty, so
         // root-level projects must be derived by exclusion — collect
         // every project ID that lives in any folder, then keep the
@@ -471,5 +467,135 @@ export function registerCollabContextHideSignRoutes(
       res.write(`: keep-alive ${Date.now()}\n\n`);
     }, 30_000);
     req.on('close', () => clearInterval(ping));
+  });
+
+  // --- Shared Space routes --------------------------------------------------
+  //
+  // These proxy the HDW shared-space endpoints so the web UI and `od` CLI
+  // can share/unshare projects and read the shared-with-me catalog through
+  // the daemon's authenticated SSO session.
+
+  app.get('/api/shared-space/info', async (req: Request, res: Response) => {
+    logRequest('GET', '/api/shared-space/info', req);
+    try {
+      const info = await fetchSharedSpaceInfo(deps.dataDir);
+      if (!info) {
+        res.status(502).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable' });
+        return;
+      }
+      res.json(info);
+    } catch (err) {
+      console.warn('[collab-context-hidesign] GET /api/shared-space/info error', err);
+      res.status(502).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable' });
+    }
+  });
+
+  app.get('/api/workspace/projects/shared-with-me', async (req: Request, res: Response) => {
+    logRequest('GET', '/api/workspace/projects/shared-with-me', req);
+    try {
+      const projects = await fetchSharedWithMe(deps.dataDir);
+      res.json({ projects });
+    } catch (err) {
+      console.warn('[collab-context-hidesign] GET /api/workspace/projects/shared-with-me error', err);
+      res.status(503).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable', retryable: true });
+    }
+  });
+
+  app.post('/api/shared-space/share', async (req: Request, res: Response) => {
+    logRequest('POST', '/api/shared-space/share', req);
+    const body = req.body as {
+      project_id?: unknown;
+      home_workspace_id?: unknown;
+      recipients?: unknown;
+    } | null;
+    const projectId = typeof body?.project_id === 'string' ? body.project_id.trim() : '';
+    const homeWorkspaceId = typeof body?.home_workspace_id === 'string' ? body.home_workspace_id.trim() : '';
+    const recipients = Array.isArray(body?.recipients)
+      ? body.recipients.filter(
+          (r): r is { username: string; displayname?: string } =>
+            r !== null && typeof r === 'object' && typeof (r as { username?: unknown }).username === 'string',
+        )
+      : [];
+    if (!projectId || !homeWorkspaceId || recipients.length === 0) {
+      res.status(400).json({ error: 'invalid_request', message: 'project_id, home_workspace_id, and recipients are required' });
+      return;
+    }
+
+    // Resolve the current user from the SSO session for the created_by field.
+    let createdByUsername = '';
+    let displayName: string | null = null;
+    if (!deps.dataDir) {
+      res.status(503).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'data directory is not configured' });
+      return;
+    }
+    try {
+      const session = readSsoConfigFile(deps.dataDir);
+      createdByUsername = session?.username?.trim() ?? '';
+      if (session?.userInfo?.displayName) {
+        displayName = session.userInfo.displayName.trim();
+      }
+    } catch {
+      // Best-effort: share without display name if SSO read fails.
+    }
+    if (!createdByUsername) {
+      res.status(401).json({ error: 'not_authenticated', message: 'SSO session is required to share' });
+      return;
+    }
+
+    // Best-effort: publish the project to the team resource hub before
+    // writing the HDW share record. A hub failure must not block the share.
+    if (deps.requestTeamShare) {
+      try {
+        const sharePrincipal: ResourceHubPrincipal = {
+          memberId: getSharedSpaceMemberId(createdByUsername),
+          teamId: homeWorkspaceId,
+          role: 'owner',
+          lifecycleState: 'active',
+          workspaceType: 'team',
+        };
+        await Promise.race([
+          deps.requestTeamShare(projectId, sharePrincipal),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('requestTeamShare timeout')), 15_000),
+          ),
+        ]);
+      } catch (err) {
+        console.warn('[collab-context-hidesign] requestTeamShare best-effort failed', err);
+      }
+    }
+
+    try {
+      const result = await shareToSharedSpace(deps.dataDir, {
+        projectId,
+        homeWorkspaceId,
+        createdByUsername,
+        recipients,
+        displayName,
+      });
+      if (result === null) {
+        res.status(502).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable' });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.warn('[collab-context-hidesign] POST /api/shared-space/share error', err);
+      res.status(503).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable', retryable: true });
+    }
+  });
+
+  app.delete('/api/shared-space/:shareId', async (req: Request, res: Response) => {
+    logRequest('DELETE', '/api/shared-space/:shareId', req);
+    const shareId = req.params.shareId ?? '';
+    if (!shareId) {
+      res.status(400).json({ error: 'invalid_request', message: 'shareId is required' });
+      return;
+    }
+    try {
+      const ok = await unshareFromSharedSpace(deps.dataDir, String(shareId));
+      res.json({ ok });
+    } catch (err) {
+      console.warn('[collab-context-hidesign] DELETE /api/shared-space/:shareId error', err);
+      res.status(503).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable', retryable: true });
+    }
   });
 }

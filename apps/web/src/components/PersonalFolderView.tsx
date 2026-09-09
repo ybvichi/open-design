@@ -56,7 +56,6 @@ const [showCreateFolder, setShowCreateFolder] = useState(false);
 
  // Resolve the personal workspace ID from the workspace directory.
  // Resolve the personal workspace ID from the workspace directory.
-  // The personal workspace is the "个人空间" default team.
   useEffect(() => {
     let cancelled = false;
     void (async () => {

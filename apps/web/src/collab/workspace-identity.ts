@@ -14,9 +14,10 @@ export function workspaceProjectHeaders(context: WorkspaceCollabContext): Header
     'x-od-workspace-role': context.role,
     'x-od-workspace-lifecycle-state': context.lifecycleState,
     'x-od-workspace-member-status': context.memberStatus,
-    'x-od-workspace-can-share-projects': String(context.permissions.canShareProjects),
-    'x-od-workspace-can-write-synced-files': String(context.permissions.canWriteSyncedFiles),
-  };
+   'x-od-workspace-can-share-projects': String(context.permissions.canShareProjects),
+   'x-od-workspace-can-write-synced-files': String(context.permissions.canWriteSyncedFiles),
+   ...(context.isDefaultTeam ? { 'x-od-workspace-is-default-team': 'true' } : {}),
+ };
 }
 
 /**

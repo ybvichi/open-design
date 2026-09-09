@@ -974,7 +974,7 @@ export function EntryShell({
   useEffect(() => {
     if (workspaceLoading) return;
     if (isWorkspaceOnlyView && !hasWorkspaceContext) {
-      navigate({ kind: 'home', view: 'home' }, { replace: true });
+      navigate({ kind: 'home', view: 'shared-with-me' }, { replace: true });
     }
   }, [workspaceLoading, isWorkspaceOnlyView, hasWorkspaceContext]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -1931,10 +1931,10 @@ export function EntryShell({
              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
            ) : null}
          {view === 'team-space' ? (
-           <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+           <TeamSpaceView teamId={route.kind === 'home' ? route.teamId : undefined} onInvite={() => setInviteOpen(true)} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} onDuplicateProject={onDuplicateProject} />
         ) : null}
          {view === 'team-folder' ? (
-            <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+            <FolderView teamId={route.kind === 'home' ? route.teamId : undefined} folderId={route.kind === 'home' ? route.folderId : undefined} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} onDuplicateProject={onDuplicateProject} />
          ) : null}
          {view === 'personal-all' ? (
           <PersonalAllView
@@ -1955,8 +1955,8 @@ export function EntryShell({
              onRenameProject={onRenameProject}
            />
          ) : null}
-         {view === 'shared-with-me' ? (
-            <SharedWithMeView />
+        {view === 'shared-with-me' ? (
+            <SharedWithMeView onOpenProject={onOpenProject} />
           ) : null}
         </div>
         </main>

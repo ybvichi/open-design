@@ -10,18 +10,18 @@ import { UA, shouldBypassProxy } from '../../../http/http.js';
  *
  * 把前端 `/api/hdw/*` 请求透传到上游 HDW 后端。上游地址按运行环境自动选择：
  * 开发环境（NODE_ENV !== 'production'）指向本地 Egg.js 服务
- *   http://127.0.0.1:7002/hdw/webapi/v1
+ *   http://127.0.0.1:7002/hdw/api
  * 生产环境指向线上 Pixso 插件入口
- *   https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/webapi/v1
+ *   https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api
  *
  * 支持 GET / POST / PUT / DELETE / PATCH，透传请求体（JSON / form /
  * multipart）与 query string，原样返回上游响应（状态码、headers、body）。
  * 二进制响应（文件流、图片）逐块 pipe，不缓存进内存。
  */
 
-const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/webapi/v1';
-const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/webapi/v1';
-const HDW_BASE = PROD_HDW_BASE;//process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
+const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api';
+const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/api';
+const HDW_BASE = process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
 
 export interface RegisterHdwRoutesDeps {
   sendApiError: (...args: any[]) => any;
@@ -29,7 +29,7 @@ export interface RegisterHdwRoutesDeps {
 
 export function registerHdwRoutes(app: Express, deps: RegisterHdwRoutesDeps): void {
   const { sendApiError } = deps;
-  app.use('/api/hdw/webapi/v1', createHdwProxyHandler(sendApiError));
+  app.use('/api/hdw/api', createHdwProxyHandler(sendApiError));
 }
 
 /** 需要透传给上游的请求头白名单（小写匹配）。 */
@@ -47,7 +47,7 @@ const FORWARD_HEADERS = new Set([
 
 function createHdwProxyHandler(sendApiError: (...args: any[]) => any) {
   return (req: any, res: any) => {
-    // Express app.use('/api/hdw/webapi/v1', ...) 剥掉 mount 前缀后，req.url 形如
+    // Express app.use('/api/hdw/api', ...) 剥掉 mount 前缀后，req.url 形如
     // `/test?key=val`。拼到 HDW_BASE 的 pathname 后面即可。
     const base = new URL(HDW_BASE);
     const basePath = base.pathname.replace(/\/+$/, '');

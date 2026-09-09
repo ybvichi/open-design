@@ -154,7 +154,26 @@ class TeamProjectController extends Controller {
         .merge(mergeObj)
         .returning('*');
 
-      ctx.body = this._toRecord(row[0]);
+      // Auto-populate lastSyncedVersionId from the resource's published
+      // version when the caller did not provide one. Critical for the
+      // share flow: the project already has a published version in HDW,
+      // but the share upsert does not pass lastSyncedVersionId.
+      const inserted = row[0];
+      if (!inserted.last_synced_version_id) {
+        const pubVersion = await k('resource_refs as rr')
+          .join('resource_versions as rv', 'rv.id', 'rr.version_id')
+          .where({ 'rr.resource_id': body.resourceId, 'rr.ref': 'published' })
+          .select('rv.id as version_id')
+          .first();
+        if (pubVersion) {
+          await k('team_projects')
+            .where({ id: inserted.id })
+            .update({ last_synced_version_id: pubVersion.version_id });
+          inserted.last_synced_version_id = pubVersion.version_id;
+        }
+      }
+
+      ctx.body = this._toRecord(inserted);
     } catch (err) {
       ctx.logger.error('[hdw] upsert team project error:', err);
       ctx.status = 500;
@@ -238,21 +257,27 @@ class TeamProjectController extends Controller {
       }
 
       const targetResourceId = `project-transfer-${crypto.randomUUID()}`;
-      // Resolve the TARGET workspace's member ID for the source owner.
-      // The source owner_member_id is scoped to the source workspace; the
-      // target resource and team_project must bind to the same user's
-      // member ID in the TARGET workspace. workspace_member_id is
-      // deterministic: getTeamMemberId(targetWorkspaceId, username).
-      const sourceMember = await k('workspace_members')
-        .where({
-          workspace_id: sourceWorkspaceId,
-          workspace_member_id: source.owner_member_id,
-        })
-        .select('username')
-        .first();
-      const targetOwnerMemberId = sourceMember?.username
-        ? getTeamMemberId(targetWorkspaceId, sourceMember.username)
-        : source.owner_member_id; // fallback: keep source ID if member row missing
+      // Use the caller-provided target owner member ID when available
+      // (the daemon resolves the target team's member ID before calling).
+      // Fall back to the server-side lookup only when the caller does not
+      // provide one — e.g. when the source owner's username must be
+      // resolved from workspace_members and then mapped via
+      // getTeamMemberId(targetWorkspaceId, username). This fallback is
+      // needed for shared space members that may not have a row in
+      // workspace_members.
+      let targetOwnerMemberId = body.targetOwnerMemberId;
+      if (!targetOwnerMemberId) {
+        const sourceMember = await k('workspace_members')
+          .where({
+            workspace_id: sourceWorkspaceId,
+            workspace_member_id: source.owner_member_id,
+          })
+          .select('username')
+          .first();
+        targetOwnerMemberId = sourceMember?.username
+          ? getTeamMemberId(targetWorkspaceId, sourceMember.username)
+          : source.owner_member_id; // fallback: keep source ID if member row missing
+      }
 
       // Run the transfer in a transaction. The transaction returns the
       // targetVersionId so we can include it in the response.

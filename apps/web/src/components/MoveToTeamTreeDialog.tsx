@@ -81,7 +81,7 @@ async function fetchFolders(
   // team workspaces use the HDW folder API. Both return the same shape.
   const basePath = isDefaultTeam
     ? `/api/folders?workspace_id=${encodeURIComponent(workspaceId)}`
-    : `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(workspaceId)}`;
+    : `/api/hdw/api/folder/list?workspace_id=${encodeURIComponent(workspaceId)}`;
   let url = basePath;
   if (folderPid) {
     url += `&folder_pid=${encodeURIComponent(folderPid)}`;

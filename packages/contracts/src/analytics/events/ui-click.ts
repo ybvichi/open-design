@@ -184,7 +184,7 @@ export interface HomeChatComposerClickProps {
   // local-code context sources (`resource_id`: 'reference-project' or
   // 'local-code' on pick; the staged chip id on remove — mirrors the
   // chat_panel composer so cross-surface funnels line up).
-  resource_kind?: 'connector' | 'plugin' | 'skill' | 'mcp' | 'workspace';
+  resource_kind?: 'connector' | 'plugin' | 'skill' | 'mcp' | 'workspace' | 'community-reference';
   resource_id?: string;
   // For plugin / action / task chips, the specific id (e.g. `prototype`,
   // `from_figma`, `hyperframes`).
@@ -426,9 +426,10 @@ export interface PluginsInstalledTabClickProps {
     | 'templates_details'
     | 'templates_use'
     | 'templates_use_dropdown'
-    | 'templates_publish'
-    | 'templates_contribute'
-    | 'create_plugin';
+   | 'templates_publish'
+   | 'templates_contribute'
+    | 'templates_share_community'
+   | 'create_plugin';
   filter_key?: string;
   filter_name?: string;
   template_id?: string;
@@ -849,7 +850,8 @@ export interface ComposerBarClickProps {
     | 'mcp'
     | 'skill'
     | 'workspace'
-    | 'attachment';
+    | 'attachment'
+    | 'community-reference';
   resource_id?: string;
   agent_id?: string;
   model_id?: string;

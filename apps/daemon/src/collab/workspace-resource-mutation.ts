@@ -28,8 +28,12 @@ export type WorkspaceResourceContext = {
    */
   workspaceTypeAsserted: 'personal' | 'team' | null;
   appUserId: string;
-  workspaceMemberId: string;
-  role: CollabMemberRole;
+ workspaceMemberId: string;
+ /** True when this workspace is the default team (shared space). In the
+  * shared space all users are members and personal projects behave like
+  * personal-space projects for ownership purposes. */
+ isDefaultTeam?: boolean;
+ role: CollabMemberRole;
   memberStatus: 'active' | 'removed';
   lifecycleState: 'active' | 'billing_past_due' | 'locked' | 'deleting' | 'deleted';
   canShareProjects: boolean;
@@ -410,9 +414,10 @@ export function workspaceResourceContext(req: any, workspaceId: string): Workspa
     lifecycleState: lifecycleState === 'billing_past_due' || lifecycleState === 'locked' || lifecycleState === 'deleting' || lifecycleState === 'deleted'
       ? lifecycleState
       : 'active',
-    canShareProjects: headerBool(req, 'x-od-workspace-can-share-projects', canWriteSyncedFiles),
-    canWriteSyncedFiles,
-  };
+   canShareProjects: headerBool(req, 'x-od-workspace-can-share-projects', canWriteSyncedFiles),
+   canWriteSyncedFiles,
+   isDefaultTeam: headerValue(req, 'x-od-workspace-is-default-team') === 'true',
+ };
 }
 
 export function workspaceResourceContextFromRequest(req: any): WorkspaceResourceContext | 'missing' | null {
@@ -435,9 +440,10 @@ export function workspaceResourceContextFromVerified(
     role: context.role,
     memberStatus: context.memberStatus,
     lifecycleState: context.lifecycleState,
-    canShareProjects: context.permissions.canShareProjects,
-    canWriteSyncedFiles: context.permissions.canWriteSyncedFiles,
-  };
+  canShareProjects: context.permissions.canShareProjects,
+  canWriteSyncedFiles: context.permissions.canWriteSyncedFiles,
+  ...(context.isDefaultTeam ? { isDefaultTeam: true } : {}),
+ };
 }
 
 export function isWorkspaceResourceLocked(ctx: WorkspaceResourceContext): boolean {

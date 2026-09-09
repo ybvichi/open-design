@@ -56,6 +56,7 @@ function PlaceholderPanel({ icon, label, note }: { icon: IconName; label: string
 
 function PersonalProjectsPanel({
   workspaceId,
+  workspaceMemberId,
   showCreateGroup,
   onShowCreateGroupChange,
   designSystems,
@@ -67,6 +68,7 @@ function PersonalProjectsPanel({
  onCopyProject,
 }: {
   workspaceId: string | null;
+  workspaceMemberId: string | null;
   showCreateGroup: boolean;
   onShowCreateGroupChange: (v: boolean) => void;
   designSystems: DesignSystemSummary[];
@@ -149,10 +151,15 @@ function PersonalProjectsPanel({
     const loadProjects = async () => {
       setProjectsLoading(true);
       try {
-        const res = await fetch(
-          `/api/folders/root/projects?workspace_id=${encodeURIComponent(workspaceId)}`,
-          { cache: 'no-store' },
-        );
+       const res = await fetch(
+         `/api/folders/root/projects?workspace_id=${encodeURIComponent(workspaceId)}`,
+         {
+           cache: 'no-store',
+           headers: workspaceMemberId
+             ? { 'x-od-workspace-member-id': workspaceMemberId }
+             : undefined,
+         },
+       );
         if (!res.ok) { if (!cancelled) setProjects([]); return; }
         const body = await res.json();
         if (cancelled) return;
@@ -361,13 +368,14 @@ function handleFolderClick(folder: PersonalFolderItem) {
        ) : projects.length === 0 ? (
          null
        ) : (
-        <RecentProjectsStrip
-          projects={projects}
-          designSystems={designSystems}
-          limit={1000}
-          heading={t('entry.navDrafts')}
-          space="drafts"
-         onOpen={(id) => onOpenProject(id)}
+       <RecentProjectsStrip
+         projects={projects}
+         designSystems={designSystems}
+         limit={1000}
+         heading={t('entry.navDrafts')}
+         space="drafts"
+         homeWorkspaceId={workspaceId}
+        onOpen={(id) => onOpenProject(id)}
          onDelete={onDeleteProject}
          onDuplicate={onCopyProject ?? onDuplicateProject}
         onRename={(id, name) => {
@@ -487,13 +495,13 @@ export function PersonalAllView({
   onCopyProject?: (id: string) => Promise<void> | void;
 }) {
   const t = useT();
- const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
- const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
+const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+const [workspaceMemberId, setWorkspaceMemberId] = useState<string | null>(null);
 const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
+ const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
 
  // Resolve the personal workspace ID from the workspace directory.
-  // The personal workspace is the "个人空间" default team — the directory
   // item with isDefaultTeam === true.
   useEffect(() => {
     let cancelled = false;
@@ -503,9 +511,10 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
         if (!res.ok) return;
         const body = await res.json() as { items?: WorkspaceDirectoryItem[] };
         if (cancelled) return;
-        const personal = body.items?.find((item) => item.isDefaultTeam === true);
-        setWorkspaceId(personal?.workspaceId ?? null);
-      } catch {
+       const personal = body.items?.find((item) => item.isDefaultTeam === true);
+       setWorkspaceId(personal?.workspaceId ?? null);
+       setWorkspaceMemberId(personal?.workspaceMemberId ?? null);
+     } catch {
         // leave workspaceId null
       }
     })();
@@ -583,10 +592,11 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
 
      <div className={styles.content} role="tabpanel">
         {activeTab === 'projects' ? (
-        <PersonalProjectsPanel
-          controlsPortalTarget={typeTabsEl}
-          workspaceId={workspaceId}
-          showCreateGroup={showCreateGroup}
+       <PersonalProjectsPanel
+         controlsPortalTarget={typeTabsEl}
+         workspaceId={workspaceId}
+         workspaceMemberId={workspaceMemberId}
+         showCreateGroup={showCreateGroup}
           onShowCreateGroupChange={setShowCreateGroup}
           designSystems={designSystems}
          onOpenProject={onOpenProject}

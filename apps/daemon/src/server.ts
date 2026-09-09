@@ -64,6 +64,7 @@ import { resolveProjectRoot } from './project-root.js';
 import { setRuntimeDataDir } from './ids.js';
 import { getDefaultTeamId, getTeamMemberId } from './ids.js';
 import { fetchHdwTeams } from './http/hdw.js';
+import { fetchSharedSpaceInfo } from './http/hdw.js';
 import { OPEN_DESIGN_PLUGIN_ID } from './mcp-observability.js';
 import {
   resolveDaemonCliPath,
@@ -1273,6 +1274,7 @@ const {
   pluginRegistryDir: PLUGIN_REGISTRY_DIR,
   marketplaceManifestUrlForRegistry,
   marketplaceRegistryIdFromUrl,
+  getDataDir: () => RUNTIME_DATA_DIR,
 });
 
 const SANDBOX_MODE_ENABLED = isSandboxModeEnabled(process.env);
@@ -1281,8 +1283,12 @@ const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT, {
 });
 const SANDBOX_RUNTIME = resolveSandboxRuntimeConfig(SANDBOX_MODE_ENABLED, RUNTIME_DATA_DIR);
 ensureSandboxRuntimeDirs(SANDBOX_RUNTIME);
-setRuntimeDataDir(RUNTIME_DATA_DIR);
-const PLUGIN_LOCKFILE_PATH = path.join(RUNTIME_DATA_DIR, 'od-plugin-lock.json');
+ setRuntimeDataDir(RUNTIME_DATA_DIR);
+ // Ensure the shared space team exists in the HDW database on startup.
+ // Best-effort: if the HDW server is not running yet, the local fallback
+ // in fetchSharedSpaceInfo still returns a valid info object.
+ fetchSharedSpaceInfo(RUNTIME_DATA_DIR).catch(() => {});
+ const PLUGIN_LOCKFILE_PATH = path.join(RUNTIME_DATA_DIR, 'od-plugin-lock.json');
 // Canonical (realpath-resolved) form of RUNTIME_DATA_DIR for the few callers
 // that compare it against a user-supplied realpath() result. On macOS, /var
 // is a symlink to /private/var, so an import realpath lands in /private/var
@@ -3312,8 +3318,40 @@ export async function startServer({
         console.warn(`[plugins] ${id} registry seed failed: ${result.message}`);
       }
     }
+ } catch (err) {
+   console.warn(`[plugins] registry seed failed: ${(err)?.message ?? err}`);
+ }
+
+  // HDW community marketplace auto-seed. Fetches the manifest from the
+  // HDW backend and upserts it as a trusted marketplace row. SSO cookies
+  // are attached when available but not required. Silent no-op when HDW
+  // is unreachable (e.g. dev without VPN) — the SquareView "项目" tab
+  // just stays empty.
+  try {
+    const {
+      HDW_MARKETPLACE_ID,
+      HDW_MARKETPLACE_URL,
+      fetchHdwMarketplaceManifestText,
+    } = await import('./http/hdw.js');
+    const { ensureMarketplaceManifest } = await import('./plugins/marketplaces.js');
+    const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, RUNTIME_DATA_DIR);
+    if (manifestText) {
+      const result = ensureMarketplaceManifest(db, {
+        id: HDW_MARKETPLACE_ID,
+        url: HDW_MARKETPLACE_URL,
+        trust: 'trusted',
+        manifestText,
+      });
+      if (result.ok) {
+        console.log(`[plugins] seeded HDW community marketplace (${result.row.manifest.plugins.length} plugin(s))`);
+      } else {
+        console.warn(`[plugins] HDW community marketplace seed failed: ${result.message}`);
+      }
+    } else {
+      console.log('[plugins] HDW community marketplace not available (fetch failed or HDW unreachable)');
+    }
   } catch (err) {
-    console.warn(`[plugins] registry seed failed: ${(err)?.message ?? err}`);
+    console.warn(`[plugins] HDW community marketplace seed failed: ${(err as Error)?.message ?? err}`);
   }
 
   // Plan §3.A5 / spec §16 Phase 5 / PB2: periodic snapshot GC. Disabled
@@ -3438,28 +3476,35 @@ export async function startServer({
         try {
           const TEAM_WORKSPACE_ID = getDefaultTeamId();
           const TEAM_WORKSPACE_MEMBER_ID = getTeamMemberId(TEAM_WORKSPACE_ID);
-          const hdwTeams = await fetchHdwTeams(RUNTIME_DATA_DIR);
-          const items: WorkspaceDirectoryItem[] = [
-            {
-              workspaceId: TEAM_WORKSPACE_ID,
-              workspaceName: '个人空间',
-              workspaceIconKey: 'spark',
-              workspaceType: 'personal' as const,
-              workspaceMemberId: TEAM_WORKSPACE_MEMBER_ID,
-              isDefaultTeam: true,
-              role: 'owner' as const,
-              memberStatus: 'active' as const,
-              lifecycleState: 'active' as const,
-            },
-            ...hdwTeams.map(t => ({
-              workspaceId: t.workspace_id,
-              workspaceName: t.workspace_name,
-              workspaceType: 'team' as const,
-              workspaceMemberId: t.workspace_member_id,
-              role: t.role,
-              memberStatus: 'active' as const,
-              lifecycleState: 'active' as const,
-            })),
+         const hdwTeams = await fetchHdwTeams(RUNTIME_DATA_DIR);
+         const sharedSpaceInfo = await fetchSharedSpaceInfo(RUNTIME_DATA_DIR);
+         // The HDW /team/my endpoint may also return the shared space as a
+         // regular team. Filter it out so it doesn't appear twice.
+         const sharedSpaceId = sharedSpaceInfo?.workspace_id ?? '';
+         const filteredTeams = sharedSpaceId
+           ? hdwTeams.filter(t => t.workspace_id !== sharedSpaceId)
+           : hdwTeams;
+        const items: WorkspaceDirectoryItem[] = [
+          ...filteredTeams.map(t => ({
+             workspaceId: t.workspace_id,
+             workspaceName: t.workspace_name,
+             workspaceType: 'team' as const,
+             workspaceMemberId: t.workspace_member_id,
+             role: t.role,
+             memberStatus: 'active' as const,
+             lifecycleState: 'active' as const,
+           })),
+           ...(sharedSpaceInfo ? [{
+             workspaceId: sharedSpaceInfo.workspace_id,
+             workspaceName: sharedSpaceInfo.workspace_name,
+             workspaceType: 'team' as const,
+             workspaceMemberId: sharedSpaceInfo.workspace_member_id,
+             role: 'member',//sharedSpaceInfo.role,
+             memberStatus: 'active' as const,
+             lifecycleState: 'active' as const,
+             isSharedSpace: true,
+             isDefaultTeam: true,
+           }] : []),
           ];
           workspaceTypes.learn(items);
           return { ok: true, items };
@@ -5511,10 +5556,11 @@ export async function startServer({
     }).catch(() => undefined);
   };
  let workspaceAnalyticsService: AnalyticsService | null = null;
-  registerCollabContextHideSignRoutes(app, {
-    dataDir: RUNTIME_DATA_DIR,
-    hdwTeamProjectCatalog: hdwTeamProjectCatalog,
-    db: db,
+ registerCollabContextHideSignRoutes(app, {
+   dataDir: RUNTIME_DATA_DIR,
+   hdwTeamProjectCatalog: hdwTeamProjectCatalog,
+   db: db,
+   requestTeamShare: collab.requestTeamShare.bind(collab),
   });
   registerVela2HideSignRoutes(app, { env: process.env, dataDir: RUNTIME_DATA_DIR });
   registerCollabContextRoutes(app, {
@@ -9032,7 +9078,7 @@ export async function startServer({
         if (!USER_PLUGIN_SOURCE_KINDS.has(sourcePlugin.sourceKind)) return res.status(409).json({ ok: false, code: 'plugin-not-shareable', message: 'Only user-installed plugins can start a share project.' });
         const body = req.body && typeof req.body === 'object' ? req.body : {};
         const action = normalizePluginShareAction(body.action);
-        if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'action must be publish-github or contribute-open-design');
+        if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'action must be publish-github, contribute-open-design, or publish-hdw');
         const createWorkspace = await authorizeCreatedProjectWorkspace(
           req,
           fetchProjectCreationWorkspaceDirectory,
@@ -9094,7 +9140,94 @@ export async function startServer({
       try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const projectBinding = getWorkspaceProjectByProjectId(db, req.params.id); if (!projectBinding?.workspaceId || !projectBinding.createdByWorkspaceMemberId) return sendApiError(res, 409, 'WORKSPACE_PROJECT_UNBOUND', 'project must have an exact workspace owner before installing a plugin'); const installScope = { workspaceId: String(projectBinding.workspaceId), workspaceMemberId: String(projectBinding.createdByWorkspaceMemberId) }; const body = req.body && typeof req.body === 'object' ? req.body : {}; const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const warnings = []; const log = []; let plugin = null; let message = 'Install finished.'; for await (const ev of installPlugin(db, { source: folder, roots: PLUGIN_REGISTRY_ROOTS, allowReplacePlugin: (pluginId) => allowScopedPluginReplace(installScope, pluginId) })) { if (ev.message) log.push(ev.message); if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings); if (ev.kind === 'success') { plugin = ev.plugin; ensureWorkspaceResource(db, 'plugin', installScope.workspaceId, ev.plugin.id, { visibility: 'personal', resourceState: 'active', createdByWorkspaceMemberId: installScope.workspaceMemberId, updatedByWorkspaceMemberId: installScope.workspaceMemberId }); message = `Installed ${ev.plugin.title}.`; break; } if (ev.kind === 'error') { message = ev.message; break; } } res.status(plugin ? 200 : 400).json({ ok: Boolean(plugin), plugin, warnings, message, log }); } catch (err) { const code = err && err.code; const status = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : 400; sendApiError(res, status, status === 404 ? 'PLUGIN_FOLDER_NOT_FOUND' : 'BAD_REQUEST', String(err?.message || err)); }
     },
     handleProjectPluginCli: async (req, res, action) => {
-      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const subcommand = action === 'publish-github' ? 'publish-repo' : 'open-design-pr'; const timeout = action === 'publish-github' ? 240_000 : 300_000; const result = await execCommandViaLoginShell(OD_NODE_BIN, [OD_BIN, 'plugin', subcommand, folder, '--json'], { timeout }); const payload = result.stdout ? JSON.parse(result.stdout) : null; if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || (action === 'publish-github' ? 'GitHub repo publish failed.' : 'HiDesign PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] }); res.json({ ok: true, message: action === 'publish-github' ? (payload.repoUrl ? `Published plugin to ${payload.repoUrl}.` : 'Published plugin to GitHub.') : (payload.prUrl ? `Opened HiDesign PR flow at ${payload.prUrl}.` : 'Opened HiDesign PR flow.'), ...(payload.repoUrl ? { url: payload.repoUrl } : {}), ...(payload.prUrl ? { url: payload.prUrl } : {}), log: payload.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [] }); } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err), log: [] }); }
+      try {
+        const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const relativePath = normalizeProjectPluginFolderPath(body.path);
+        const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata);
+        const folder = await resolveProjectChildDirectory(projectRoot, relativePath);
+        const subcommand = action === 'publish-github' ? 'publish-repo' : action === 'publish-hdw' ? 'publish-hdw' : 'open-design-pr';
+        const timeout = action === 'publish-github' ? 240_000 : action === 'publish-hdw' ? 120_000 : 300_000;
+        const cliArgs = [OD_BIN, 'plugin', subcommand, folder, '--json'];
+        // Pass project name as --title so auto-generated manifests use a
+        // human-readable name instead of the folder UUID.
+        if (action === 'publish-hdw' && project.name) {
+          cliArgs.push('--title', project.name);
+        }
+        // Pass the HTML entry file so the auto-generated manifest's
+        // od.preview.entry points to the page being shared from.
+        if (action === 'publish-hdw' && typeof body.entryFile === 'string' && body.entryFile.trim()) {
+          cliArgs.push('--entry', body.entryFile.trim());
+        }
+       if (action === 'publish-hdw') {
+         cliArgs.push('--data-dir', RUNTIME_DATA_DIR);
+         try {
+           const { readSsoConfigFile } = await import('./http/hik_logins/hicoo.js');
+           const sso = readSsoConfigFile(RUNTIME_DATA_DIR);
+           if (sso?.username) cliArgs.push('--publisher-username', sso.username);
+           const display = sso?.userInfo?.displayName?.trim();
+           if (display) cliArgs.push('--publisher-displayname', display);
+         } catch { /* best-effort: CLI falls back to 'unknown' */ }
+       }
+       // Generate a cover screenshot of the entry HTML so /square can show
+       // a preview image for remote (not-yet-downloaded) community plugins.
+       // The desktop renderer renders the page to PNG; we upload the PNG as
+       // a blob to HDW and pass the digest to the CLI as --cover-digest.
+       // If the renderer is unavailable or the screenshot fails, publish
+       // proceeds without a cover — the card just shows a placeholder.
+       if (action === 'publish-hdw' && typeof desktopArtifactExporter === 'function' && typeof body.entryFile === 'string' && body.entryFile.trim()) {
+         try {
+           const entryFileName = body.entryFile.trim();
+           const { buildDesktopArtifactExportInput } = await import('./pdf-export.js');
+           const { uploadHdwCommunityBlob } = await import('./http/hdw.js');
+           const { readProjectFile } = await import('./projects.js');
+           const fileResult = await readProjectFile(PROJECTS_DIR, req.params.id, entryFileName, project.metadata);
+           const htmlContent = fileResult.buffer.toString('utf8');
+           const exportInput = await buildDesktopArtifactExportInput({
+             daemonUrl: daemonUrlRef.current,
+             fileName: entryFileName,
+             format: 'image',
+             imageFormat: 'png',
+             width: 1200,
+             height: 800,
+             sourceHtml: htmlContent,
+             projectId: req.params.id,
+             projectsRoot: PROJECTS_DIR,
+             title: project.name || entryFileName,
+           });
+           const coverResult = await desktopArtifactExporter(exportInput);
+           if (coverResult.ok && coverResult.path) {
+             const { promises: fsp } = await import('node:fs');
+             const coverBuffer = await fsp.readFile(coverResult.path);
+             // Write to a temp file then upload via the blob uploader.
+             const tmpCoverPath = `${folder}.cover.png`;
+             await fsp.writeFile(tmpCoverPath, coverBuffer);
+             const coverBlob = await uploadHdwCommunityBlob(tmpCoverPath, RUNTIME_DATA_DIR);
+             await fsp.unlink(tmpCoverPath).catch(() => {});
+             if (coverBlob) {
+               cliArgs.push('--cover-digest', coverBlob.digest);
+             }
+           }
+         } catch { /* best-effort: publish without cover */ }
+       }
+       const result = await execCommandViaLoginShell(OD_NODE_BIN, cliArgs, { timeout });
+        const payload = result.stdout ? JSON.parse(result.stdout) : null;
+        if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : action === 'publish-hdw' ? 'publish-hdw-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || payload?.error?.message || (action === 'publish-github' ? 'GitHub repo publish failed.' : action === 'publish-hdw' ? 'HDW community publish failed.' : 'HiDesign PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.message).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] });
+        const url = payload.repoUrl || payload.prUrl || payload.marketplaceUrl;
+        // Auto-refresh the HDW community marketplace cache so the newly
+        // published plugin shows up in Hi广场 without a manual refresh.
+        if (action === 'publish-hdw') {
+          try {
+            const { HDW_MARKETPLACE_ID, HDW_MARKETPLACE_URL, fetchHdwMarketplaceManifestText } = await import('./http/hdw.js');
+            const { ensureMarketplaceManifest } = await import('./plugins/marketplaces.js');
+            const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, RUNTIME_DATA_DIR);
+            if (manifestText) {
+              ensureMarketplaceManifest(db, { id: HDW_MARKETPLACE_ID, url: HDW_MARKETPLACE_URL, trust: 'trusted', manifestText });
+            }
+          } catch { /* best-effort; the publish itself already succeeded */ }
+        }
+        res.json({ ok: true, message: action === 'publish-github' ? (payload.repoUrl ? `Published plugin to ${payload.repoUrl}.` : 'Published plugin to GitHub.') : action === 'publish-hdw' ? (payload.marketplaceUrl ? `Published plugin to HDW community: ${payload.marketplaceUrl}.` : 'Published plugin to HDW community marketplace.') : (payload.prUrl ? `Opened HiDesign PR flow at ${payload.prUrl}.` : 'Opened HiDesign PR flow.'), ...(url ? { url } : {}), log: payload.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [] });
+      } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err), log: [] }); }
     },
     handleCandidateDraft: async (req, res) => {
       if (!isLocalSameOrigin(req, resolvedPort)) return res.status(403).json({ error: 'cross-origin request rejected' });
@@ -9102,11 +9235,11 @@ export async function startServer({
     },
     handleCandidateShareTask: async (req, res) => {
       if (!isLocalSameOrigin(req, resolvedPort)) return res.status(403).json({ error: 'cross-origin request rejected' });
-      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const action = body.action === 'publish-github' || body.action === 'contribute-open-design' ? body.action : null; if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'plugin share action is required'); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const draft = await generateSkillPluginDraft(db, projectRoot, req.params.id, req.params.candidateId); if (!draft) return sendApiError(res, 404, 'NOT_FOUND', 'plugin candidate not found'); if (!draft.validation.ok) return res.status(422).json({ ok: false, code: 'plugin-draft-invalid', message: 'Generated plugin draft is invalid.', draft }); const task = pluginShareTaskStore.createAndStart(req.params.id, { action, path: draft.draftPath }, draft.folder); res.status(202).json({ taskId: task.id, action, path: draft.draftPath, status: task.status, startedAt: task.startedAt, draft }); } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err) }); }
+      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const action = body.action === 'publish-github' || body.action === 'contribute-open-design' || body.action === 'publish-hdw' ? body.action : null; if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'plugin share action is required'); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const draft = await generateSkillPluginDraft(db, projectRoot, req.params.id, req.params.candidateId); if (!draft) return sendApiError(res, 404, 'NOT_FOUND', 'plugin candidate not found'); if (!draft.validation.ok) return res.status(422).json({ ok: false, code: 'plugin-draft-invalid', message: 'Generated plugin draft is invalid.', draft }); const task = pluginShareTaskStore.createAndStart(req.params.id, { action, path: draft.draftPath }, draft.folder); res.status(202).json({ taskId: task.id, action, path: draft.draftPath, status: task.status, startedAt: task.startedAt, draft }); } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err) }); }
     },
     handleProjectShareTask: async (req, res) => {
       if (!isLocalSameOrigin(req, resolvedPort)) return res.status(403).json({ error: 'cross-origin request rejected' });
-      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const action: PluginShareAction | null = body.action === 'publish-github' || body.action === 'contribute-open-design' ? body.action : null; if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'plugin share action is required'); const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const task = pluginShareTaskStore.createAndStart(req.params.id, { action, path: relativePath }, folder); res.status(202).json({ taskId: task.id, action, path: relativePath, status: task.status, startedAt: task.startedAt }); } catch (err) { const code = err && err.code; const status = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : 400; sendApiError(res, status, status === 404 ? 'PLUGIN_FOLDER_NOT_FOUND' : 'BAD_REQUEST', String(err?.message || err)); }
+      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const action: PluginShareAction | null = body.action === 'publish-github' || body.action === 'contribute-open-design' || body.action === 'publish-hdw' ? body.action : null; if (!action) return sendApiError(res, 400, 'BAD_REQUEST', 'plugin share action is required'); const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const task = pluginShareTaskStore.createAndStart(req.params.id, { action, path: relativePath }, folder); res.status(202).json({ taskId: task.id, action, path: relativePath, status: task.status, startedAt: task.startedAt }); } catch (err) { const code = err && err.code; const status = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : 400; sendApiError(res, status, status === 404 ? 'PLUGIN_FOLDER_NOT_FOUND' : 'BAD_REQUEST', String(err?.message || err)); }
     },
   };
 
@@ -9354,6 +9487,7 @@ export async function startServer({
     bundledMarketplaceEntries,
     createMarketplaceFetcher,
     marketplaceRegistryIdFromUrl,
+    dataDir: RUNTIME_DATA_DIR,
   });
   registerPluginAssetRoutes(app, {
     db,

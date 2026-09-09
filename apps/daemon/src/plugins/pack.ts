@@ -14,9 +14,8 @@
 //   - Any other plain files under the folder
 //
 // What we exclude:
-//   - node_modules / .git / dist / build / out / coverage
-//     (consistent with the installer's tarball-traversal skiplist
-//     — keeps archive size sane and prevents "ship my whole
+//   - node_modules / .git / build / out / coverage
+//     (keeps archive size sane and prevents "ship my whole
 //     development setup" accidents)
 //   - .DS_Store / Thumbs.db (OS noise)
 //   - The output archive itself when --out lands inside the folder
@@ -24,6 +23,11 @@
 //
 // We do NOT chase symlinks (consistent with the installer's
 // extract-time symlink rejection, §3.A6 plan).
+//
+// NOTE: `dist` is intentionally NOT skipped. For design projects
+// shared to the community, `dist/` often contains the actual
+// user-facing HTML/CSS/JS content that must survive the
+// pack → upload → download → remix round-trip.
 
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
@@ -51,7 +55,7 @@ export interface PackPluginResult {
 }
 
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', '.next', 'dist', 'build', 'out', 'coverage',
+  'node_modules', '.git', '.next', 'build', 'out', 'coverage',
   '.turbo', '.cache', '.pnpm-store', '.parcel-cache', '.svelte-kit',
   '.nuxt', '.astro', '.vercel', '.vscode',
 ]);

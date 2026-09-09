@@ -48,9 +48,10 @@ export const MarketplacePluginEntrySchema = z.object({
   }).passthrough().optional(),
   homepage:    z.string().optional(),
   license:     z.string().optional(),
-  capabilitiesSummary: z.array(z.string()).optional(),
-  deprecated:  z.union([z.boolean(), z.string()]).optional(),
-  yanked:      z.boolean().optional(),
+ capabilitiesSummary: z.array(z.string()).optional(),
+  coverUrl:    z.string().optional(),
+ deprecated:  z.union([z.boolean(), z.string()]).optional(),
+ yanked:      z.boolean().optional(),
   yankedAt:    z.string().optional(),
   yankReason:  z.string().optional(),
   tags:        z.array(z.string()).optional(),
@@ -59,6 +60,7 @@ export const MarketplacePluginEntrySchema = z.object({
   description: z.string().optional(),
   description_i18n: LocalizedTextSchema.optional(),
   icon:        z.string().optional(),
+  prompt:      z.string().optional(),
 }).passthrough();
 
 export type MarketplacePluginEntry = z.infer<typeof MarketplacePluginEntrySchema>;

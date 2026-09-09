@@ -186,7 +186,7 @@ export function InviteDialog({
     updateRow(id, { person, status: 'checking', statusMsg: null });
     try {
       const res = await fetch(
-        `/api/hdw/webapi/v1/team/${resolvedTeamId}/member/check?username=${encodeURIComponent(emailToUsername(person.email))}`,
+        `/api/hdw/api/team/${resolvedTeamId}/member/check?username=${encodeURIComponent(emailToUsername(person.email))}`,
         { cache: 'no-store' },
       );
       const body = await res.json().catch(() => null);
@@ -212,7 +212,7 @@ export function InviteDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/team/invite', {
+      const res = await fetch('/api/hdw/api/team/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

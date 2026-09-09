@@ -1,5 +1,22 @@
+
+
 # HiDesign 0.21.X 开发【第一周】
-## 可测试内容
+
+## 安装包
+
+ARM64
+
+https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/public/webresources/download/hi-design/stable/versions/v0.21.0/Hi.Design-0.21.0-mac-arm64.dmg
+
+Inter
+
+https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/public/webresources/download/hi-design/stable/versions/v0.21.0/Hi.Design-0.21.0-mac-x64.dmg
+
+Win
+
+https://pixso.hikvision.com.cn/hik-plugin/ai-builder-web/public/webresources/download/hi-design/stable/versions/v0.21.0/Hi.Design-0.21.0-win-x64-setup.exe
+
+## 功能概览，仅供测试时参考，以实际功能清单为准
 ---------------------------------------------
 
 ### 首页
@@ -26,3 +43,5 @@
 9. 只读项目（管理者，成员，访客）
 10. 复制项目（所有者，管理员，成员）
 11. 团队成员管理
+
+----------------------------------------------

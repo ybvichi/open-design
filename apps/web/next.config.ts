@@ -202,7 +202,7 @@ const nextConfig: NextConfig = {
           // 与 fetch 自然落回代理。详见 apps/daemon/src/routes/hik/_routes/uedro.ts。
            { source: '/uedro/:path*', destination: `${DAEMON_ORIGIN}/uedro/:path*` },
            { source: '/portal/:path*', destination: `${DAEMON_ORIGIN}/portal/:path*` },
-          // Hidesign-Web (HDW) API 代理：/api/hdw/webapi/v1/* → daemon → 上游
+          // Hidesign-Web (HDW) API 代理：/api/hdw/api/* → daemon → 上游
           // (开发环境 localhost:7002，生产环境 pixso.hikvision.com.cn)。
            { source: '/api/hdw/:path*', destination: `${DAEMON_ORIGIN}/api/hdw/:path*` },
          ];

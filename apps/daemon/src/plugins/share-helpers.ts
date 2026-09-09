@@ -113,6 +113,7 @@ export function githubRepoNameFromPluginName(name: string): string {
 export const PLUGIN_SHARE_ACTION_LABELS: Record<PluginShareAction, string> = {
   'publish-github': 'Publish to GitHub',
   'contribute-open-design': 'Contribute to HiDesign',
+  'publish-hdw': 'Share to HDW Community',
 };
 
 export const USER_PLUGIN_SOURCE_KINDS = new Set([
@@ -136,7 +137,6 @@ const PLUGIN_CONTEXT_SKIP_DIRS = new Set([
   '__pycache__',
   'build',
   'coverage',
-  'dist',
   'node_modules',
   'out',
   'target',
@@ -171,6 +171,24 @@ export function renderPluginSharePrompt({ action, sourcePlugin, stagedPath }: Pl
       '```',
       '',
       'Read the JSON response. If `ok` is true, report the final repository URL and any validation/log summary. If it fails, report the `message`, `code`, and the useful log lines. The endpoint checks `gh` auth and performs the repository creation; do not hand-roll a second GitHub flow unless you are explaining a daemon endpoint failure.',
+      '',
+    'Do not rewrite the plugin unless publishing requires a small metadata fix. If you make any fix, explain it before publishing.',
+  ].join('\n');
+}
+  if (action === 'publish-hdw') {
+    return [
+      `Publish the local HiDesign plugin "${title}" to the HDW community marketplace.`,
+      '',
+      `The plugin source files have been copied into this project at \`${stagedPath}\`.`,
+      'Use the local daemon share endpoint so the publish flow runs through HiDesign\'s validated HDW path:',
+      '',
+      '```bash',
+      `curl -sS -X POST "$OD_DAEMON_URL/api/projects/$OD_PROJECT_ID/plugins/publish-hdw" \\`,
+      `  -H 'content-type: application/json' \\`,
+      `  -d '${JSON.stringify({ path: stagedPath })}'`,
+      '```',
+      '',
+      'Read the JSON response. If `ok` is true, report the marketplace plugin URL and any validation/log summary. If it fails, report the `message`, `code`, and the useful log lines. The endpoint packs the plugin, uploads the archive blob to HDW via SSO, and publishes metadata to the community marketplace; do not hand-roll a second upload flow unless you are explaining a daemon endpoint failure.',
       '',
       'Do not rewrite the plugin unless publishing requires a small metadata fix. If you make any fix, explain it before publishing.',
     ].join('\n');

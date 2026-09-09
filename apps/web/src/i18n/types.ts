@@ -1197,14 +1197,37 @@ export interface Dict {
   'personalScope.tabSkill': string;
   'personalScope.tabMcp': string;
   'personalScope.tabExperts': string;
- 'personalScope.emptyNotePersonal': string;
- 'personalScope.emptyNoteShared': string;
- 'squareScope.subtitle': string;
+'personalScope.emptyNotePersonal': string;
+'personalScope.emptyNoteShared': string;
+  'sharedSpace.title': string;
+  'sharedSpace.subtitle': string;
+  'sharedSpace.emptyNote': string;
+  'sharedSpace.loadingProjects': string;
+  'sharedSpace.shareToSharedSpace': string;
+  'sharedSpace.shareDialogTitle': string;
+  'sharedSpace.shareDialogDesc': string;
+  'sharedSpace.shareDialogRecipientLabel': string;
+  'sharedSpace.shareDialogRecipientPlaceholder': string;
+  'sharedSpace.shareDialogSubmit': string;
+  'sharedSpace.shareDialogCancel': string;
+  'sharedSpace.shareSuccess': string;
+  'sharedSpace.shareFailed': string;
+  'sharedSpace.collaboratorBadge': string;
+  'sharedSpace.sharedBy': string;
+'squareScope.subtitle': string;
  'squareScope.tabProjects': string;
  'squareScope.tabSkill': string;
  'squareScope.tabMcp': string;
  'squareScope.tabTool': string;
- 'squareScope.emptyNote': string;
+'squareScope.emptyNote': string;
+'squareScope.loading': string;
+'squareScope.loadFailed': string;
+'squareScope.reference': string;
+'squareScope.remix': string;
+'squareScope.noPlugins': string;
+'squareScope.publisher': string;
+'squareScope.remixing': string;
+'squareScope.remixFailed': string;
  'teamSpace.defaultTitle': string;
   'teamSpace.subtitle': string;
   'teamSpace.tabProjects': string;
@@ -4209,6 +4232,8 @@ export interface Dict {
    *  for the "no loading state, looks like nothing happened" report
    *  (recvqae7v8yMlk). */
   'fileViewer.publishingFile': string;
+  'fileViewer.shareToCommunity': string;
+  'fileViewer.sharing': string;
   'fileViewer.unpublishFile': string;
   /** @deprecated Orphaned (recvqgif6Xa7Wb): rendered the "no team to share
    *  with yet" bridge card with its create-team CTA in the share panel.

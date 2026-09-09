@@ -641,6 +641,11 @@ export function HomeView({
   const [selectedConnectorContexts, setSelectedConnectorContexts] = useState<SelectedConnectorContext[]>([]);
   const [contextWorkspaceItems, setContextWorkspaceItems] = useState<WorkspaceContextItem[]>([]);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+
+  // Community reference context: set when the user picks "参考" from Hi广场.
+  // Shows a context chip so the reference origin is visible and removable,
+  // matching the UX of plugin/MCP/connector context chips.
+  const [communityReference, setCommunityReference] = useState<{ title: string } | null>(null);
   const [workingDir, setWorkingDir] = useState<string | null>(null);
   // Token paired with `workingDir` when picked through the desktop host's
   // native dialog. Spent on the post-creation working-dir POST so the
@@ -1061,6 +1066,7 @@ export function HomeView({
     consumedHandoffIdRef.current = promptHandoff.id;
     setError(null);
     if (promptHandoff.source === 'plugin-use') {
+      setCommunityReference(null);
       setPendingPluginUseHandoff({
         pluginId: promptHandoff.pluginId,
         action: promptHandoff.action ?? 'use',
@@ -1075,7 +1081,30 @@ export function HomeView({
       return;
     }
 
+    if (promptHandoff.source === 'community-reference') {
+      // Pre-fill the composer with the community plugin's prompt text (SKILL.md)
+      // and surface a context chip so the reference origin is visible and
+      // removable, matching the UX of plugin/MCP/connector context chips.
+      setActive(null);
+      setActiveSkill(null);
+      setActiveSkillCatalogScope(null);
+      setSelectedPluginContexts([]);
+      setSelectedMcpContexts([]);
+      setSelectedConnectorContexts([]);
+      setFallbackProjectKind('other');
+      setFallbackProjectMetadata(null);
+      setCommunityReference({ title: promptHandoff.title });
+      setPrompt(promptHandoff.prompt);
+      setPromptEditedByUser(false);
+      if (promptHandoff.focus) {
+        pendingPromptFocusEndRef.current = true;
+      }
+      scrollHomeToTop();
+      return;
+    }
+
     if (promptHandoff.source === 'skill-use') {
+      setCommunityReference(null);
       // Same destination as picking the skill from the composer's own picker:
       // the skill becomes the run's active skill and seeds its example prompt.
       useSkill(promptHandoff.skill, null);
@@ -1091,6 +1120,7 @@ export function HomeView({
     setSelectedConnectorContexts([]);
     setFallbackProjectKind('other');
     setFallbackProjectMetadata(null);
+    setCommunityReference(null);
     if (promptHandoff.focus) {
       pendingPromptFocusEndRef.current = true;
     }
@@ -1144,11 +1174,13 @@ export function HomeView({
       contextOnlyMcp +
       contextOnlyConnectors +
       contextWorkspaceItems.length +
-      stagedFiles.length
+      stagedFiles.length +
+      (communityReference ? 1 : 0)
     );
   }, [
     activeContextItemCount,
     contextWorkspaceItems.length,
+    communityReference,
     selectedConnectorContexts,
     selectedMcpContexts,
     selectedPluginContexts,
@@ -2258,6 +2290,7 @@ export function HomeView({
     setPendingApplyId(null);
     setPendingChipId(null);
     setError(null);
+    setCommunityReference(null);
     setPromptEditedByUser(prompt.trim().length > 0);
     focusPromptAtEnd();
   }
@@ -2906,6 +2939,7 @@ export function HomeView({
       setSelectedMcpContexts([]);
       setSelectedConnectorContexts([]);
       setContextWorkspaceItems([]);
+      setCommunityReference(null);
     } catch (err) {
       // A submit handler that throws (instead of resolving false) lands on
       // the same recovery path as a rejected creation.
@@ -2964,6 +2998,7 @@ export function HomeView({
     || selectedConnectorContexts.length > 0
     || contextWorkspaceItems.length > 0
     || stagedFiles.length > 0
+    || communityReference
   );
 
   return (
@@ -3016,8 +3051,10 @@ export function HomeView({
         contextOnlyPlugins={selectedPluginContexts.filter((item) => !item.inlineBacked).map((item) => item.record)}
         contextOnlyMcpServers={selectedMcpContexts.filter((item) => !item.inlineBacked).map((item) => item.server)}
         contextOnlyConnectors={selectedConnectorContexts.filter((item) => !item.inlineBacked).map((item) => item.connector)}
-        contextWorkspaceItems={contextWorkspaceItems}
-        onRemovePluginContext={removePluginContext}
+       contextWorkspaceItems={contextWorkspaceItems}
+       communityReference={communityReference}
+       onClearCommunityReference={() => setCommunityReference(null)}
+       onRemovePluginContext={removePluginContext}
         onRemoveMcpContext={removeMcpContext}
         onRemoveConnectorContext={removeConnectorContext}
         onAddWorkspaceContext={addWorkspaceContext}

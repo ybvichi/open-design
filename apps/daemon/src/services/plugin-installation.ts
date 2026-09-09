@@ -55,15 +55,17 @@ interface InstallFromLocalFolderEvent {
 }
 
 export function normalizeProjectPluginFolderPath(input: unknown) {
-  const value = String(input ?? '').replace(/\\/g, '/').trim();
-  if (!value || value.includes('\0') || value.startsWith('/') || /^[A-Za-z]:\//.test(value)) {
-    throw new Error('plugin folder path must be a relative project path');
-  }
-  const parts = value.split('/').filter(Boolean);
-  if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
-    throw new Error('plugin folder path must not contain traversal segments');
-  }
-  return parts.join('/');
+ const value = String(input ?? '').replace(/\\/g, '/').trim();
+ if (!value || value.includes('\0') || value.startsWith('/') || /^[A-Za-z]:\//.test(value)) {
+   throw new Error('plugin folder path must be a relative project path');
+ }
+ // '.' means the project root itself — allow it for whole-project sharing.
+ if (value === '.') return '.';
+ const parts = value.split('/').filter(Boolean);
+ if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
+   throw new Error('plugin folder path must not contain traversal segments');
+ }
+ return parts.join('/');
 }
 
 export async function resolveProjectChildDirectory(projectRoot: string, relativePath: string) {

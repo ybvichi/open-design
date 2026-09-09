@@ -841,6 +841,26 @@ export function registerCollabSyncRoutes(
         ownerMemberId = null;
       }
     }
+    // Cross-workspace owner override: the hub catalog and local owners maps
+    // can carry the personal-space (default team) member ID after a
+    // cross-workspace transfer, but the same user has different member IDs
+    // across workspaces. When the resolved owner matches the default-team
+    // member ID AND the caller workspace context gives them a different
+    // member ID, substitute the caller workspace member ID. This keeps
+    // pull/bootstrap (writeMaterializedVersion) and status
+    // (readMaterializedVersion) using the same scope key without it the
+    // status route own override creates a key mismatch that leaves
+    // materializedVersion null and the UI stuck on pulling indefinitely.
+    const defaultMemberId = getTeamMemberId(getDefaultTeamId());
+    if (
+      ownerMemberId
+      && defaultMemberId
+      && ownerMemberId === defaultMemberId
+      && viewerPrincipal?.memberId
+      && viewerPrincipal.memberId !== defaultMemberId
+    ) {
+      ownerMemberId = viewerPrincipal.memberId;
+    }
     const resourceTeamId = capturedIdentity
       ? viewerPrincipal?.teamId
       : context?.workspaceType === 'team'

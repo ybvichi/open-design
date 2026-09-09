@@ -1,7 +1,7 @@
 'use strict';
 
 const { createKnex } = require('../../utils/knex.js');
-const { createTeamId, getTeamMemberId } = require('../../utils/ids.js');
+const { createTeamId, getTeamMemberId, getSharedSpaceTeamId } = require('../../utils/ids.js');
 const { sendHiklinkMessage } = require('../../utils/hiklink.js');
 
 const Controller = require('egg').Controller;
@@ -290,7 +290,6 @@ class TeamController extends Controller {
       const k = this.getKnex();
       const teams = await k('workspaces as w')
         .join('workspace_members as m', 'w.workspace_id', 'm.workspace_id')
-        .where('m.username', username)
         .select(
           'w.workspace_id',
           'w.workspace_name',
@@ -301,6 +300,8 @@ class TeamController extends Controller {
           'm.role',
           'm.created_at as joined_at'
         )
+        .where('m.username', username)
+        .whereNot('w.workspace_id', getSharedSpaceTeamId())
         .orderBy('w.created_at', 'asc');
 
       ctx.body = {

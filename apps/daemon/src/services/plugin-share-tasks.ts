@@ -1,6 +1,6 @@
 import type { randomUUID } from 'node:crypto';
 
-export type PluginShareAction = 'publish-github' | 'contribute-open-design';
+export type PluginShareAction = 'publish-github' | 'contribute-open-design' | 'publish-hdw';
 
 export interface PluginShareTask {
   id: string;
@@ -45,6 +45,7 @@ interface PluginShareCliPayload {
   ok?: boolean;
   repoUrl?: string;
   prUrl?: string;
+  marketplaceUrl?: string;
   steps?: PluginShareStep[];
   error?: {
     label?: string;
@@ -73,6 +74,15 @@ function pluginShareActionToCli(action: PluginShareAction) {
       failureCode: 'publish-repo-failed',
     };
   }
+  if (action === 'publish-hdw') {
+    return {
+      argv: ['plugin', 'publish-hdw'],
+      title: 'Share to community',
+      command: 'od plugin publish-hdw',
+      successMessage: 'Published plugin to HDW community marketplace.',
+      failureCode: 'publish-hdw-failed',
+    };
+  }
   return {
     argv: ['plugin', 'open-design-pr'],
     title: 'HiDesign PR',
@@ -89,6 +99,14 @@ function pluginShareProgressPlan(action: PluginShareAction) {
       'Create or update the GitHub repository',
       'Push plugin files',
       'Return the repository URL',
+    ];
+  }
+  if (action === 'publish-hdw') {
+    return [
+      'Pack the plugin folder into a .tgz archive',
+      'Upload the archive blob to HDW (sha256-verified)',
+      'Publish plugin metadata to the community marketplace',
+      'Return the marketplace plugin URL',
     ];
   }
   return [
@@ -190,11 +208,15 @@ export function createPluginShareTaskStore(deps: CreatePluginShareTaskStoreDeps)
       notify(task);
       return;
     }
-    const url = payload.repoUrl || payload.prUrl || undefined;
+    const url = payload.repoUrl || payload.prUrl || payload.marketplaceUrl || undefined;
     task.status = 'done';
     task.result = {
       message: url
-        ? (action === 'publish-github' ? `Published plugin to ${url}.` : `Opened HiDesign PR flow at ${url}.`)
+        ? (action === 'publish-github'
+          ? `Published plugin to ${url}.`
+          : action === 'publish-hdw'
+          ? `Published plugin to HDW community: ${url}.`
+          : `Opened HiDesign PR flow at ${url}.`)
         : share.successMessage,
       ...(url ? { url } : {}),
       log: stepLog,

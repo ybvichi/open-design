@@ -29,6 +29,7 @@ import {
 } from '../providers/registry';
 import type { DesignSystemSummary, Project, ProjectDisplayStatus, ProjectFile } from '../types';
 import { Icon } from './Icon';
+import { ShareToSharedSpaceDialog } from './ShareToSharedSpaceDialog';
 import { InviteDialog } from './InviteDialog';
 import { STATUS_LABEL_KEYS } from './DesignsTab';
 import { isDesignSystemProject, isPublishedDesignSystemProject } from './design-system-project';
@@ -42,7 +43,7 @@ import {
   canAccessWorkspaceInviteFlow,
   resolveWorkspaceInviteTarget,
 } from './EntryNavRail';
-import { copyProjectToPersonal, moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
+import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
 import {
   workspaceContextHasTeamIdentity,
   type WorkspaceCollabContext,
@@ -109,8 +110,11 @@ interface Props {
   loading?: boolean;
   /** Full-page project grids render their own title + controls. The Home strip
    *  omits this and keeps the compact "最近项目 / 查看全部" header. */
-  heading?: string;
-  description?: string;
+ heading?: string;
+ description?: string;
+  /** The workspace ID this strip's projects belong to. Required for
+   * "分享到共享空间" to know the project's home workspace. */
+  homeWorkspaceId?: string | null;
   /** Return false when opening failed and the grid stayed mounted, so aborted
    * background cover work can resume after the foreground attempt finishes. */
   onOpen: (id: string) => boolean | void | Promise<boolean | void>;
@@ -369,6 +373,7 @@ export function RecentProjectsStrip({
   designSystems = EMPTY_DESIGN_SYSTEMS,
   heading,
   description,
+  homeWorkspaceId,
   onOpen,
   onViewAll,
   onDelete,
@@ -418,7 +423,7 @@ operator,
     const fetchMembers = async () => {
       try {
         const res = await fetch(
-          `/api/hdw/webapi/v1/team/${encodeURIComponent(teamId)}/members`,
+          `/api/hdw/api/team/${encodeURIComponent(teamId)}/members`,
           { cache: 'no-store' },
         );
         if (!res.ok) { if (!cancelled) setHdwMemberNames(EMPTY_MAP); return; }
@@ -553,9 +558,10 @@ operator,
   >({});
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuPlacement, setMenuPlacement] = useState<'down' | 'up'>('down');
-  const [renameTarget, setRenameTarget] = useState<{ id: string; original: string } | null>(null);
-  const [renameInput, setRenameInput] = useState('');
-  const [confirmTarget, setConfirmTarget] = useState<Project | null>(null);
+ const [renameTarget, setRenameTarget] = useState<{ id: string; original: string } | null>(null);
+ const [renameInput, setRenameInput] = useState('');
+ const [confirmTarget, setConfirmTarget] = useState<Project | null>(null);
+  const [sharedSpaceTarget, setSharedSpaceTarget] = useState<Project | null>(null);
   // recvqbh189zBY6: commitDelete used to await onDelete and drop the result on
   // the floor either way — a 403/network failure closed the dialog exactly
   // like a success, leaving the project right where it was with no signal
@@ -706,10 +712,6 @@ operator,
  const [moveTarget, setMoveTarget] = useState<{ project: Project; action: 'to-team' | 'to-personal' } | null>(null);
  // When set, the tree selector is open for a single-project move to team.
 const [moveToTeamTarget, setMoveToTeamTarget] = useState<Project | null>(null);
- // When set, the tree selector is open for a copy-to-personal flow.
- const [copyToPersonalTarget, setCopyToPersonalTarget] = useState<Project | null>(null);
- // Project id currently being copied (drives the dialog busy state).
- const [copyingId, setCopyingId] = useState<string | null>(null);
 // Tree dialog mode for the current move: 'tabbed' in team space, 'personal-folders'
  // for personal-space folder moves, 'team' for the legacy move-to-team flow.
  const [moveToTreeMode, setMoveToTreeMode] = useState<'team' | 'personal-folders' | 'tabbed'>('tabbed');
@@ -808,64 +810,9 @@ function commitMove() {
  const isGuest = operator
    ? operator.role === 'guest'
    : workspaceContext?.role === 'guest';
- const canShowCardActions = actionsAvailable && !isGuest;
+const canShowCardActions = actionsAvailable && !isGuest;
 
-  function requestCopyToPersonal(project: Project) {
-    trackCollection('copy_to_personal', {
-      project_key: project.id,
-      project_relation: resolveCreator(project).ownedBySelf ? 'self' : 'other',
-    });
-    setMenuOpenId(null);
-    setCopyToPersonalTarget(project);
-  }
-
-  async function handleCopyToPersonalConfirm(selection: TeamTreeSelection) {
-    const project = copyToPersonalTarget;
-    setCopyToPersonalTarget(null);
-    if (!project) return;
-    const startedAt = performance.now();
-    setCopyingId(project.id);
-    try {
-      await copyProjectToPersonal(
-        project.id,
-        workspaceContext,
-        { targetFolderId: selection.folderId },
-      );
-      window.dispatchEvent(new CustomEvent('personal:folders-updated'));
-      notifyTeamProjectsChanged();
-      trackWorkspaceProjectActionResult(analytics.track, {
-        page_name: analyticsPage,
-        area: 'project_collection',
-        action: 'copy_to_personal',
-        result: 'success',
-        requested_count: 1,
-        succeeded_count: 1,
-        failed_count: 0,
-        duration_ms: Math.round(performance.now() - startedAt),
-        ...workspaceDimensions,
-      });
-    } catch (err) {
-      console.warn('[RecentProjectsStrip] copy project to personal failed:', err);
-      setShareErrorProjectId(project.id);
-      setShareErrorKind('share');
-      trackWorkspaceProjectActionResult(analytics.track, {
-        page_name: analyticsPage,
-        area: 'project_collection',
-        action: 'copy_to_personal',
-        result: 'failed',
-        requested_count: 1,
-        succeeded_count: 0,
-        failed_count: 1,
-        duration_ms: Math.round(performance.now() - startedAt),
-        error_code: 'request_failed',
-        ...workspaceDimensions,
-      });
-    } finally {
-      setCopyingId(null);
-    }
-  }
-
-  // Bulk-action state for the 多选 bar. Every action below is the batch form of
+ // Bulk-action state for the 多选 bar. Every action below is the batch form of
   // an action the per-card ⋯ menu already offers (move in/out of the team
   // space, delete); nothing new is exposed here that a single card cannot do.
   const selectedProjects = visibleProjects.filter(({ project }) => selectedProjectIds.has(project.id));
@@ -2406,26 +2353,22 @@ function requestDelete(project: Project) {
                          </span>
                        </button>
                      ))}
-                      {/* Copy to personal: any team member can copy a team
-                          project to their own personal space — this is a read
-                          operation on the source, not a mutation, so it is NOT
-                          gated by canMutate. */}
-                      {space === 'team' ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={copyingId === project.id}
-                          onClick={() => requestCopyToPersonal(project)}
-                        >
-                          <Icon name="copy" size={12} />
-                          <span>
-                            {copyingId === project.id
-                              ? t('recentProjects.copyInProgress')
-                              : t('recentProjects.copyToPersonal')}
-                          </span>
-                        </button>
-                      ) : null}
-                      {shareErrorProjectId === project.id ? (
+                    {/* Share to Shared Space: available to project owners
+                         who can mutate. Opens a member-picker dialog. */}
+                     {homeWorkspaceId && (creator.canMutate || creator.canAdmin) ? (
+                       <button
+                         type="button"
+                         role="menuitem"
+                         onClick={() => {
+                           setSharedSpaceTarget(project);
+                           setMenuOpenId(null);
+                         }}
+                       >
+                         <Icon name="share" size={12} />
+                         <span>{t('sharedSpace.shareToSharedSpace')}</span>
+                       </button>
+                     ) : null}
+                     {shareErrorProjectId === project.id ? (
                         <div className="recent-projects__card-menu-error" role="alert">
                           {t(
                             shareErrorKind === 'unshare'
@@ -2455,8 +2398,16 @@ function requestDelete(project: Project) {
               ) : null}
             </div>
           );
-        })}
-      </div>
+       })}
+     </div>
+      {sharedSpaceTarget && homeWorkspaceId ? (
+        <ShareToSharedSpaceDialog
+          projectId={sharedSpaceTarget.id}
+          homeWorkspaceId={homeWorkspaceId}
+          projectName={sharedSpaceTarget.name}
+          onClose={() => setSharedSpaceTarget(null)}
+        />
+      ) : null}
       {renameTarget ? (
         <Dialog
           as="form"
@@ -2624,17 +2575,8 @@ function requestDelete(project: Project) {
        disabledKeys={disabledKeys}
       canMoveToPersonal={resolveCreator(moveToTeamTarget).ownedBySelf}
      />
-   ) : null}
-    {copyToPersonalTarget ? (
-      <MoveToTeamTreeDialog
-        onConfirm={handleCopyToPersonalConfirm}
-        onCancel={() => setCopyToPersonalTarget(null)}
-        busy={copyingId === copyToPersonalTarget.id}
-        mode="personal-folders"
-        copyMode
-      />
-    ) : null}
-   {bulkMoveToTeamOpen ? (
+  ) : null}
+  {bulkMoveToTeamOpen ? (
      <MoveToTeamTreeDialog
        onConfirm={handleBulkMoveToTeamConfirm}
        onCancel={() => setBulkMoveToTeamOpen(false)}

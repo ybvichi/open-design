@@ -86,6 +86,43 @@ function createFolderId(seed) {
   return generateDeterministicId(seed ?? generateShortId() + Date.now().toString(36));
 }
 
+/**
+ * Get the global Shared Space team ID.
+ *
+ * A single constant team ID shared by ALL users -- every logged-in user is
+ * automatically a `member` of this team. Derived from a fixed seed so it is
+ * identical across devices and accounts.
+ */
+function getSharedSpaceTeamId() {
+  return createTeamId('shared_space_team_global');
+}
+
+/**
+ * Derive a user's member ID within the Shared Space team.
+ *
+ * Deterministic per account: the same user always gets the same Shared Space
+ * member ID, derived from `shared_space_member_${username}`. This ID is
+ * stable across devices and is used as `recipient_member_id` in the
+ * `workspace_project_shares` table.
+ */
+function getSharedSpaceMemberId(username) {
+  return generateDeterministicId(`shared_space_member_${username}`);
+}
+
+/**
+ * Derive a cross-team collaborator member ID from a username.
+ *
+ * Used as `author_member_id` on comments when the commenter is NOT a member
+ * of the project's home workspace (e.g. commenting via the Shared Space).
+ * The ID is stable across teams and devices, and is namespaced separately
+ * from `getSharedSpaceMemberId` (`collaborator_` prefix) so the two cannot
+ * collide. Display layers can detect this ID pattern to show a
+ * "协作者" (Collaborator) badge.
+ */
+function getCollaboratorMemberId(username) {
+  return generateDeterministicId(`collaborator_${username}`);
+}
+
 module.exports = {
   DEFAULT_SHORT_ID_LENGTH,
   generateShortId,
@@ -93,4 +130,7 @@ module.exports = {
   createTeamId,
   getTeamMemberId,
   createFolderId,
+  getSharedSpaceTeamId,
+  getSharedSpaceMemberId,
+  getCollaboratorMemberId,
 };

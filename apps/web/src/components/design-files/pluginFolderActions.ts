@@ -1,4 +1,4 @@
-export type PluginFolderAgentAction = 'install' | 'publish' | 'contribute';
+export type PluginFolderAgentAction = 'install' | 'publish' | 'contribute' | 'publish-hdw';
 
 const INSTALL_TITLE = 'Install this generated plugin into My plugins.';
 const INSTALL_NOTE =
@@ -11,6 +11,7 @@ export function buildPluginFolderAgentActionPrompt(
   const folderPath = normalizePluginFolderPath(relativePath);
   if (action === 'contribute') return buildContributePrompt(folderPath);
   if (action === 'publish') return buildPublishPrompt(folderPath);
+  if (action === 'publish-hdw') return buildPublishHdwPrompt(folderPath);
   return [
     INSTALL_TITLE,
     '',
@@ -91,6 +92,33 @@ function buildPublishPrompt(folderPath: string): string {
     '- Do NOT try to install `gh`, `git`, or any other binary. Detect-and-instruct only.',
     '- Do NOT force-push (`--force` / `--force-with-lease`) and do NOT overwrite an existing tag. Fail and report instead.',
     '- Do NOT retry a failed step. Report the error and stop.',
+  ].join('\n');
+}
+
+// `publish-hdw` uploads the generated plugin to the HDW community
+// marketplace. The CLI owns the SSO auth gate, packing, blob upload,
+// and metadata publish. This is the community-sharing path that makes
+// the plugin visible in Hi广场 with "参考"/"复用" buttons.
+function buildPublishHdwPrompt(folderPath: string): string {
+  return [
+    'Publish this generated plugin to the HDW community marketplace.',
+    'The goal is to end this turn with the plugin uploaded and visible in Hi广场.',
+    '',
+    `Plugin folder: \`${folderPath}\``,
+    `Manifest: \`${folderPath}/open-design.json\``,
+    '',
+    'Run this deterministic HiDesign CLI workflow from the current project workspace:',
+    '',
+    '`"$OD_NODE_BIN" "$OD_BIN" plugin publish-hdw ' + folderPath + ' --json`',
+    '',
+    'The CLI packs the folder into a .tgz archive, uploads the blob to HDW via SSO session cookies, and publishes metadata (name, version, prompt, tags, description) to the community marketplace. The publisher username is resolved from the SSO session.',
+    'Report the exact command, any structured CLI error, and the final pluginId/versionId printed by the CLI. Stop on failure; do not retry.',
+    '',
+    '**Hard constraints.** Treat these as inviolable:',
+    '- Do NOT emit a `<question-form>` or any clarification UI that waits for the user. Fire-and-forget.',
+    '- Do NOT try to install `gh`, `git`, or any other binary. Detect-and-instruct only.',
+    '- Do NOT retry a failed step. Report the error and stop.',
+    '- Do NOT call `od plugin publish --to open-design` or `od plugin publish-repo` — those are different publish targets.',
   ].join('\n');
 }
 

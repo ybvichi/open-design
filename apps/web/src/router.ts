@@ -88,7 +88,10 @@ export type Route =
 
 export function parseRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-  if (parts.length === 0) return { kind: 'home', view: 'home' };
+  if (parts.length === 0) return { kind: 'home', view: 'shared-with-me' };
+ if (parts[0] === 'home' && !parts[1]) {
+   return { kind: 'home', view: 'home' };
+ }
   if (parts[0] === 'onboarding') {
     return { kind: 'home', view: 'onboarding' };
   }
@@ -205,7 +208,7 @@ if (parts[0] === 'collab-demo') {
     }
     return { kind: 'marketplace' };
   }
-  return { kind: 'home', view: 'home' };
+  return { kind: 'home', view: 'shared-with-me' };
 }
 
 export function buildPath(route: Route): string {
@@ -235,10 +238,11 @@ export function buildPath(route: Route): string {
         ? `/team/${encodeURIComponent(route.teamId)}/folder/${encodeURIComponent(route.folderId)}`
         : '/';
     }
-    if (route.view === 'settings') return '/settings';
-   if (route.view === 'personal-all') return '/personal-all';
-   if (route.view === 'shared-with-me') return '/shared-with-me';
-   if (route.view === 'personal-folder') {
+   if (route.view === 'settings') return '/settings';
+  if (route.view === 'personal-all') return '/personal-all';
+   if (route.view === 'shared-with-me') return '/';
+   if (route.view === 'home') return '/home';
+  if (route.view === 'personal-folder') {
      return route.folderId ? `/personal/folder/${encodeURIComponent(route.folderId)}` : '/personal-all';
    }
    return '/';

@@ -1,4 +1,4 @@
-import { Fragment, useId, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+﻿import { Fragment, useId, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import type { TeamProject, WorkspaceDirectoryItem } from '@open-design/contracts';
 import { navigate } from '../router';
@@ -58,15 +58,16 @@ function formatJoinedDate(dateStr: string): string {
 }
 
 interface Props {
-  teamId?: string;
-  onInvite?: () => void;
-  designSystems?: DesignSystemSummary[];
-  onOpenProject?: (id: string) => void;
-  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
-  onRenameProject?: (id: string, name: string) => void;
+ teamId?: string;
+ onInvite?: () => void;
+ designSystems?: DesignSystemSummary[];
+ onOpenProject?: (id: string) => void;
+ onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+ onRenameProject?: (id: string, name: string) => void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
 }
 
-export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProject, onDeleteProject, onRenameProject }: Props) {
+export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProject, onDeleteProject, onRenameProject, onDuplicateProject }: Props) {
   const t = useT();
   const [activeTab, setActiveTab] = useState<TeamTab>('projects');
   const [teamName, setTeamName] = useState<string | null>(null);
@@ -129,7 +130,7 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
       try {
         const memberId = await getTeamMemberId(teamId, username);
         const res = await fetch(
-          `/api/hdw/webapi/v1/team/${teamId}/member/${memberId}`,
+          `/api/hdw/api/team/${teamId}/member/${memberId}`,
           { cache: 'no-store' },
         );
         if (!res.ok) { if (!cancelled) setOperator(null); return; }
@@ -227,7 +228,7 @@ export function TeamSpaceView({ teamId, onInvite, designSystems = [], onOpenProj
 
       <div className={styles.content} role="tabpanel">
         {activeTab === 'projects' ? (
-          <ProjectsPanel controlsPortalTarget={typeTabsEl} teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} />
+          <ProjectsPanel controlsPortalTarget={typeTabsEl} teamId={teamId} operator={operator} showCreateGroup={showCreateGroup} onShowCreateGroupChange={setShowCreateGroup} designSystems={designSystems} onOpenProject={onOpenProject} onDeleteProject={onDeleteProject} onRenameProject={onRenameProject} onDuplicateProject={onDuplicateProject} />
         ) : null}
         {activeTab === 'members' ? (
           <MembersTable teamId={teamId} operator={operator} />
@@ -271,7 +272,7 @@ interface TeamFolderItem {
 
 /** Fetch all team projects for a workspace from the daemon's team-projects
  *  endpoint. When `folderId` is provided, the daemon filters server-side
- *  via the HDW webapi folder/project/list endpoint so the frontend never
+ *  via the HDW api folder/project/list endpoint so the frontend never
  *  loads the entire workspace catalog. Pass `'root'` for root-level
  *  projects (folder_id IS NULL). Omit to fetch all projects. */
 async function fetchTeamProjects(
@@ -314,7 +315,8 @@ function ProjectsPanel({
   designSystems = [],
   onOpenProject,
   onDeleteProject,
-  onRenameProject,
+ onRenameProject,
+ onDuplicateProject,
   controlsPortalTarget,
 }: {
   teamId?: string;
@@ -325,6 +327,7 @@ function ProjectsPanel({
   onOpenProject?: (id: string) => void;
   onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
   onRenameProject?: (id: string, name: string) => void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
   controlsPortalTarget?: HTMLElement | null;
 }) {
   const t = useT();
@@ -355,7 +358,7 @@ function ProjectsPanel({
      setLoading(true);
      try {
        const res = await fetch(
-         `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}`,
+         `/api/hdw/api/folder/list?workspace_id=${encodeURIComponent(teamId)}`,
          { cache: 'no-store' },
        );
        if (!res.ok) { if (!cancelled) setFolders([]); return; }
@@ -442,7 +445,7 @@ function ProjectsPanel({
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await fetch(`/api/hdw/webapi/v1/folder/add`, {
+      const res = await fetch(`/api/hdw/api/folder/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -476,7 +479,7 @@ function ProjectsPanel({
     setFolders((prev) => prev.filter((f) => f.folderId !== folder.folderId));
     try {
       const res = await fetch(
-        `/api/hdw/webapi/v1/folder/${folder.folderId}?operator_member_id=${encodeURIComponent(operatorMemberId)}`,
+        `/api/hdw/api/folder/${folder.folderId}?operator_member_id=${encodeURIComponent(operatorMemberId)}`,
         { method: 'DELETE' },
       );
       const body = await res.json().catch(() => null);
@@ -521,7 +524,7 @@ function ProjectsPanel({
     }
     setRenamingFolder(true);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+      const res = await fetch('/api/hdw/api/folder/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -623,24 +626,26 @@ function ProjectsPanel({
         ) : projects.length === 0 ? (
           null
         ) : (
-         <RecentProjectsStrip
-           projects={projects}
-           designSystems={designSystems}
-           limit={1000}
-           heading={t('entry.navDrafts')}
-           space="team"
-           onOpen={(id) => onOpenProject?.(id)}
-           onDelete={onDeleteProject}
-           onRename={(id, name) => {
-             setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
-             onRenameProject?.(id, name);
-           }}
-          hideTitle
-          controlsPortalTarget={controlsPortalTarget}
-          operator={operator}
-          canManageProjectCollection={canManage}
-          currentWorkspaceId={teamId}
-          currentFolderId={null}
+        <RecentProjectsStrip
+          projects={projects}
+          designSystems={designSystems}
+          limit={1000}
+          heading={t('entry.navDrafts')}
+          space="team"
+          homeWorkspaceId={teamId}
+          onOpen={(id) => onOpenProject?.(id)}
+          onDelete={onDeleteProject}
+          onRename={(id, name) => {
+            setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+            onRenameProject?.(id, name);
+          }}
+          onDuplicate={onDuplicateProject}
+         hideTitle
+         controlsPortalTarget={controlsPortalTarget}
+         operator={operator}
+        canManageProjectCollection={canManage}
+        currentWorkspaceId={teamId}
+        currentFolderId={null}
         />
        )}
      </div>
@@ -750,7 +755,7 @@ function MembersTable({ teamId, operator }: { teamId?: string; operator: Operato
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/hdw/webapi/v1/team/${teamId}/members`, { cache: 'no-store' });
+        const res = await fetch(`/api/hdw/api/team/${teamId}/members`, { cache: 'no-store' });
         if (!res.ok) { if (!cancelled) setMembers([]); return; }
         const body = await res.json();
         if (cancelled) return;
@@ -780,7 +785,7 @@ function MembersTable({ teamId, operator }: { teamId?: string; operator: Operato
       let cancelled = false;
       void (async () => {
         try {
-          const res = await fetch(`/api/hdw/webapi/v1/team/${teamId}/members`, { cache: 'no-store' });
+          const res = await fetch(`/api/hdw/api/team/${teamId}/members`, { cache: 'no-store' });
           if (!res.ok) { if (!cancelled) return; }
          const body = await res.json();
          if (cancelled) return;
@@ -837,7 +842,7 @@ function MembersTable({ teamId, operator }: { teamId?: string; operator: Operato
     setMembers((prev) => prev.filter((m) => m.workspaceMemberId !== member.workspaceMemberId));
     setRoleError(null);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/team/member/remove', {
+      const res = await fetch('/api/hdw/api/team/member/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -866,7 +871,7 @@ function MembersTable({ teamId, operator }: { teamId?: string; operator: Operato
     ));
     setRoleError(null);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/team/member/role', {
+      const res = await fetch('/api/hdw/api/team/member/role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -999,9 +1004,10 @@ interface FolderViewProps {
   onOpenProject?: (id: string) => void;
   onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
   onRenameProject?: (id: string, name: string) => void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
 }
 
-export function FolderView({ teamId, folderId, designSystems = [], onOpenProject, onDeleteProject, onRenameProject }: FolderViewProps) {
+export function FolderView({ teamId, folderId, designSystems = [], onOpenProject, onDeleteProject, onRenameProject, onDuplicateProject }: FolderViewProps) {
   const t = useT();
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([]);
   const [teamName, setTeamName] = useState<string | null>(null);
@@ -1024,7 +1030,7 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
        let currentId: string | null = folderId;
        for (let i = 0; i < 20 && currentId; i++) {
          const res = await fetch(
-           `/api/hdw/webapi/v1/folder/detail?folder_id=${encodeURIComponent(currentId)}`,
+           `/api/hdw/api/folder/detail?folder_id=${encodeURIComponent(currentId)}`,
            { cache: 'no-store' },
          );
          if (!res.ok) break;
@@ -1101,7 +1107,7 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
       try {
         const memberId = await getTeamMemberId(teamId, username);
         const res = await fetch(
-          `/api/hdw/webapi/v1/team/${teamId}/member/${memberId}`,
+          `/api/hdw/api/team/${teamId}/member/${memberId}`,
           { cache: 'no-store' },
         );
         if (!res.ok) { if (!cancelled) setOperator(null); return; }
@@ -1185,11 +1191,12 @@ export function FolderView({ teamId, folderId, designSystems = [], onOpenProject
           designSystems={designSystems}
           onOpenProject={onOpenProject}
           onDeleteProject={onDeleteProject}
-          onRenameProject={onRenameProject}
-        />
-      </div>
-    </section>
-  );
+         onRenameProject={onRenameProject}
+         onDuplicateProject={onDuplicateProject}
+       />
+     </div>
+   </section>
+ );
 }
 
 function FoldersPanel({
@@ -1203,19 +1210,21 @@ function FoldersPanel({
   designSystems = [],
   onOpenProject,
   onDeleteProject,
-  onRenameProject,
+ onRenameProject,
+ onDuplicateProject,
 }: {
-  teamId?: string;
-  folderId?: string;
-  operator: OperatorInfo | null;
-  showCreateFolder: boolean;
-  onShowCreateFolderChange: (v: boolean) => void;
-  breadcrumb: BreadcrumbItem[];
-  teamName: string | null;
-  designSystems?: DesignSystemSummary[];
-  onOpenProject?: (id: string) => void;
-  onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
-  onRenameProject?: (id: string, name: string) => void;
+ teamId?: string;
+ folderId?: string;
+ operator: OperatorInfo | null;
+ showCreateFolder: boolean;
+ onShowCreateFolderChange: (v: boolean) => void;
+ breadcrumb: BreadcrumbItem[];
+ teamName: string | null;
+ designSystems?: DesignSystemSummary[];
+ onOpenProject?: (id: string) => void;
+ onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
+ onRenameProject?: (id: string, name: string) => void;
+  onDuplicateProject?: (id: string) => Promise<void> | void;
 }) {
   const t = useT();
   const [folders, setFolders] = useState<TeamFolderItem[]>([]);
@@ -1247,7 +1256,7 @@ function FoldersPanel({
      setLoading(true);
      try {
        const res = await fetch(
-         `/api/hdw/webapi/v1/folder/list?workspace_id=${encodeURIComponent(teamId)}&folder_pid=${encodeURIComponent(folderId)}`,
+         `/api/hdw/api/folder/list?workspace_id=${encodeURIComponent(teamId)}&folder_pid=${encodeURIComponent(folderId)}`,
          { cache: 'no-store' },
        );
        if (!res.ok) { if (!cancelled) setFolders([]); return; }
@@ -1334,7 +1343,7 @@ function FoldersPanel({
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await fetch(`/api/hdw/webapi/v1/folder/add`, {
+      const res = await fetch(`/api/hdw/api/folder/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1367,7 +1376,7 @@ function FoldersPanel({
     setFolders((prev) => prev.filter((f) => f.folderId !== folder.folderId));
     try {
       const res = await fetch(
-        `/api/hdw/webapi/v1/folder/${folder.folderId}?operator_member_id=${encodeURIComponent(operatorMemberId)}`,
+        `/api/hdw/api/folder/${folder.folderId}?operator_member_id=${encodeURIComponent(operatorMemberId)}`,
         { method: 'DELETE' },
       );
       const body = await res.json().catch(() => null);
@@ -1411,7 +1420,7 @@ function FoldersPanel({
     }
     setRenamingFolder(true);
     try {
-      const res = await fetch('/api/hdw/webapi/v1/folder/rename', {
+      const res = await fetch('/api/hdw/api/folder/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1546,24 +1555,26 @@ function FoldersPanel({
         ) : projects.length === 0 ? (
           null
         ) : (
-         <RecentProjectsStrip
-           projects={projects}
-           designSystems={designSystems}
-           limit={1000}
-           heading={t('entry.navDrafts')}
-           space="team"
-           onOpen={(id) => onOpenProject?.(id)}
-           onDelete={onDeleteProject}
-           onRename={(id, name) => {
-             setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
-             onRenameProject?.(id, name);
-           }}
-          hideTitle
-          operator={operator}
-          controlsPortalTarget={controlsEl}
-          canManageProjectCollection={canManage}
-          currentWorkspaceId={teamId}
-          currentFolderId={folderId}
+        <RecentProjectsStrip
+          projects={projects}
+          designSystems={designSystems}
+          limit={1000}
+          heading={t('entry.navDrafts')}
+          space="team"
+          homeWorkspaceId={teamId}
+          onOpen={(id) => onOpenProject?.(id)}
+          onDelete={onDeleteProject}
+          onRename={(id, name) => {
+            setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+            onRenameProject?.(id, name);
+          }}
+          onDuplicate={onDuplicateProject}
+         hideTitle
+         operator={operator}
+         controlsPortalTarget={controlsEl}
+         canManageProjectCollection={canManage}
+         currentWorkspaceId={teamId}
+         currentFolderId={folderId}
         />
        )}
      </div>

@@ -2208,7 +2208,7 @@ export interface PluginShareOutcome {
 
 export interface PluginShareTaskStart {
   taskId: string;
-  action: 'publish-github' | 'contribute-open-design';
+  action: 'publish-github' | 'contribute-open-design' | 'publish-hdw';
   path: string;
   status: 'queued' | 'running' | 'done' | 'failed';
   startedAt: number;
@@ -2228,7 +2228,7 @@ export interface PluginShareTaskError {
 
 export interface PluginShareTaskSnapshot {
   taskId: string;
-  action: 'publish-github' | 'contribute-open-design';
+  action: 'publish-github' | 'contribute-open-design' | 'publish-hdw';
   path: string;
   status: 'queued' | 'running' | 'done' | 'failed';
   startedAt: number;
@@ -2265,10 +2265,43 @@ export async function contributeGeneratedPluginToHiDesign(
   );
 }
 
+/**
+ * Publish a plugin folder to the HDW community marketplace via the direct
+ * synchronous endpoint. Does NOT create chat messages or share tasks —
+ * suitable for UI surfaces that want clean feedback without polluting
+ * the conversation.
+ */
+export async function publishToHdwCommunity(
+  projectId: string,
+  relativePath: string,
+  workspaceContext?: WorkspaceCollabContext | null,
+): Promise<PluginShareOutcome> {
+  return postGeneratedPluginShareAction(
+    projectId,
+    relativePath,
+    'publish-hdw',
+    workspaceContext,
+  );
+}
+export async function publishToHdwCommunityWithEntry(
+  projectId: string,
+  relativePath: string,
+  entryFile: string | null | undefined,
+  workspaceContext?: WorkspaceCollabContext | null,
+): Promise<PluginShareOutcome> {
+  return postGeneratedPluginShareAction(
+    projectId,
+    relativePath,
+    'publish-hdw',
+    workspaceContext,
+    entryFile,
+  );
+}
+
 export async function startGeneratedPluginShareTask(
   projectId: string,
   relativePath: string,
-  action: 'publish-github' | 'contribute-open-design',
+  action: 'publish-github' | 'contribute-open-design' | 'publish-hdw',
   workspaceContext?: WorkspaceCollabContext | null,
 ): Promise<PluginShareTaskStart> {
   const resp = await fetch(
@@ -2401,8 +2434,9 @@ export async function createPluginShareProject(
 async function postGeneratedPluginShareAction(
   projectId: string,
   relativePath: string,
-  action: 'publish-github' | 'contribute-open-design',
+  action: 'publish-github' | 'contribute-open-design' | 'publish-hdw',
   workspaceContext?: WorkspaceCollabContext | null,
+  entryFile?: string | null,
 ): Promise<PluginShareOutcome> {
   try {
     const resp = await fetch(
@@ -2413,7 +2447,10 @@ async function postGeneratedPluginShareAction(
           'Content-Type': 'application/json',
           ...(workspaceContext ? workspaceProjectHeaders(workspaceContext) : {}),
         },
-        body: JSON.stringify({ path: relativePath }),
+        body: JSON.stringify({
+          path: relativePath,
+          ...(entryFile ? { entryFile } : {}),
+        }),
       },
     );
     const body = (await resp.json().catch(() => null)) as Partial<PluginShareOutcome> | null;
@@ -2916,4 +2953,45 @@ export function resolvePluginQueryFallback(
 function isStringMap(value: unknown): value is Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.values(value).every((entry) => typeof entry === 'string');
+}
+
+// --- HDW community marketplace remix ---
+
+export interface RemixHdwPluginResult {
+  ok: boolean;
+  projectId?: string;
+  conversationId?: string;
+  message?: string;
+}
+
+/**
+ * Remix a community plugin from the HDW marketplace.
+ *
+ * Calls POST /api/marketplaces/hdw-community/plugins/:name/remix, which
+ * downloads the archive, installs the plugin locally, and creates a new
+ * project. Returns the project id + conversation id for navigation.
+ */
+export async function remixHdwPlugin(name: string): Promise<RemixHdwPluginResult> {
+  try {
+    const resp = await fetch(
+      `/api/marketplaces/hdw-community/plugins/${encodeURIComponent(name)}/remix`,
+      { method: 'POST' },
+    );
+    const body = (await resp.json().catch(() => null)) as {
+      ok?: boolean;
+      project?: { id?: string };
+      conversationId?: string;
+      message?: string;
+      error?: string;
+    } | null;
+    return {
+      ok: Boolean(resp.ok && body?.ok),
+      ...(body?.project?.id ? { projectId: body.project.id } : {}),
+      ...(body?.conversationId ? { conversationId: body.conversationId } : {}),
+      ...(body?.message ? { message: body.message } : {}),
+      ...(!resp.ok && body?.error ? { message: body.error } : {}),
+    };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
 }

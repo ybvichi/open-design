@@ -36,8 +36,9 @@ export interface HdwCloudConfig {
 export function readHdwCloudConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): HdwCloudConfig | null {
-  const HDW_API_URL =  PROD_HDW_API_URL;//env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL
-  const pathPrefix =  '/hik-plugin/hidesign-web/hdw';//env.NODE_ENV === 'production' ? '/hik-plugin/hidesign-web' : '/hdw'
+  const HDW_API_URL =  env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL
+  //const pathPrefix =  '/hik-plugin/hidesign-web/hdw';
+  const pathPrefix = env.NODE_ENV === 'production' ? '/hik-plugin/hidesign-web/hdw' : '/hdw'
   const baseUrl = env.OD_HDW_API_URL?.trim()
     || HDW_API_URL;
   return {
@@ -141,7 +142,7 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
         };
       }>(
         'GET',
-        `/webapi/v1/team/${encodeURIComponent(workspaceId)}/members`,
+        `/api/team/${encodeURIComponent(workspaceId)}/members`,
         undefined,
         { 'x-hdw-workspace-id': workspaceId },
       );
@@ -406,11 +407,12 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       sourceWorkspaceId: string,
       projectId: string,
       targetWorkspaceId: string,
+      targetOwnerMemberId?: string,
     ): Promise<HdwTransferResult> {
       const { payload } = await request<HdwTransferResult>(
         'POST',
         `/api/workspaces/${encodeURIComponent(sourceWorkspaceId)}/team-projects/${encodeURIComponent(projectId)}/transfer`,
-        { targetWorkspaceId },
+        { targetWorkspaceId, ...(targetOwnerMemberId ? { targetOwnerMemberId } : {}) },
         { 'x-hdw-workspace-id': sourceWorkspaceId },
       );
       return payload;
@@ -426,9 +428,9 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       folderId: string | null,
       operatorMemberId?: string,
     ): Promise<void> {
-      const { payload } = await request<HdwFolderWebapiResponse>(
+      const { payload } = await request<HdwFolderApiResponse>(
         'POST',
-        '/webapi/v1/folder/project/move',
+        '/api/folder/project/move',
         {
           folder_id: folderId,
           project_id: projectId,
@@ -535,9 +537,9 @@ export interface HdwTransferResult {
   targetOwnerMemberId?: string;
 }
 
-/** Response shape for HDW webapi/v1 endpoints (folder controllers). These
+/** Response shape for HDW api endpoints (folder controllers). These
  *  return HTTP 200 with a code field: 0 = success, -1 = failure. */
-export interface HdwFolderWebapiResponse {
+export interface HdwFolderApiResponse {
   code: number;
   msg: string;
   data?: unknown;

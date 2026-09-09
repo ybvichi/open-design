@@ -207,26 +207,42 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
    * allows) when the gate wasn't wired up, matching how an unbound project's
    * comments behaved before this fix existed either way.
    */
-  async function enforceCommentWorkspaceMutation(
-    req: Request,
-    res: any,
-    projectId: string,
-  ): Promise<boolean> {
-    if (!ctx.enforceWorkspaceProjectMutation || !ctx.sendApiError) return true;
-    return ctx.enforceWorkspaceProjectMutation(
-      req,
-      res,
-      ctx.sendApiError,
-      getWorkspaceProject,
-      getWorkspaceProjectByProjectId,
-      db,
-      projectId,
-      // NOT `writeFiles`: a comment is not an artifact edit. Sharing a
-      // project into the team grants every active member comment standing
-      // (the read-only banner promises "view and comment"), so this gate
-      // checks the wider `comment` capability; author-level rules
-      // (`callerMayMutate` below) still restrict status/delete per comment.
-      'comment',
+ async function enforceCommentWorkspaceMutation(
+   req: Request,
+   res: any,
+   projectId: string,
+ ): Promise<boolean> {
+   if (!ctx.enforceWorkspaceProjectMutation || !ctx.sendApiError) return true;
+   // When the caller is in the Shared Space context, the project lives in
+   // its home workspace (not the shared space), so the normal project-row
+   // lookup by workspace ID will miss. The shared space grants read +
+   // comment to every active member, so we allow the comment capability
+   // here and let the per-comment author rules (callerMayMutate) handle
+   // edit/delete. resolveCaller already stamps the collaborator member ID.
+   if (ctx.resolveWorkspaceContext) {
+     try {
+       const resolution = await ctx.resolveWorkspaceContext(req, projectId);
+       if (resolution.ok && resolution.context?.isSharedSpace) {
+         return true;
+       }
+     } catch {
+       // Fall through to the normal gate on resolution failure.
+     }
+   }
+   return ctx.enforceWorkspaceProjectMutation(
+     req,
+     res,
+     ctx.sendApiError,
+     getWorkspaceProject,
+     getWorkspaceProjectByProjectId,
+     db,
+     projectId,
+     // NOT `writeFiles`: a comment is not an artifact edit. Sharing a
+     // project into the team grants every active member comment standing
+     // (the read-only banner promises "view and comment"), so this gate
+     // checks the wider `comment` capability; author-level rules
+     // (`callerMayMutate` below) still restrict status/delete per comment.
+     'comment',
     );
   }
 
@@ -287,17 +303,24 @@ export function registerProjectCommentRoutes(app: Express, ctx: RegisterProjectC
     });
   }
 
-  /** The caller's workspaceMemberId, or undefined off-team / personal mode. */
-  async function resolveCaller(
-    req: Request,
-    context: WorkspaceCollabContext | null,
-  ): Promise<string | undefined> {
-    if (ctx.resolveWorkspaceContext) {
-      return context?.workspaceMemberId || undefined;
-    }
-    if (!ctx.resolveAuthorMemberId) return undefined;
-    return ctx.resolveAuthorMemberId(req.headers.authorization);
-  }
+ /** The caller's workspaceMemberId, or undefined off-team / personal mode. */
+ async function resolveCaller(
+   req: Request,
+   context: WorkspaceCollabContext | null,
+ ): Promise<string | undefined> {
+   if (ctx.resolveWorkspaceContext) {
+     // When commenting via the Shared Space, use the cross-team stable
+     // collaborator ID so the comment author is namespaced separately from
+     // the home workspace's member IDs. Display layers can badge this as
+     // "协作者" (Collaborator).
+     if (context?.isSharedSpace && context.collaboratorMemberId) {
+       return context.collaboratorMemberId;
+     }
+     return context?.workspaceMemberId || undefined;
+   }
+   if (!ctx.resolveAuthorMemberId) return undefined;
+   return ctx.resolveAuthorMemberId(req.headers.authorization);
+ }
 
   function isLocalTeamRelayCandidate(
     projectId: string,
