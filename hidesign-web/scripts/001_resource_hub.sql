@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS team_projects (
     resource_id             TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
     owner_member_id         TEXT NOT NULL,
     display_name            TEXT,
+    cover_digest            TEXT,
     sync_state              TEXT NOT NULL DEFAULT 'pending_upload'
                             CHECK (sync_state IN ('pending_upload', 'syncing', 'synced', 'failed')),
     last_synced_version_id  TEXT REFERENCES resource_versions(id),

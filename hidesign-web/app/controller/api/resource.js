@@ -262,6 +262,63 @@ class ResourceController extends Controller {
     }
   }
 
+
+
+  // ---- List: GET /api/workspaces/:ws/resources?kind=skill ----
+  async list() {
+    const { ctx } = this;
+    const workspaceId = ctx.params.workspaceId;
+    const kind = ctx.query.kind || undefined;
+    const ownerMemberId = ctx.query.owner_member_id || undefined;
+
+    try {
+      const k = this.getKnex();
+      let q = k('resources as r')
+        .leftJoin('resource_refs as rr', function() {
+          this.on('rr.resource_id', 'r.id').andOn('rr.ref', '=', k.raw('?', ['published']));
+        })
+        .leftJoin('resource_versions as rv', 'rv.id', 'rr.version_id')
+        .where('r.workspace_id', workspaceId)
+        .whereNull('r.deleted_at')
+        .select(
+          'r.id',
+          'r.kind',
+          'r.owner_member_id as owner_member_id',
+          'r.metadata',
+          'r.created_at',
+          'r.updated_at',
+          'rv.version',
+          'rv.id as version_id',
+        )
+        .orderBy('r.updated_at', 'desc');
+
+      if (kind) {
+        q = q.where('r.kind', kind);
+      }
+      if (ownerMemberId) {
+        q = q.where('r.owner_member_id', ownerMemberId);
+      }
+
+      const rows = await q;
+
+      const resources = rows.map(row => ({
+        id: row.id,
+        kind: row.kind,
+        ownerMemberId: row.owner_member_id,
+        metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+        version: row.version || null,
+        versionId: row.version_id || null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
+      ctx.body = { resources };
+    } catch (err) {
+      ctx.logger.error('[hdw] list resources error:', err);
+      ctx.status = 500;
+      ctx.body = { error: 'internal_error', message: err.message };
+    }
+  }
   // ---- Helpers ----
 
   async _nextVersionNumber(resourceId) {

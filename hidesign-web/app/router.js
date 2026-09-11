@@ -46,6 +46,7 @@ module.exports = app => {
   router.get('/hdw/api/workspaces/:workspaceId/resources/:resourceId/refs/:ref', controller.api.resource.head);
   router.post('/hdw/api/workspaces/:workspaceId/resources/:resourceId/materialize', controller.api.resource.materialize);
   router.del('/hdw/api/workspaces/:workspaceId/resources/:resourceId', controller.api.resource.remove);
+  router.get('/hdw/api/workspaces/:workspaceId/resources', controller.api.resource.list);
   // api:blob // Blob 上传下载
   router.put('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.upload);
   router.get('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.download);

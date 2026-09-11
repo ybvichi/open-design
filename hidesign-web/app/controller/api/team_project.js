@@ -144,6 +144,7 @@ class TeamProjectController extends Controller {
       if (body.lastSyncedVersionId !== undefined) mergeObj.last_synced_version_id = body.lastSyncedVersionId;
       if (body.metadata) mergeObj.metadata = JSON.stringify(body.metadata);
       if (body.folderId !== undefined) mergeObj.folder_id = body.folderId;
+      if (body.coverDigest !== undefined) mergeObj.cover_digest = body.coverDigest;
 
       const row = await k('team_projects')
         .insert({
@@ -153,6 +154,7 @@ class TeamProjectController extends Controller {
           resource_id: body.resourceId,
           owner_member_id: ownerMemberId,
           display_name: body.displayName || null,
+          cover_digest: body.coverDigest || null,
           sync_state: body.syncState || 'pending_upload',
           last_synced_version_id: body.lastSyncedVersionId || null,
           metadata: body.metadata ? JSON.stringify(body.metadata) : null,
@@ -240,7 +242,7 @@ class TeamProjectController extends Controller {
         .where({ 'tp.workspace_id': sourceWorkspaceId, 'tp.project_id': projectId })
         .select(
           'tp.id', 'tp.resource_id', 'tp.owner_member_id', 'tp.display_name',
-          'tp.sync_state', 'tp.last_synced_version_id', 'tp.metadata',
+          'tp.sync_state', 'tp.last_synced_version_id', 'tp.metadata', 'tp.cover_digest',
           'r.kind', 'r.metadata as resource_metadata'
         )
         .first();
@@ -346,6 +348,7 @@ class TeamProjectController extends Controller {
           resource_id: targetResourceId,
           owner_member_id: targetOwnerMemberId,
           display_name: source.display_name,
+          cover_digest: source.cover_digest,
           sync_state: 'synced',
           last_synced_version_id: targetVersionId,
           metadata: source.metadata,
@@ -423,6 +426,7 @@ class TeamProjectController extends Controller {
       ownerMemberId: row.owner_member_id,
       displayName: row.display_name || null,
       ownerDisplayName: row.owner_displayname || null,
+      coverDigest: row.cover_digest || null,
       syncState: row.sync_state,
       lastSyncedVersionId: row.last_synced_version_id || null,
       folderId: row.folder_id || null,

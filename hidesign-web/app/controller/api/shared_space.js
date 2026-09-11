@@ -41,9 +41,10 @@ class SharedSpaceController extends Controller {
      home_workspace_id: homeWorkspaceId,
      created_by_username: createdByUsername,
      created_by_displayname: createdByDisplayname,
-     recipients = [],
-     metadata: projectMetadata,
-   } = ctx.request.body;
+    recipients = [],
+    metadata: projectMetadata,
+    coverDigest,
+  } = ctx.request.body;
 
     if (!projectId || !homeWorkspaceId || !createdByUsername) {
       ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 project_id, home_workspace_id 或 created_by_username' };
@@ -56,6 +57,13 @@ class SharedSpaceController extends Controller {
 
     try {
       const k = this.getKnex();
+      // Update the team_projects row's cover_digest in the home workspace
+      // so the shared project card shows the entry screenshot.
+      if (coverDigest) {
+        await k('team_projects')
+          .where({ workspace_id: homeWorkspaceId, project_id: projectId })
+          .update({ cover_digest: coverDigest });
+      }
       const sharedSpaceId = getSharedSpaceTeamId();
      const createdByMemberId = getSharedSpaceMemberId(createdByUsername);
      const now = new Date();
@@ -165,6 +173,7 @@ class SharedSpaceController extends Controller {
               'tp.folder_id',
               'tp.metadata',
               'tp.last_synced_version_id',
+              'tp.cover_digest',
               'r.metadata as resource_metadata',
             )
             .first();
@@ -196,6 +205,7 @@ class SharedSpaceController extends Controller {
             syncState: tp?.sync_state || 'unknown',
             folderId: tp?.folder_id || null,
             lastSyncedVersionId: tp?.last_synced_version_id || null,
+            coverDigest: tp?.cover_digest || null,
             metadata: metadata || null,
             access: {
               canView: true,
