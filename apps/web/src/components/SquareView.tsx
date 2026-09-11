@@ -8,12 +8,14 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { PreviewModal } from './PreviewModal';
+import { PublishDialog, type PublishProjectSelection } from './PublishDialog';
 import type { MarketplacePluginEntry } from '@open-design/contracts';
 import { Icon, type IconName } from './Icon';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { navigate } from '../router';
 import { remixHdwPlugin } from '../state/projects';
+import { getStoredUsername } from '../auth/auth';
 import {
   createCommunityReferenceHandoff,
   stashHomePromptHandoff,
@@ -65,7 +67,7 @@ function PlaceholderPanel({ icon, label, note }: { icon: IconName; label: string
   );
 }
 
-function ProjectsPanel({ refreshKey, onRefresh }: { refreshKey: number; onRefresh: () => void }) {
+function ProjectsPanel({ refreshKey, onRefresh, username }: { refreshKey: number; onRefresh: () => void; username?: string | null }) {
   const t = useT();
   const [plugins, setPlugins] = useState<MarketplacePluginEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,11 +95,15 @@ function ProjectsPanel({ refreshKey, onRefresh }: { refreshKey: number; onRefres
     let cancelled = false;
     setLoading(true);
     setError(false);
-    fetch('/api/marketplaces/hdw-community/plugins')
+    const url = username
+      ? `/api/marketplaces/hdw-community/plugins?username=${encodeURIComponent(username)}`
+      : '/api/marketplaces/hdw-community/plugins';
+    fetch(url)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('fetch failed'))))
       .then((d: { plugins?: MarketplacePluginEntry[] }) => {
         if (cancelled) return;
-        setPlugins(d.plugins ?? []);
+        const all = d.plugins ?? [];
+        setPlugins(all);
         setLoading(false);
       })
       .catch(() => {
@@ -170,7 +176,7 @@ function ProjectsPanel({ refreshKey, onRefresh }: { refreshKey: number; onRefres
         <span className={styles.panelIcon} aria-hidden>
           <Icon name="folder" size={32} />
         </span>
-        <p className={styles.panelNote}>{t('squareScope.noPlugins')}</p>
+        <p className={styles.panelNote}>{username ? t('squareScope.myPublishesEmpty') : t('squareScope.noPlugins')}</p>
       </div>
     );
   }
@@ -350,13 +356,16 @@ function SquarePluginPreview({
   return createPortal(modal, document.body);
 }
 
-export function SquareView() {
+export function SquareView({ mode = 'community' }: { mode?: 'community' | 'my-publishes' }) {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<SquareTab>('projects');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const myUsername = getStoredUsername();
+ const [activeTab, setActiveTab] = useState<SquareTab>('projects');
+ const [refreshKey, setRefreshKey] = useState(0);
+  const [publishOpen, setPublishOpen] = useState(false);
 
-  const title = t('entry.navPlaza');
-  const subtitle = t('squareScope.subtitle');
+  const isMyPublishes = mode === 'my-publishes';
+  const title = isMyPublishes ? t('squareScope.myPublishesTitle') : t('pluginsHome.title');
+  const subtitle = isMyPublishes ? t('squareScope.myPublishesSubtitle') : t('squareScope.subtitle');
 
   // activeTab is always a value from `tabs` (starts at 'projects', only set
   // via tab buttons), so the find is guaranteed to match.
@@ -364,16 +373,60 @@ export function SquareView() {
 
   return (
     <section className={styles.view} aria-labelledby="square-title" data-testid="square-view">
-      <header className={styles.header}>
+     <header className={styles.header}>
         <div className={styles.titleBlock}>
-          <h1 id="square-title" className={styles.title}>{title}</h1>
+          {isMyPublishes ? (
+            <nav className={styles.breadcrumb} aria-label="breadcrumb">
+              <button
+                type="button"
+                className={styles.breadcrumbItem}
+                onClick={() => navigate({ kind: 'home', view: 'square' })}
+              >
+                <Icon name="arrow-left" size={16} aria-hidden />
+                {t('squareScope.backToCommunity')}
+              </button>
+              <span className={styles.breadcrumbSep} aria-hidden>
+                <Icon name="chevron-right" size={14} />
+              </span>
+              <span className={styles.breadcrumbCurrent}>{title}</span>
+           </nav>
+       ) : (
+         <h1 id="square-title" className={styles.title}>{title}</h1>
+       )}
           <span className={styles.subtitle}>
             <span className={styles.dot} aria-hidden />
             {subtitle}
           </span>
         </div>
         <div className={styles.headerActions}>
-          <button
+          {!isMyPublishes ? (
+            <button
+              type="button"
+              className={styles.outlineBtn}
+              onClick={() => navigate({ kind: 'home', view: 'my-publishes' })}
+            >
+              {t('squareScope.myPublishes')}
+            </button>
+        ) : null}
+        <button
+          type="button"
+          className={styles.solidBtn}
+          onClick={() => setPublishOpen(true)}
+        >
+          {t('squareScope.newPublish')}
+        </button>
+        {publishOpen ? (
+          <PublishDialog
+            onClose={() => setPublishOpen(false)}
+            onPublish={(selection: PublishProjectSelection) => {
+              // TODO: wire to the actual community publish API endpoint.
+              // For now we log the selection so the integration is visible.
+              console.info('[publish] project selection:', selection);
+              setRefreshKey((k) => k + 1);
+            }}
+          />
+        ) : null}
+         <button
             type="button"
             className={styles.refreshBtn}
             title={t('recentProjects.refresh')}
@@ -383,7 +436,7 @@ export function SquareView() {
             <Icon name="refresh" size={16} aria-hidden />
           </button>
         </div>
-      </header>
+     </header>
 
       <div className={styles.typeTabs} role="tablist">
         {TABS.map((tab) => (
@@ -403,7 +456,7 @@ export function SquareView() {
 
       <div className={styles.content} role="tabpanel">
         {activeTab === 'projects' ? (
-          <ProjectsPanel refreshKey={refreshKey} onRefresh={() => setRefreshKey((k) => k + 1)} />
+          <ProjectsPanel refreshKey={refreshKey} onRefresh={() => setRefreshKey((k) => k + 1)} username={isMyPublishes ? myUsername : null} />
         ) : (
           <PlaceholderPanel
             icon={activeDef.icon}

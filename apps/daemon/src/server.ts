@@ -9221,11 +9221,12 @@ const resolveShareAccess = async (projectId: string, _req: any) => {
        // The desktop renderer renders the page to PNG; we upload the PNG as
        // a blob to HDW and pass the digest to the CLI as --cover-digest.
        // If the renderer is unavailable or the screenshot fails, publish
-       // proceeds without a cover — the card just shows a placeholder.
-       if (action === 'publish-hdw' && typeof desktopArtifactExporter === 'function' && typeof body.entryFile === 'string' && body.entryFile.trim()) {
-         try {
-           const entryFileName = body.entryFile.trim();
-           const { buildDesktopArtifactExportInput } = await import('./pdf-export.js');
+      // proceeds without a cover — the card just shows a placeholder.
+      let capturedCoverDigest: string | null = null;
+      if (action === 'publish-hdw' && typeof desktopArtifactExporter === 'function' && typeof body.entryFile === 'string' && body.entryFile.trim()) {
+        try {
+          const entryFileName = body.entryFile.trim();
+          const { buildDesktopArtifactExportInput } = await import('./pdf-export.js');
            const { uploadHdwCommunityBlob } = await import('./http/hdw.js');
            const { readProjectFile } = await import('./projects.js');
            const fileResult = await readProjectFile(PROJECTS_DIR, req.params.id, entryFileName, project.metadata);
@@ -9249,30 +9250,57 @@ const resolveShareAccess = async (projectId: string, _req: any) => {
              // Write to a temp file then upload via the blob uploader.
              const tmpCoverPath = `${folder}.cover.png`;
              await fsp.writeFile(tmpCoverPath, coverBuffer);
-             const coverBlob = await uploadHdwCommunityBlob(tmpCoverPath, RUNTIME_DATA_DIR);
-             await fsp.unlink(tmpCoverPath).catch(() => {});
-             if (coverBlob) {
-               cliArgs.push('--cover-digest', coverBlob.digest);
-             }
+           const coverBlob = await uploadHdwCommunityBlob(tmpCoverPath, RUNTIME_DATA_DIR);
+           await fsp.unlink(tmpCoverPath).catch(() => {});
+           if (coverBlob) {
+             cliArgs.push('--cover-digest', coverBlob.digest);
+              capturedCoverDigest = coverBlob.digest;
            }
-         } catch { /* best-effort: publish without cover */ }
-       }
-       const result = await execCommandViaLoginShell(OD_NODE_BIN, cliArgs, { timeout });
-        const payload = result.stdout ? JSON.parse(result.stdout) : null;
-        if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : action === 'publish-hdw' ? 'publish-hdw-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || payload?.error?.message || (action === 'publish-github' ? 'GitHub repo publish failed.' : action === 'publish-hdw' ? 'HDW community publish failed.' : 'HiDesign PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.message).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] });
-        const url = payload.repoUrl || payload.prUrl || payload.marketplaceUrl;
-        // Auto-refresh the HDW community marketplace cache so the newly
-        // published plugin shows up in Hi广场 without a manual refresh.
-        if (action === 'publish-hdw') {
-          try {
-            const { HDW_MARKETPLACE_ID, HDW_MARKETPLACE_URL, fetchHdwMarketplaceManifestText } = await import('./http/hdw.js');
-            const { ensureMarketplaceManifest } = await import('./plugins/marketplaces.js');
-            const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, RUNTIME_DATA_DIR);
-            if (manifestText) {
-              ensureMarketplaceManifest(db, { id: HDW_MARKETPLACE_ID, url: HDW_MARKETPLACE_URL, trust: 'trusted', manifestText });
+         }
+        } catch { /* best-effort: publish without cover */ }
+      }
+﻿      // Web-side cover image: browser captures PNG screenshot of preview
+      // iframe and sends it as base64 data URL. Works without desktop app.
+      if (action === 'publish-hdw' && !capturedCoverDigest && typeof body.coverImage === 'string' && body.coverImage.startsWith('data:image/')) {
+        try {
+          const { uploadHdwCommunityBlob } = await import('./http/hdw.js');
+          const { promises: fsp } = await import('node:fs');
+          const base64Match = body.coverImage.match(/^data:image\/[\w+]+;base64,(.+)$/);
+          if (base64Match) {
+            const coverBuffer = Buffer.from(base64Match[1], 'base64');
+            const tmpCoverPath = folder + '.cover.png';
+            await fsp.writeFile(tmpCoverPath, coverBuffer);
+            const coverBlob = await uploadHdwCommunityBlob(tmpCoverPath, RUNTIME_DATA_DIR);
+            await fsp.unlink(tmpCoverPath).catch(() => {});
+            if (coverBlob) {
+              cliArgs.push('--cover-digest', coverBlob.digest);
+              capturedCoverDigest = coverBlob.digest;
             }
-          } catch { /* best-effort; the publish itself already succeeded */ }
-        }
+          }
+        } catch { /* best-effort: publish without cover */ }
+      }
+
+      const result = await execCommandViaLoginShell(OD_NODE_BIN, cliArgs, { timeout });
+       const payload = result.stdout ? JSON.parse(result.stdout) : null;
+       if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : action === 'publish-hdw' ? 'publish-hdw-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || payload?.error?.message || (action === 'publish-github' ? 'GitHub repo publish failed.' : action === 'publish-hdw' ? 'HDW community publish failed.' : 'HiDesign PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.message).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] });
+       const url = payload.repoUrl || payload.prUrl || payload.marketplaceUrl;
+       // Auto-refresh the HDW community marketplace cache so the newly
+       // published plugin shows up in Hi广场 without a manual refresh.
+       if (action === 'publish-hdw') {
+         try {
+           const { HDW_MARKETPLACE_ID, HDW_MARKETPLACE_URL, fetchHdwMarketplaceManifestText, writeCoverDigest } = await import('./http/hdw.js');
+           const { ensureMarketplaceManifest } = await import('./plugins/marketplaces.js');
+           // Persist the cover digest → plugin name mapping so the
+           // marketplace manifest can be augmented with coverUrl.
+           if (capturedCoverDigest && payload.pluginName) {
+             writeCoverDigest(RUNTIME_DATA_DIR, payload.pluginName, capturedCoverDigest);
+           }
+           const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, RUNTIME_DATA_DIR);
+           if (manifestText) {
+             ensureMarketplaceManifest(db, { id: HDW_MARKETPLACE_ID, url: HDW_MARKETPLACE_URL, trust: 'trusted', manifestText });
+           }
+         } catch { /* best-effort; the publish itself already succeeded */ }
+       }
         res.json({ ok: true, message: action === 'publish-github' ? (payload.repoUrl ? `Published plugin to ${payload.repoUrl}.` : 'Published plugin to GitHub.') : action === 'publish-hdw' ? (payload.marketplaceUrl ? `Published plugin to HDW community: ${payload.marketplaceUrl}.` : 'Published plugin to HDW community marketplace.') : (payload.prUrl ? `Opened HiDesign PR flow at ${payload.prUrl}.` : 'Opened HiDesign PR flow.'), ...(url ? { url } : {}), log: payload.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [] });
       } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err), log: [] }); }
     },

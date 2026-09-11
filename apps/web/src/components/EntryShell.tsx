@@ -232,6 +232,7 @@ import { smoothScrollToTop } from '../utils/smoothScrollToTop';
 import { summarizeProjectNameFromPrompt } from '../utils/projectName';
 import { deepSeekHarnessNeedsSetup } from '../utils/visibleAgents';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
+import { readRecentlyOpenedProjects } from '../lib/recently-opened-projects';
 import {
  providerModelsCacheKey,
  type ProviderModelsCache,
@@ -725,11 +726,20 @@ onCopyProject,
  });
  const projectSearchProjects = buildProjectSearchCatalog(draftProjectsList, allProjectsList);
  const homeProjectsList = useMemo(
-   () => reconcileSharedProjectCatalogFields({
-     projects,
-     teamProjects: teamProjects.projects,
-     workspaceContext,
-   }),
+   () => {
+     const serverProjects = reconcileSharedProjectCatalogFields({
+       projects,
+       teamProjects: teamProjects.projects,
+       workspaceContext,
+     });
+     // Merge recently-opened projects from localStorage so shared projects
+     // opened from /share-me survive the next server re-fetch. Server data
+     // takes precedence; localStorage entries only fill gaps.
+     const serverIds = new Set(serverProjects.map((p) => p.id));
+     const recents = readRecentlyOpenedProjects()
+       .filter((p) => !serverIds.has(p.id));
+     return recents.length > 0 ? [...recents, ...serverProjects] : serverProjects;
+   },
    [projects, teamProjects.projects, workspaceContext],
  );
  // projectId → sharing member id, so a card in the 全部项目 / 草稿 grids can
@@ -1772,6 +1782,7 @@ onCopyProject,
              />
            ) : null}
            {view === 'square' ? <SquareView /> : null}
+           {view === 'my-publishes' ? <SquareView mode="my-publishes" /> : null}
            {view === 'community' ? (
              <CommunityView
                onRemixTemplate={({ templateId, prompt }) => {

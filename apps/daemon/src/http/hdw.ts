@@ -3,6 +3,8 @@ import { UA, type Cookie } from './http.js';
 import { readSsoConfigFile, readSsoUsername } from './hik_logins/hicoo.js';
 import { createHash } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api';
 const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/api';
@@ -416,14 +418,62 @@ export const HDW_MARKETPLACE_ID = 'hdw-community';
 export const HDW_MARKETPLACE_PATH = '/community/marketplace';
 export const HDW_MARKETPLACE_URL = `${HDW_BASE}${HDW_MARKETPLACE_PATH}`;
 
+/**
+ * Locally stored mapping of plugin name → cover blob digest.
+ *
+ * The HDW backend accepts `coverDigest` on the publish endpoint but does not
+ * persist or return it in the marketplace manifest. We store the mapping
+ * ourselves so `fetchHdwMarketplaceManifestText` can augment each entry with
+ * a `coverUrl` pointing to the HDW blob proxy (`/api/hdw/api/community/blobs/<digest>`).
+ */
+function coverDigestsPath(dataDir: string): string {
+  return path.join(dataDir, 'hdw-cover-digests.json');
+}
+
+export function readCoverDigests(dataDir: string): Record<string, string> {
+  try {
+    const text = fs.readFileSync(coverDigestsPath(dataDir), 'utf8');
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, string>;
+    }
+  } catch { /* file missing or invalid — treat as empty */ }
+  return {};
+}
+
+export function writeCoverDigest(dataDir: string, pluginName: string, coverDigest: string): void {
+  try {
+    const digests = readCoverDigests(dataDir);
+    digests[pluginName] = coverDigest;
+    fs.writeFileSync(coverDigestsPath(dataDir), JSON.stringify(digests, null, 2));
+  } catch { /* best-effort: cover will just be missing */ }
+}
+
 export async function fetchHdwMarketplaceManifestText(
   url: string,
   dataDir: string,
+  params?: Record<string, string>,
 ): Promise<string | null> {
   if (!url.startsWith(HDW_BASE)) return null;
   const hdwPath = url.slice(HDW_BASE.length);
   const session = readSsoConfigFile(dataDir);
-  const manifest = await hdwGet<unknown>(hdwPath, undefined, session?.cookies);
+  const manifest = await hdwGet<unknown>(hdwPath, params, session?.cookies);
   if (!manifest) return null;
+  // Augment plugin entries with coverUrl from locally stored cover digests.
+  // The HDW backend does not return coverDigest in the marketplace manifest,
+  // so we look up the digest we stored at publish time and construct a
+  // coverUrl pointing to the HDW blob proxy endpoint.
+  const coverDigests = readCoverDigests(dataDir);
+  if (Object.keys(coverDigests).length > 0 && manifest && typeof manifest === 'object') {
+    const m = manifest as { plugins?: Array<Record<string, unknown>> };
+    if (Array.isArray(m.plugins)) {
+      for (const entry of m.plugins) {
+        const name = typeof entry.name === 'string' ? entry.name : undefined;
+        if (name && coverDigests[name] && !entry.coverUrl) {
+          entry.coverUrl = `/api/hdw/api/community/blobs/${coverDigests[name]}`;
+        }
+      }
+    }
+  }
   return JSON.stringify(manifest);
 }

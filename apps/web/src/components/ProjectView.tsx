@@ -9031,7 +9031,7 @@ export function ProjectView({
     // Direct share-to-community handler — calls the synchronous publish-hdw
   // endpoint without creating chat messages or share tasks. Suitable for
   // reuse across multiple UI surfaces that need share-to-community.
-  const handleShareToCommunity = useCallback(async () => {
+ ﻿const handleShareToCommunity = useCallback(async (coverImage?: string | null) => {
     setShareNotice(null);
     setActivePluginActionPaths((prev) => new Set(prev).add('.'));
    try {
@@ -9040,6 +9040,7 @@ export function ProjectView({
         '.',
         project?.metadata?.entryFile,
         projectRunWorkspaceContext,
+        coverImage,
       );
      setShareNotice({
         type: outcome.ok ? 'success' : 'error',

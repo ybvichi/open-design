@@ -213,6 +213,7 @@ import {
 } from './state/projects';
 import { useModalWindowDragGuard } from './hooks/useModalWindowDragGuard';
 import { resumeThumbnailLoads, suspendThumbnailLoads } from './lib/thumbnail-load-gate';
+import { recordRecentlyOpenedProject, removeRecentlyOpenedProject } from './lib/recently-opened-projects';
 import type {
   PluginShareAction,
   PluginShareProjectOutcome,
@@ -3821,6 +3822,7 @@ function AppInner() {
             }
           : null;
     }
+    recordRecentlyOpenedProject(project);
     navigate({ kind: 'project', projectId: id, fileName: routeFileName });
     return true;
   };
@@ -4042,6 +4044,7 @@ try {
       });
     }
     clearLocalProject(id, { deleted: true });
+    removeRecentlyOpenedProject(id);
     removeWorkspaceProjectTabs(id);
     iframeKeepAlivePool.evictProject(id, { includeActive: true });
     setProjects((curr) => curr.filter((p) => p.id !== id));

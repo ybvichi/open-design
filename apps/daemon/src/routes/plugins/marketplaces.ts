@@ -117,13 +117,37 @@ export function registerPluginMarketplaceRoutes(app: Express, deps: RegisterPlug
     } catch (err) { res.status(500).json({ error: String(err) }); }
   });
  app.get('/api/marketplaces/:id/plugins', async (req, res) => {
-   try {
-     const { getMarketplace } = await import('../../plugins/marketplaces.js');
-     const row = getMarketplace(db, req.params.id) as MarketplaceRow | null;
-     if (!row) return res.status(404).json({ error: 'marketplace not found' });
-     res.json({ plugins: row.manifest.plugins ?? [] });
-   } catch (err) { res.status(500).json({ error: String(err) }); }
- });
+    try {
+      const { getMarketplace } = await import('../../plugins/marketplaces.js');
+      const row = getMarketplace(db, req.params.id) as MarketplaceRow | null;
+      if (!row) return res.status(404).json({ error: 'marketplace not found' });
+      const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
+      if (username) {
+        // Pass publisher_username to HDW so the backend filters at the DB
+        // query level — no need to return the full marketplace.
+        try {
+          const { HDW_MARKETPLACE_ID, HDW_MARKETPLACE_URL, fetchHdwMarketplaceManifestText } =
+            await import('../../http/hdw.js');
+          if (req.params.id === HDW_MARKETPLACE_ID) {
+            const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, dataDir, { publisher_username: username });
+            if (manifestText) {
+              const manifest = JSON.parse(manifestText) as { plugins?: unknown[] };
+              res.json({ plugins: manifest.plugins ?? [] });
+              return;
+            }
+          }
+        } catch { /* fall back to cached data below */ }
+        // HDW fetch failed — fall back to cached data filtered by publisher.id.
+        const fallback = (row.manifest.plugins ?? []).filter((p) => {
+          const pub = (p as Record<string, unknown>).publisher as Record<string, unknown> | undefined;
+          return pub?.id === username;
+        });
+        res.json({ plugins: fallback });
+        return;
+      }
+      res.json({ plugins: row.manifest.plugins ?? [] });
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+  });
  app.get('/api/marketplaces/:id/plugins/:name/preview', async (req, res) => {
    try {
      const { HDW_MARKETPLACE_ID } = await import('../../http/hdw.js');

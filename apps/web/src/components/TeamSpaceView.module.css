@@ -256,6 +256,73 @@
   cursor: default;
 }
 
+/* White-outline button (transparent bg + border) — used for secondary
+   header actions like "我的发布". */
+.outlineBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+.outlineBtn:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong, var(--border));
+}
+
+.outlineBtn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Black-fill button — used for primary header actions like "新建发布". */
+.solidBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--text-strong);
+  color: var(--accent-contrast, #fff);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+.solidBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 88%, #fff);
+}
+
+.solidBtn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 92%, #fff);
+  transform: translateY(1px);
+}
+
+.solidBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .tableScroll {
   overflow-x: auto;
 }
@@ -570,50 +637,44 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 2px;
-  margin: 0 0 16px;
-  font-size: 14px;
-  min-height: 24px;
-}
-
-.breadcrumbItem {
-  background: none;
-  border: none;
-  padding: 2px 6px;
   margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-muted, #6b7280);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.15s, color 0.15s;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--font-size-20, 20px);
+  line-height: 1.25;
 }
 
-.breadcrumbItem:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.05));
-  color: var(--text-strong, #1f2937);
-}
-
-.breadcrumbSep {
-  display: flex;
-  align-items: center;
-  color: var(--text-muted, #9ca3af);
-  flex-shrink: 0;
-}
-
-.breadcrumbCurrent {
-  padding: 2px 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-strong, #1f2937);
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+ .breadcrumbItem {
+   background: none;
+   border: none;
+   padding: 0 6px;
+   margin: 0;
+   height: auto;
+   font-size: 13px;
+   font-weight: 500;
+   color: var(--text-muted, #6b7280);
+   cursor: pointer;
+   border-radius: 4px;
+   transition: background 0.15s, color 0.15s;
+ }
+ 
+ .breadcrumbItem:hover {
+   background: var(--bg-hover, rgba(0, 0, 0, 0.05));
+   color: var(--text-strong, #1f2937);
+ }
+ 
+ .breadcrumbSep {
+   display: flex;
+   align-items: center;
+   color: var(--text-muted, #9ca3af);
+   flex-shrink: 0;
+ }
+ 
+ .breadcrumbCurrent {
+   padding: 0 6px;
+   font-size: var(--font-size-20, 20px);
+   line-height: 1.25;
+   font-weight: 600;
+   color: var(--text-strong, #1f2937);
+ }
 
 .folderList {
   display: grid;

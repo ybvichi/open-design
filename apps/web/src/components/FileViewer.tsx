@@ -1852,9 +1852,9 @@ interface Props {
   ) => void;
   /** Prevent a second retained viewer from entering Manual Edit. */
   manualEditEntryAllowed?: boolean;
-  /** Share the whole project to the HDW community marketplace. */
-  onShareToCommunity?: () => void;
-  /** True while the share-to-community task is in flight. */
+ /** Share the whole project to the HDW community marketplace. */
+  onShareToCommunity?: (coverImage?: string | null) => void;
+ /** True while the share-to-community task is in flight. */
   sharingToCommunity?: boolean;
 }
 
@@ -6501,9 +6501,9 @@ function ReactComponentViewer({
   metricsConsent?: boolean;
   installationId?: string | null;
   viewerOnly?: boolean;
-  workspaceActive?: boolean;
-  onShareToCommunity?: () => void;
-  sharingToCommunity?: boolean;
+ workspaceActive?: boolean;
+  onShareToCommunity?: (coverImage?: string | null) => void;
+ sharingToCommunity?: boolean;
 }) {
   const t = useT();
   const analytics = useAnalytics();
@@ -7271,15 +7271,15 @@ function ReactComponentViewer({
                   artifactId={artifactId}
                   artifactKind={handoffArtifactKind}
                   metricsConsent={metricsConsent}
-                  installationId={installationId}
-                />
-              )}
-              {viewerOnly || !onShareToCommunity ? null : (
-                <button
-                  type="button"
-                  className="viewer-action viewer-share-community"
+                 installationId={installationId}
+               />
+             )}
+            {viewerOnly || !onShareToCommunity ? null : (
+              <button
+                type="button"
+                className="viewer-action viewer-share-community"
                   onClick={() => onShareToCommunity()}
-                  disabled={sharingToCommunity}
+                disabled={sharingToCommunity}
                   title={t('fileViewer.shareToCommunity')}
                   aria-label={t('fileViewer.shareToCommunity')}
                 >
@@ -7517,9 +7517,9 @@ function HtmlViewer({
     fileName: string,
     handler: (() => Promise<boolean>) | null,
   ) => void;
-  manualEditEntryAllowed?: boolean;
-  onShareToCommunity?: () => void;
-  sharingToCommunity?: boolean;
+ manualEditEntryAllowed?: boolean;
+  onShareToCommunity?: (coverImage?: string | null) => void;
+ sharingToCommunity?: boolean;
 }) {
   const { locale, t } = useI18n();
   const iframeKeepAlivePool = useIframeKeepAlivePool();
@@ -17135,7 +17135,14 @@ async function openReviewListModal() {
                 <button
                   type="button"
                   className="viewer-action viewer-share-community"
-                  onClick={() => onShareToCommunity()}
+                  onClick={async () => {
+                    let coverImage: string | null = null;
+                    try {
+                      const snap = await captureExportImageSnapshot();
+                      if (snap?.dataUrl) coverImage = snap.dataUrl;
+                    } catch { /* best-effort: publish without cover */ }
+                    onShareToCommunity(coverImage);
+                  }}
                   disabled={sharingToCommunity}
                   title={t('fileViewer.shareToCommunity')}
                   aria-label={t('fileViewer.shareToCommunity')}

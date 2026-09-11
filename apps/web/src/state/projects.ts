@@ -2288,6 +2288,7 @@ export async function publishToHdwCommunityWithEntry(
   relativePath: string,
   entryFile: string | null | undefined,
   workspaceContext?: WorkspaceCollabContext | null,
+  coverImage?: string | null,
 ): Promise<PluginShareOutcome> {
   return postGeneratedPluginShareAction(
     projectId,
@@ -2295,6 +2296,7 @@ export async function publishToHdwCommunityWithEntry(
     'publish-hdw',
     workspaceContext,
     entryFile,
+    coverImage,
   );
 }
 
@@ -2437,6 +2439,7 @@ async function postGeneratedPluginShareAction(
   action: 'publish-github' | 'contribute-open-design' | 'publish-hdw',
   workspaceContext?: WorkspaceCollabContext | null,
   entryFile?: string | null,
+  coverImage?: string | null,
 ): Promise<PluginShareOutcome> {
   try {
     const resp = await fetch(
@@ -2450,6 +2453,7 @@ async function postGeneratedPluginShareAction(
         body: JSON.stringify({
           path: relativePath,
           ...(entryFile ? { entryFile } : {}),
+          ...(coverImage ? { coverImage } : {}),
         }),
       },
     );

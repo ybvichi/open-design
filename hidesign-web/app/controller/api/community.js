@@ -39,6 +39,7 @@ class CommunityController extends Controller {
   async marketplace() {
     const { ctx } = this;
     const tag = ctx.query.tag;
+    const publisherUsername = ctx.query.publisher_username || ctx.query.username || '';
     try {
       const k = this.getKnex();
       let query = k('community_plugins as cp')
@@ -59,6 +60,9 @@ class CommunityController extends Controller {
         .orderBy('cp.updated_at', 'desc');
       if (tag) {
         query = query.whereRaw('cp.tags @> ARRAY[?]', [tag]);
+      }
+      if (publisherUsername) {
+        query = query.where('cp.publisher_username', publisherUsername);
       }
       const rows = await query;
       const plugins = rows.map(row => this._toMarketplaceEntry(row));

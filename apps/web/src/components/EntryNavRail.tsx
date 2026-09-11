@@ -1192,8 +1192,8 @@ export function EntryNavRail({
   const analytics = useAnalytics();
   const analyticsPage = entryViewToTracking(view);
   const workspaceDimensions = workspaceAnalyticsDimensions(context);
-  const communityLabel = t('pluginsHome.title');
-  const plazaLabel = t('entry.navPlaza');
+ const communityLabel = t('pluginsHome.title');
+ const plazaLabel = t('pluginsHome.title');
   // #5517 renamed the rail's first item from 最近 (Recents) to 首页 (Home) —
   // the key keeps its historical name, the VALUE now reads Home in every
   // locale (polish round 2, ref 1db2d00c2).

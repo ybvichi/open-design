@@ -27,9 +27,10 @@ export type EntryHomeView =
  | 'community'
  | 'drafts'
  // Hi广场 — community plaza surface. Empty placeholder for now.
- | 'square'
- | 'all-projects'
-  | 'members'
+| 'square'
+| 'all-projects'
+| 'my-publishes'
+ | 'members'
   | 'board'
   | 'workspace-settings'
   // Team tree destinations. `/team/:teamId` opens a team workspace page;
@@ -174,10 +175,13 @@ if (parts[0] === 'collab-demo') {
     // stays visible alongside the gallery.
     return { kind: 'home', view: 'community' };
   }
-  if (parts[0] === 'square' && !parts[1]) {
-    return { kind: 'home', view: 'square' };
+ if (parts[0] === 'square' && !parts[1]) {
+   return { kind: 'home', view: 'square' };
+ }
+  if (parts[0] === 'my-publishes' && !parts[1]) {
+    return { kind: 'home', view: 'my-publishes' };
   }
-  if (parts[0] === 'drafts' && !parts[1]) {
+ if (parts[0] === 'drafts' && !parts[1]) {
     return { kind: 'home', view: 'drafts' };
   }
   if (parts[0] === 'all-projects' && !parts[1]) {
@@ -227,8 +231,9 @@ export function buildPath(route: Route): string {
     }
     if (route.view === 'integrations') return '/integrations';
     if (route.view === 'community') return '/community';
-    if (route.view === 'square') return '/square';
-    if (route.view === 'drafts') return '/drafts';
+   if (route.view === 'square') return '/square';
+   if (route.view === 'my-publishes') return '/my-publishes';
+   if (route.view === 'drafts') return '/drafts';
     if (route.view === 'all-projects') return '/all-projects';
     if (route.view === 'members') return '/members';
     if (route.view === 'board') return '/board';
