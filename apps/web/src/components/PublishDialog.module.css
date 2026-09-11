@@ -120,17 +120,12 @@
 
 /* --- Form grid --- */
 .formGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   padding: 20px 0;
 }
 
-@media (max-width: 640px) {
-  .formGrid {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* --- Panels --- */
 .panel {
@@ -140,7 +135,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 18px;
-  min-height: 320px;
+  min-height: 0;
 }
 
 .panelHeader {
@@ -259,7 +254,7 @@
   gap: 4px;
   flex: 1 1 auto;
   overflow-y: auto;
-  max-height: 220px;
+  max-height: 240px;
 }
 
 .projectOption {
@@ -327,7 +322,7 @@
   flex: 1 1 auto;
   border: 2px dashed var(--border);
   border-radius: 10px;
-  padding: 32px 16px;
+  padding: 28px 16px;
   text-align: center;
   cursor: pointer;
   transition: border-color 140ms ease-out, background-color 140ms ease-out;

@@ -1964,16 +1964,16 @@ onCopyProject,
           onCopyProject={onCopyProject}
         />
         ) : null}
-        {view === 'personal-folder' ? (
-          <PersonalFolderView
-            folderId={route.kind === 'home' ? route.folderId : undefined}
-            designSystems={designSystems}
-            onOpenProject={onOpenProject}
-            onDeleteProject={onDeleteProject}
-            onRenameProject={onRenameProject}
-          />
-        ) : null}
-       {view === 'shared-with-me' ? (
+       {view === 'personal-folder' ? (
+         <PersonalFolderView
+           folderId={route.kind === 'home' ? route.folderId : undefined}
+           designSystems={designSystems}
+           onOpenProject={onOpenProject}
+           onDeleteProject={onDeleteProject}
+           onRenameProject={onRenameProject}
+         />
+    ) : null}
+     {view === 'shared-with-me' ? (
            <SharedWithMeView onOpenProject={onOpenProject} />
          ) : null}
        </div>

@@ -3030,6 +3030,17 @@ export function projectCover(
   };
   const trimmed = project.name.trim();
   const initial = (trimmed ? Array.from(trimmed)[0]! : '?').toUpperCase();
+  // Use the pre-captured entry screenshot from team_projects.cover_digest
+  // when available — a single <img> load is far cheaper than resolving the
+  // entry file, probing with HEAD, and rendering an iframe document.
+  if (project.coverDigest) {
+    return {
+      kind: 'image' as const,
+      src: `/api/hdw/api/community/blobs/${project.coverDigest}`,
+      style,
+      initial,
+    };
+  }
   // Catalog-only team projects have not been materialized locally yet - the
   // files do not exist on disk. Any override (stale snapshot cache) or
   // entryFile metadata would point the iframe at a /raw/ URL for a file that

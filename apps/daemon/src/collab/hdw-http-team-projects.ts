@@ -29,6 +29,9 @@ function toTeamProject(record: HdwTeamProjectRecord): TeamProject | null {
   if (record.ownerDisplayName?.trim()) {
     project.ownerDisplayName = record.ownerDisplayName.trim();
   }
+  if (record.coverDigest) {
+    project.coverDigest = record.coverDigest;
+  }
   if (record.displayName?.trim()) {
     project.name = record.displayName.trim();
   }
@@ -91,6 +94,7 @@ function toVelaTeamProjectRecord(
     displayName: record.displayName,
     syncState: toVelaSyncState(record.syncState),
     lastSyncedVersionId: record.lastSyncedVersionId,
+    coverDigest: record.coverDigest ?? null,
     createdAt: record.createdAt,
     originProjectUpdatedAt,
     updatedAt: record.updatedAt,
@@ -140,6 +144,7 @@ export function createHdwHttpTeamProjectCatalog(
         : {}),
       ...(principal?.memberId ? { ownerMemberId: principal.memberId } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+      ...(input.coverDigest !== undefined ? { coverDigest: input.coverDigest } : {}),
     });
     },
 
@@ -181,6 +186,7 @@ export function createHdwHttpTeamProjectCatalogClient(
         : {}),
       ...(principal.memberId ? { ownerMemberId: principal.memberId } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+      ...(input.coverDigest !== undefined ? { coverDigest: input.coverDigest } : {}),
     });
       if (!record) return null;
       return toVelaTeamProjectRecord(record);

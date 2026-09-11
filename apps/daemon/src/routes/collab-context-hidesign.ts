@@ -41,7 +41,7 @@ export interface RegisterCollabContextHideSignRoutesDeps {
   db?: SqliteDb | null;
   /** Publishes a project to the team resource hub before sharing. Best-effort:
    *  wrapped in try/catch so a hub failure does not block the HDW share write. */
-  requestTeamShare?: (projectId: string, share?: string | ResourceHubPrincipal) => Promise<{ version: number | null; versionId?: string }>;
+  requestTeamShare?: (projectId: string, share?: string | ResourceHubPrincipal, coverDigest?: string | null) => Promise<{ version: number | null; versionId?: string }>;
 }
 
 interface HdwFolderProjectRow {
@@ -508,6 +508,7 @@ export function registerCollabContextHideSignRoutes(
       project_id?: unknown;
       home_workspace_id?: unknown;
       recipients?: unknown;
+      coverDigest?: unknown;
     } | null;
     const projectId = typeof body?.project_id === 'string' ? body.project_id.trim() : '';
     const homeWorkspaceId = typeof body?.home_workspace_id === 'string' ? body.home_workspace_id.trim() : '';
@@ -517,6 +518,7 @@ export function registerCollabContextHideSignRoutes(
             r !== null && typeof r === 'object' && typeof (r as { username?: unknown }).username === 'string',
         )
       : [];
+    const coverDigest = typeof body?.coverDigest === 'string' ? body.coverDigest.trim() : null;
     if (!projectId || !homeWorkspaceId || recipients.length === 0) {
       res.status(400).json({ error: 'invalid_request', message: 'project_id, home_workspace_id, and recipients are required' });
       return;
@@ -555,7 +557,7 @@ export function registerCollabContextHideSignRoutes(
           workspaceType: 'team',
         };
         await Promise.race([
-          deps.requestTeamShare(projectId, sharePrincipal),
+          deps.requestTeamShare(projectId, sharePrincipal, coverDigest),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('requestTeamShare timeout')), 15_000),
           ),
@@ -572,6 +574,7 @@ export function registerCollabContextHideSignRoutes(
         createdByUsername,
         recipients,
         displayName,
+        ...(coverDigest ? { coverDigest } : {}),
       });
       if (result === null) {
         res.status(502).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable' });

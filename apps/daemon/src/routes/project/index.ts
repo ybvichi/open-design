@@ -3428,7 +3428,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     if (targetVisibility === 'team') return summary.currentUserAccess.canMoveToTeam;
     return summary.currentUserAccess.canMoveToPersonal;
   }
-async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team', targetWorkspaceId?: string | null, targetMemberId?: string | null) {
+async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team', targetWorkspaceId?: string | null, targetMemberId?: string | null, coverDigest?: string | null) {
   let transferMeta: { targetOwnerMemberId?: string } | void = undefined;
   for (const projectId of projectIds) {
     if (visibility === 'team') {
@@ -3454,6 +3454,7 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
            ctx.workspaceId,
            targetWorkspaceId,
            principal,
+           coverDigest,
          );
          if (result?.targetOwnerMemberId) {
            transferMeta = { targetOwnerMemberId: result.targetOwnerMemberId };
@@ -3463,7 +3464,7 @@ async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProject
        const principal = targetWorkspaceId
          ? { ...workspaceProjectPrincipal(ctx), teamId: targetWorkspaceId }
          : workspaceProjectPrincipal(ctx);
-       await collabSync.requestTeamShare(projectId, principal);
+       await collabSync.requestTeamShare(projectId, principal, coverDigest);
       } else {
         await collabSync.requestTeamUnshare(projectId, workspaceProjectPrincipal(ctx));
       }
@@ -3614,6 +3615,9 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
      const targetFolderId = typeof req.body?.targetFolderId === 'string'
        ? req.body.targetFolderId.trim() || null
        : null;
+     const coverDigest = typeof req.body?.coverDigest === 'string'
+       ? req.body.coverDigest.trim() || null
+       : null;
       let project = getProject(db, req.params.projectId);
       if (
         visibility === 'personal'
@@ -3758,7 +3762,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
             targetMemberId = targetIdentity.workspaceMemberId;
           }
         }
-        const transferMeta = await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId, targetMemberId);
+        const transferMeta = await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId, targetMemberId, coverDigest);
         if (!targetMemberId && transferMeta?.targetOwnerMemberId) {
           targetMemberId = transferMeta.targetOwnerMemberId;
         }
@@ -3772,7 +3776,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
        updateWorkspaceProject(db, effectiveWorkspaceId, project.id, movePatch);
        if (!isFolderOnlyMove) {
          try {
-           await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId);
+           await requestTeamVisibility([project.id], ctx, visibility, resolvedTargetWorkspaceId, null, coverDigest);
          } catch (error) {
            restoreWorkspaceProjectRow(row);
            throw new TeamProjectSyncError(error);
@@ -3849,6 +3853,9 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
       const batchTargetFolderId = typeof req.body?.targetFolderId === 'string'
         ? req.body.targetFolderId.trim() || null
         : undefined;
+      const batchCoverDigest = typeof req.body?.coverDigest === 'string'
+        ? req.body.coverDigest.trim() || null
+        : null;
       if (!validVisibility(visibility) || !projectIds) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'projectIds and visibility are required');
       }
@@ -3932,7 +3939,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
      moveMany(projectIds);
      if (!batchIsFolderOnly) {
      try {
-      const batchTransferMeta = await requestTeamVisibility(projectIds, ctx, visibility, batchResolvedTargetWorkspaceId, batchTargetMemberId);
+      const batchTransferMeta = await requestTeamVisibility(projectIds, ctx, visibility, batchResolvedTargetWorkspaceId, batchTargetMemberId, batchCoverDigest);
        // If the directory did not resolve a target member ID, use the
        // server-authoritative target owner member ID as a fallback and
        // re-patch the rows. When the directory already resolved the

@@ -1184,8 +1184,10 @@ export interface Dict {
   'newTeam.creating': string;
   'newTeam.createError': string;
   'newTeam.createSuccess': string;
-  'personalFunc.all': string;
+ 'personalFunc.all': string;
 'personalFunc.shared': string;
+  'personalFunc.skill': string;
+  'personalFunc.mcp': string;
   // Personal scope views ("个人所有" / "分享给我的") — header subtitle,
   //  type tabs, and the empty-state note shown while no data is wired yet.
   'personalScope.subtitlePersonal': string;
@@ -1197,7 +1199,21 @@ export interface Dict {
   'personalScope.tabSkill': string;
   'personalScope.tabMcp': string;
   'personalScope.tabExperts': string;
+  'personalScope.addSkill': string;
+ 'personalScope.addMcp': string;
+ 'personalScope.subtitleSkill': string;
+ 'personalScope.subtitleMcp': string;
+ 'personalScope.importAndShareSuccess': string;
+ 'personalScope.importSuccessShareFailed': string;
+ 'personalScope.noTeamWorkspace': string;
 'personalScope.emptyNotePersonal': string;
+  'personalScope.cloudSkillEmpty': string;
+  'personalScope.cloudSkillLoading': string;
+  'personalScope.cloudSkillAdd': string;
+  'personalScope.cloudSkillInstalling': string;
+  'personalScope.cloudSkillInstalled': string;
+  'personalScope.cloudSkillInstallFailed': string;
+  'personalScope.cloudSkillAlreadyInstalled': string;
 'personalScope.emptyNoteShared': string;
   'sharedSpace.title': string;
   'sharedSpace.subtitle': string;

@@ -391,6 +391,10 @@ createdByWorkspaceMemberId?: string | null;
   /** Display name of the owning workspace member, resolved by the daemon
    *  from the HDW member roster at query time. */
   ownerDisplayName?: string | null;
+  /** SHA-256 digest of the project's entry screenshot blob. When present,
+   *  the card cover renders a single cached <img> instead of probing and
+   *  loading the entry HTML file in an iframe. */
+  coverDigest?: string | null;
 }
 
 export interface ProjectTemplate {

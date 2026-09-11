@@ -155,9 +155,9 @@ export function parseRoute(pathname: string): Route {
  if (parts[0] === 'settings') {
    return { kind: 'home', view: 'settings' };
  }
- if (parts[0] === 'personal-all' && !parts[1]) {
-   return { kind: 'home', view: 'personal-all' };
- }
+if (parts[0] === 'personal-all' && !parts[1]) {
+  return { kind: 'home', view: 'personal-all' };
+}
 if (parts[0] === 'shared-with-me' && !parts[1]) {
   return { kind: 'home', view: 'shared-with-me' };
 }
@@ -247,8 +247,8 @@ export function buildPath(route: Route): string {
         : '/';
     }
    if (route.view === 'settings') return '/settings';
- if (route.view === 'personal-all') return '/personal-all';
-   if (route.view === 'shared-with-me') return '/share-me';
+if (route.view === 'personal-all') return '/personal-all';
+ if (route.view === 'shared-with-me') return '/share-me';
   if (route.view === 'home') return '/home';
   if (route.view === 'personal-folder') {
      return route.folderId ? `/personal/folder/${encodeURIComponent(route.folderId)}` : '/personal-all';

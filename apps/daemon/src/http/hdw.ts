@@ -283,6 +283,7 @@ export interface HdwSharedWithMeProject {
  folderId: string | null;
  metadata: Record<string, unknown> | null;
  lastSyncedVersionId: string | null;
+ coverDigest?: string | null;
  access: {
     canView: boolean;
     canComment: boolean;
@@ -343,6 +344,7 @@ export async function shareToSharedSpace(
     recipients: Array<{ username: string; displayname?: string }>;
     displayName?: string | null;
     metadata?: Record<string, unknown> | null;
+    coverDigest?: string | null;
   },
 ): Promise<{ shared: number; skipped: number } | null> {
   if (!dataDir) return null;
@@ -360,6 +362,7 @@ export async function shareToSharedSpace(
         recipient_member_id: getSharedSpaceMemberId(r.username),
      })),
      ...(input.metadata ? { metadata: input.metadata } : {}),
+     ...(input.coverDigest ? { coverDigest: input.coverDigest } : {}),
    },
     session?.cookies,
   );

@@ -7046,12 +7046,13 @@ export async function startServer({
         localId: id,
         ...(system?.title ? { title: system.title } : {}),
         ...(system?.summary ? { description: system.summary } : {}),
-      };
-    },
-    run: runTeamResourceCommand,
-  });
-  const designSystemBackingProjects = new Map<string, string>();
-  const designSystemBackingProjectKey = (
+     };
+  },
+  run: runTeamResourceCommand,
+  hdwClient: hdwCloudClient,
+});
+const designSystemBackingProjects = new Map<string, string>();
+ const designSystemBackingProjectKey = (
     workspaceId: string,
     resourceId: string,
   ) => JSON.stringify([workspaceId, resourceId]);
@@ -7158,6 +7159,7 @@ export async function startServer({
       };
     },
     run: runTeamResourceCommand,
+    hdwClient: hdwCloudClient,
   });
   const pluginsTeamList = cachedTeamResourceList(
     pluginsTeamShare,
@@ -7198,6 +7200,7 @@ export async function startServer({
       };
     },
     run: runTeamResourceCommand,
+    hdwClient: hdwCloudClient,
   });
   const skillsTeamList = cachedTeamResourceList(
     skillsTeamShare,
@@ -7219,6 +7222,69 @@ export async function startServer({
     syncSharedResource: syncSharedTeamSkill,
     share: skillsTeamShare,
     listTeam: skillsTeamList,
+  });
+  // ---- Cloud skill catalog: browse HDW resources and install on demand ----
+  app.get('/api/workspace/skills/cloud', async (req: any, res: any) => {
+    const resolution = await resolveTeamResourceScope(req);
+    if (!resolution.ok) {
+      return res.status(resolution.status).json({ error: resolution.code, message: resolution.message });
+    }
+    const scope = resolution.scope;
+    const workspaceId = scope.principal.teamId;
+    const ownerMemberId = typeof req.query.owner_member_id === 'string' ? req.query.owner_member_id : scope.principal.memberId;
+    if (!hdwCloudClient) {
+      return res.json({ skills: [] });
+    }
+    try {
+      const resources = await hdwCloudClient.listResources(workspaceId, 'skill', ownerMemberId);
+      const skills = resources.map((r) => ({
+        resourceId: r.id,
+        localId: (r.metadata as any)?.localId ?? r.id,
+        title: (r.metadata as any)?.title ?? r.id,
+        description: (r.metadata as any)?.description ?? null,
+        ownerMemberId: r.ownerMemberId,
+        version: r.version,
+        versionId: r.versionId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
+      res.json({ skills });
+    } catch (err: any) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'cloud skill list failed' });
+    }
+  });
+
+  app.post('/api/workspace/skills/cloud/:resourceId/install', async (req: any, res: any) => {
+    const resourceId = typeof req.params.resourceId === 'string' ? decodeURIComponent(req.params.resourceId) : '';
+    if (!resourceId) return res.status(400).json({ error: 'invalid resource id' });
+    const resolution = await resolveTeamResourceScope(req);
+    if (!resolution.ok) {
+      return res.status(resolution.status).json({ error: resolution.code, message: resolution.message });
+    }
+    const scope = resolution.scope;
+    const workspaceId = scope.principal.teamId;
+    if (!hdwCloudClient) {
+      return res.status(503).json({ error: 'HDW_CLOUD_NOT_CONFIGURED' });
+    }
+    try {
+      const resources = await hdwCloudClient.listResources(workspaceId, 'skill');
+      const cloudResource = resources.find((r) => r.id === resourceId);
+      if (!cloudResource) {
+        return res.status(404).json({ error: 'CLOUD_SKILL_NOT_FOUND' });
+      }
+      const localId = (cloudResource.metadata as any)?.localId ?? cloudResource.id;
+      const record: TeamResourceShareRecord = {
+        id: localId,
+        hubResourceId: resourceId,
+        ownerMemberId: cloudResource.ownerMemberId,
+        versionId: cloudResource.versionId ?? undefined,
+        version: cloudResource.version ?? undefined,
+      };
+      await syncSharedTeamSkill(record, scope);
+      res.json({ installed: true, localId });
+    } catch (err: any) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'cloud skill install failed' });
+    }
   });
   const teamResourceListByKind = {
     design_system: designSystemsTeamList,
@@ -8473,8 +8539,8 @@ const resolveShareAccess = async (projectId: string, _req: any) => {
     // C-lane sync seam for D's project-visibility routes: a personal→team move
     // calls requestTeamShare on success to publish the project for the team.
     collabSync: {
-      requestTeamShare: async (projectId, ownerMemberId) => {
-        const result = await collab.requestTeamShare(projectId, ownerMemberId);
+      requestTeamShare: async (projectId, ownerMemberId, coverDigest) => {
+        const result = await collab.requestTeamShare(projectId, ownerMemberId, coverDigest);
         // The GET cache also contains the fallback "project is shared"
         // verdict when this Workspace has no authoritative presence stream.
         // A successful visibility mutation changes that verdict immediately.
@@ -8486,12 +8552,13 @@ const resolveShareAccess = async (projectId: string, _req: any) => {
        invalidatePresenceReadCache(projectId);
        return result;
      },
-     requestTeamTransfer: async (projectId, sourceWorkspaceId, targetWorkspaceId, principal) => {
+     requestTeamTransfer: async (projectId, sourceWorkspaceId, targetWorkspaceId, principal, coverDigest) => {
        const result = await collab.requestTeamTransfer(
          projectId,
          sourceWorkspaceId,
          targetWorkspaceId,
          principal ?? undefined,
+         coverDigest,
        );
        invalidatePresenceReadCache(projectId);
        return result;
@@ -9294,6 +9361,14 @@ const resolveShareAccess = async (projectId: string, _req: any) => {
            // marketplace manifest can be augmented with coverUrl.
            if (capturedCoverDigest && payload.pluginName) {
              writeCoverDigest(RUNTIME_DATA_DIR, payload.pluginName, capturedCoverDigest);
+           }
+           // Scenario 3: after saving entry HTML/image, push the cover
+           // digest to the team project catalog so team_projects.cover_digest
+           // stays in sync with the latest entry screenshot.
+           if (capturedCoverDigest) {
+             try {
+               await collabSync.requestTeamShare(req.params.id, undefined, capturedCoverDigest);
+             } catch { /* best-effort: cover digest update is non-blocking */ }
            }
            const manifestText = await fetchHdwMarketplaceManifestText(HDW_MARKETPLACE_URL, RUNTIME_DATA_DIR);
            if (manifestText) {

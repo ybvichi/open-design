@@ -17,6 +17,9 @@ import type { ResourceHubPrincipal } from './resource-principal.js';
 export interface ResourcePublishInput {
   projectId: string;
   principal?: ResourceHubPrincipal;
+  /** SHA-256 digest of the project entry screenshot; threaded to the
+   *  team_projects.cover_digest column on transfer/share/save. */
+  coverDigest?: string | null;
 }
 
 export interface PublishedResourceVersion {
@@ -69,6 +72,7 @@ export interface ResourcePublishAdapter {
   transferToWorkspace?(input: ResourcePublishInput & { reason: string } & {
     sourceWorkspaceId: string;
     targetWorkspaceId: string;
+    coverDigest?: string | null;
   }): Promise<PublishedResourceVersion | null>;
 }
 

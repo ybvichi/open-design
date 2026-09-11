@@ -40,6 +40,7 @@ export interface VelaTeamProjectCatalog {
     lastSyncedVersionId?: string | null;
     metadata?: Record<string, unknown> | null;
     folderId?: string | null;
+    coverDigest?: string | null;
   }, principal?: ResourceHubPrincipal | null): Promise<void>;
   remove(projectId: string, principal?: ResourceHubPrincipal | null): Promise<void>;
 }
@@ -66,6 +67,7 @@ type TeamProjectWire = {
   metadata?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+  coverDigest?: unknown;
 };
 
 type TeamProjectsListWire = {
@@ -450,6 +452,7 @@ function toVelaTeamProjectRecord(input: unknown): VelaTeamProjectRecord | null {
       canEdit: access.canEdit ?? false,
       frozen: access.frozen ?? false,
     },
+    coverDigest: typeof record.coverDigest === 'string' ? record.coverDigest : null,
   };
 }
 
@@ -621,6 +624,7 @@ function toFallbackVelaTeamProjectRecord(
       canEdit: false,
       frozen: false,
     },
+    coverDigest: null,
   };
 }
 

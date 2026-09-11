@@ -248,13 +248,14 @@ export function createHdwHttpResourceAdapter(
       }, undefined);
     },
 
-   async transferToWorkspace({ projectId, principal, sourceWorkspaceId, targetWorkspaceId }) {
+   async transferToWorkspace({ projectId, principal, sourceWorkspaceId, targetWorkspaceId, coverDigest }) {
      return gated(principal, async () => {
        const result = await options.client.transferProject(
          sourceWorkspaceId,
          projectId,
          targetWorkspaceId,
           principal?.memberId,
+          coverDigest,
        );
        return {
          version: result.version,

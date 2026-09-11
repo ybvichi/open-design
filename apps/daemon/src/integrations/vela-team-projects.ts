@@ -15,9 +15,12 @@ export interface VelaTeamProjectRecord {
   ownerMemberId: string;
   displayName: string | null;
   syncState: VelaTeamProjectSyncState;
-  lastSyncedVersionId: string | null;
-  createdAt: string;
-  /** Owner-origin project timestamp from the catalog row's metadata. This is
+ lastSyncedVersionId: string | null;
+ createdAt: string;
+  /** SHA-256 digest of the project's entry screenshot. Persisted on
+   *  team_projects.cover_digest; null when no cover has been captured. */
+  coverDigest: string | null;
+ /** Owner-origin project timestamp from the catalog row's metadata. This is
    * distinct from `updatedAt`, which is the catalog row revision time and may
    * be restamped by a delayed retry. */
   originProjectUpdatedAt: number | null;
@@ -35,8 +38,9 @@ export interface UpsertVelaTeamProjectInput {
   resourceId: string;
   displayName?: string | null;
   syncState?: VelaTeamProjectSyncState;
-  lastSyncedVersionId?: string | null;
-  folderId?: string | null;
+ lastSyncedVersionId?: string | null;
+ folderId?: string | null;
+  coverDigest?: string | null;
 }
 
 export interface VelaTeamProjectCatalogClient {

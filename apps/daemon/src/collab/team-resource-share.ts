@@ -18,6 +18,16 @@ import {
 } from './vela-cli-resource-adapter.js';
 import type { ResourcePublishAdapter } from './publish-scheduler.js';
 import { workspaceContextFromDirectoryItem } from './vela-workspace-context.js';
+import {
+  createHdwHttpResourceAdapter,
+} from './hdw-http-resource-adapter.js';
+import {
+  shouldUseHdwHttpResourceTransport,
+} from './hdw-http-team-projects.js';
+import {
+  createHdwCloudClientFromEnv,
+  type HdwCloudClient,
+} from '../integrations/hdw-cloud.js';
 
 /** Thrown when a team member without share rights attempts to share a resource. */
 export class TeamResourceShareForbiddenError extends Error {
@@ -145,12 +155,107 @@ export interface CreateTeamResourceShareOptions {
     readOptions?: TeamResourceSharedReadOptions,
   ) => Promise<string>;
   env?: NodeJS.ProcessEnv;
+  /** Pre-built HDW cloud client. When set and the HDW transport is active,
+   *  the share service publishes through the HDW HTTP adapter instead of
+   *  the vela CLI. */
+  hdwClient?: HdwCloudClient | null;
 }
 
 export function createTeamResourceShareService(
   options: CreateTeamResourceShareOptions,
 ): TeamResourceShareService {
   const env = options.env ?? process.env;
+  // HDW HTTP is the default resource transport. When active and a client is
+  // available, publish/unpublish through the HDW adapter so sharing works
+  // without the vela CLI. The sharedResources listing still flows through
+  // options.run (the SWR-cached vela command) with its in-memory fallback.
+  if (shouldUseHdwHttpResourceTransport(env)) {
+    const client = options.hdwClient ?? createHdwCloudClientFromEnv(env);
+    if (client) {
+      const sanitizeResourceIdSegment = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const scopedIdPrefixFor = (principal?: ResourceHubPrincipal | null) =>
+        principal?.teamId
+          ? `${options.idPrefix}-${sanitizeResourceIdSegment(principal.teamId)}`
+          : options.idPrefix;
+      const resourceIdFor = (id: string, principal?: ResourceHubPrincipal | null) =>
+        `${scopedIdPrefixFor(principal)}-${sanitizeResourceIdSegment(id)}`;
+      const adapter: ResourcePublishAdapter = createHdwHttpResourceAdapter({
+        resolveProjectDir: options.resolveDir,
+        ...(options.describeResource ? { describeProject: options.describeResource } : {}),
+        resourceIdFor,
+        kind: options.kind,
+        hasTeamIdentity: () => true,
+        client,
+      });
+      const sharedByWorkspace = new Map<string, Set<string>>();
+      const sharedFor = (workspaceId: string): Set<string> => {
+        let shared = sharedByWorkspace.get(workspaceId);
+        if (!shared) {
+          shared = new Set<string>();
+          sharedByWorkspace.set(workspaceId, shared);
+        }
+        return shared;
+      };
+      return {
+        async share(resourceId, scope) {
+          if (!scope.canShare) throw new TeamResourceShareForbiddenError();
+          const { principal } = scope;
+          const result = await adapter.publish({
+            projectId: resourceId,
+            principal,
+            reason: 'share',
+          });
+          if (result) sharedFor(principal.teamId).add(resourceId);
+          return result;
+        },
+        async unshare(resourceId, scope) {
+          const { principal } = scope;
+          const sharedResource = (await this.sharedResources(scope)).find((resource) => resource.id === resourceId);
+          if (sharedResource && !sharedResource.canUnshare) {
+            throw new TeamResourceShareForbiddenError();
+          }
+          await adapter.unpublish?.({ projectId: resourceId, principal });
+          sharedFor(principal.teamId).delete(resourceId);
+          return true;
+        },
+        async sharedIds(scope) {
+          return (await this.sharedResources(scope)).map((resource) => resource.id);
+        },
+        async sharedResources(scope, readOptions) {
+          const { principal } = scope;
+          const shared = sharedFor(principal.teamId);
+          try {
+            const out = await (options.run ?? defaultRun)(
+              ['shared', '--json'],
+              principal.teamId,
+              readOptions,
+            );
+            const scopedResources = parseSharedResourceRecords(out, options.kind, scopedIdPrefixFor(principal));
+            const legacyResources = principal.workspaceType === 'personal'
+              ? []
+              : parseSharedResourceRecords(out, options.kind, options.idPrefix);
+            const byId = new Map<string, TeamResourceShareRecord>();
+            for (const resource of legacyResources) byId.set(resource.id, resource);
+            for (const resource of scopedResources) byId.set(resource.id, resource);
+            const resources = [...byId.values()];
+            shared.clear();
+            for (const resource of resources) shared.add(resource.id);
+            return resources
+              .map((resource) => {
+                resource.canUnshare = canManageSharedResource(principal, resource);
+                return resource;
+              })
+              .sort((a, b) => a.id.localeCompare(b.id));
+          } catch (error) {
+            if (readOptions?.authoritative) throw error;
+            return [...shared].sort().map((id) => ({ id, canUnshare: true }));
+          }
+        },
+        isShared: (resourceId, scope) => sharedFor(scope.principal.teamId).has(resourceId),
+        configured: true,
+      };
+    }
+  }
   if (!shouldUseVelaCliResourceTransport(env)) {
     return {
       share: async () => null,

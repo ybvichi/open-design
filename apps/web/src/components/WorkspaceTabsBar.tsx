@@ -1094,7 +1094,7 @@ export function WorkspaceTabsBar({
   // A workspace context switch must never bounce the user away from their
   // current route. The context switches underneath and only the tab bar
   // state updates. Scope views (personal-all, team-space, team-folder,
-  // personal-folder, shared-with-me) keep the pending route ref set so
+  // personal-folder, shared-with-me) keep
   // syncStateToRoute doesn't fold the outgoing workspace's URL into the
   // incoming snapshot. For every other route — including non-scope home
   // views like /community, /marketplace, /settings — clear the pending
@@ -2001,10 +2001,10 @@ function displayTabFor(
    'workspace-settings': t('entry.navWorkspaceSettings'),
   'team-space': t('entry.navTeamSection'),
   'team-folder': t('entry.navTeamSection'),
- 'personal-all': t('personalFunc.all'),
- 'shared-with-me': t('personalFunc.shared'),
- 'personal-folder': t('personalFunc.all'),
- settings: t('settings.title'),
+'personal-all': t('personalFunc.all'),
+'shared-with-me': t('personalFunc.shared'),
+'personal-folder': t('personalFunc.all'),
+settings: t('settings.title'),
 };
 const entryIcon: Record<EntryHomeView, IconName> = {
     home: 'home',
@@ -2026,10 +2026,10 @@ const entryIcon: Record<EntryHomeView, IconName> = {
    'workspace-settings': 'settings',
   'team-space': 'folder',
   'team-folder': 'folder-filled',
- 'personal-all': 'folder-filled',
- 'shared-with-me': 'share',
- 'personal-folder': 'folder-filled',
- settings: 'settings',
+'personal-all': 'folder-filled',
+'shared-with-me': 'share',
+'personal-folder': 'folder-filled',
+settings: 'settings',
 };
  return {
     id: tab.id,

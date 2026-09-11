@@ -203,6 +203,10 @@ export interface TeamProject {
   /** Display name of the owning workspace member, resolved by the daemon
    *  from the HDW member roster at query time. */
   ownerDisplayName?: string | null;
+  /** SHA-256 digest of the project's entry screenshot (cover image blob).
+   *  Stored on the team_projects.cover_digest column; used to render project
+   *  cards without pulling the full project tree. */
+  coverDigest?: string | null;
 }
 
 /**
@@ -264,6 +268,9 @@ export interface SharedWithMeProject {
     canEdit: boolean;
     frozen: boolean;
   };
+  /** SHA-256 digest of the project's entry screenshot blob, sourced from
+   *  team_projects.cover_digest in the home workspace. */
+  coverDigest?: string | null;
 }
 
 /** GET /api/workspace/projects/shared-with-me response. */

@@ -214,7 +214,7 @@ export interface ServerContext {
    * used by the demo surface.
    */
   collabSync: {
-   requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): Promise<{ version: number | null }>;
+   requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal, coverDigest?: string | null): Promise<{ version: number | null }>;
    requestTeamUnshare(projectId: string, share?: string | ResourceHubPrincipal): Promise<void>;
    /**
     * Transfer a project from one workspace to another. When the adapter
@@ -226,6 +226,7 @@ export interface ServerContext {
     sourceWorkspaceId: string,
     targetWorkspaceId: string,
     principal?: ResourceHubPrincipal | null,
+    coverDigest?: string | null,
   ): Promise<{ version: number | null; versionId?: string; targetOwnerMemberId?: string }>;
    /**
     * Pull and atomically register a catalog-only Team project before an

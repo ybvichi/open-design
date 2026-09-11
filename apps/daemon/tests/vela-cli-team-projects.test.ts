@@ -269,6 +269,7 @@ describe('Vela CLI team-project catalog adapter', () => {
             canEdit: false,
             frozen: false,
           },
+          coverDigest: null,
         }));
       },
       upsert: async (input) => {

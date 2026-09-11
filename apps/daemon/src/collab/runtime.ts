@@ -99,6 +99,7 @@ export interface CollabRuntime {
   requestTeamShare(
     projectId: string,
     share?: string | ResourceHubPrincipal,
+    coverDigest?: string | null,
   ): Promise<{ version: number | null; versionId?: string }>;
   /** Move a project out of the team space. */
   requestTeamUnshare(projectId: string, principal?: ResourceHubPrincipal | null): Promise<void>;
@@ -113,6 +114,7 @@ export interface CollabRuntime {
     sourceWorkspaceId: string,
     targetWorkspaceId: string,
     principal?: ResourceHubPrincipal | null,
+    coverDigest?: string | null,
   ): Promise<{ version: number | null; versionId?: string; targetOwnerMemberId?: string }>;
   /** Restore a persisted team share into runtime bookkeeping without publishing. */
   rememberTeamShare(
@@ -386,6 +388,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     syncState: TeamProjectCatalogSyncState,
     principal?: ResourceHubPrincipal | null,
     lastSyncedVersionId?: string,
+    coverDigest?: string | null,
   ) {
     const descriptor = await options.describeProject?.(projectId) ?? null;
     const displayName = typeof descriptor?.name === 'string'
@@ -407,6 +410,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
           syncState,
           ...(lastSyncedVersionId ? { lastSyncedVersionId } : {}),
           ...(descriptor ? { metadata: descriptor } : {}),
+          ...(coverDigest !== undefined ? { coverDigest } : {}),
         },
         target,
       );
@@ -632,6 +636,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     projectId: string,
     reason: string,
     principal?: ResourceHubPrincipal | null,
+    coverDigest?: string | null,
   ): Promise<{ version: number | null; versionId?: string }> {
     const key = principal ? scopedProjectKey(projectId, principal) : projectId;
     let publishedResult: PublishedResourceVersion | null = null;
@@ -668,6 +673,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
         'synced',
         principal,
         result.versionId,
+        coverDigest,
       );
       options.onPublished?.({
         projectId,
@@ -842,7 +848,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       if (states.includes('synced')) return 'synced';
       return syncStates.get(projectId) ?? 'local_only';
     },
-    async requestTeamShare(projectId, share) {
+    async requestTeamShare(projectId, share, coverDigest) {
       const principal = typeof share === 'object' && share
         ? share
         : await getProjectPrincipal(projectId);
@@ -852,7 +858,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       const key = principal ? scopedProjectKey(projectId, principal) : projectId;
       unshared.delete(projectId);
       unshared.delete(key);
-      return publishNow(projectId, 'share', principal);
+      return publishNow(projectId, 'share', principal, coverDigest);
     },
     async requestTeamUnshare(projectId, principal) {
       const targets = principal
@@ -894,7 +900,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       syncStates.set(projectId, 'local_only');
       sharePrincipals.delete(projectId);
     },
-   async requestTeamTransfer(projectId, sourceWorkspaceId, targetWorkspaceId, principal) {
+   async requestTeamTransfer(projectId, sourceWorkspaceId, targetWorkspaceId, principal, coverDigest) {
      // Resolve a concrete principal — the route always passes one, but
      // guard the null path so the type contract holds.
      const effectivePrincipal = principal ?? await getProjectPrincipal(projectId);
@@ -910,6 +916,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
            sourceWorkspaceId,
            targetWorkspaceId,
             principal: effectivePrincipal,
+            ...(coverDigest ? { coverDigest } : {}),
          });
         if (result) {
            // Update runtime bookkeeping for the target workspace.
@@ -953,7 +960,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       await options.teamProjectCatalog?.remove?.(projectId, sourcePrincipal);
       const targetPrincipal: ResourceHubPrincipal = { ...effectivePrincipal, teamId: targetWorkspaceId };
      rememberTeamShare(projectId, targetPrincipal, 'pending_upload');
-     return publishNow(projectId, 'transfer', targetPrincipal);
+     return publishNow(projectId, 'transfer', targetPrincipal, coverDigest);
    },
     projectOwnerMemberId: (projectId, principal) => {
       if (principal) return scopedOwners.get(scopedProjectKey(projectId, principal)) ?? null;

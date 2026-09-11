@@ -1373,6 +1373,17 @@ function projectCover(
 	const trimmed = project.name.trim();
 	const initial = (trimmed ? Array.from(trimmed)[0]! : "?").toUpperCase();
 	const meta = project.metadata;
+	// Use the pre-captured entry screenshot from team_projects.cover_digest
+	// when available — a single <img> load is far cheaper than resolving the
+	// entry file, probing with HEAD, and rendering an iframe document.
+	if (project.coverDigest) {
+		return {
+			kind: "image" as const,
+			src: `/api/hdw/api/community/blobs/${project.coverDigest}`,
+			style,
+			initial,
+		};
+	}
 	// Brand projects get a clean generated cover (extracted logo / site favicon
 	// / monogram) rather than a raw scaled-down HTML page, which reads as broken
 	// clipped text in the card. The brand color gradient mirrors the monogram

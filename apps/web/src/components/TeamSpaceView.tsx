@@ -304,6 +304,7 @@ function teamProjectToProject(tp: TeamProject): Project {
   createdByWorkspaceMemberId: tp.ownerMemberId ?? null,
   ownerDisplayName: tp.ownerDisplayName ?? null,
   ...(tp.metadata ? { metadata: tp.metadata } : {}),
+  coverDigest: tp.coverDigest ?? null,
   };
 }
 

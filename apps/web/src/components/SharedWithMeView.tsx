@@ -42,6 +42,7 @@ function sharedRowToProject(row: SharedWithMeProject): Project {
    createdByWorkspaceMemberId: row.ownerMemberId ?? null,
     ownerDisplayName: row.sharedByDisplayname ?? null,
    ...(row.metadata ? { metadata: row.metadata as unknown as Project['metadata'] } : {}),
+  coverDigest: row.coverDigest ?? null,
   };
 }
 

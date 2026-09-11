@@ -209,6 +209,7 @@ export function buildAllProjectsList(input: {
         createdAt: typeof teamProject.createdAt === 'number' ? teamProject.createdAt : fallbackTimestamp,
         updatedAt: typeof teamProject.updatedAt === 'number' ? teamProject.updatedAt : fallbackTimestamp,
         ...(teamProject.metadata ? { metadata: teamProject.metadata } : {}),
+        coverDigest: teamProject.coverDigest ?? null,
       } satisfies Project;
     });
 

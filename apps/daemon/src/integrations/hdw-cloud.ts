@@ -283,6 +283,24 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       }
     },
 
+    async listResources(
+      workspaceId: string,
+      kind?: string,
+      ownerMemberId?: string,
+    ): Promise<HdwResourceRecord[]> {
+      const params = new URLSearchParams();
+      if (kind) params.set('kind', kind);
+      if (ownerMemberId) params.set('owner_member_id', ownerMemberId);
+      const qs = params.toString() ? '?' + params : '';
+      const { payload } = await request<{ resources: HdwResourceRecord[] }>(
+        'GET',
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/resources${qs}`,
+        undefined,
+        { 'x-hdw-workspace-id': workspaceId },
+      );
+      return payload.resources ?? [];
+    },
+
     /** List team projects for a workspace. The HDW backend already
      *  JOINs workspace_members to provide ownerDisplayName. */
     async listTeamProjects(
@@ -362,11 +380,16 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       projectId: string,
       targetWorkspaceId: string,
       targetOwnerMemberId?: string,
+      coverDigest?: string | null,
     ): Promise<HdwTransferResult> {
       const { payload } = await request<HdwTransferResult>(
         'POST',
         `/api/workspaces/${encodeURIComponent(sourceWorkspaceId)}/team-projects/${encodeURIComponent(projectId)}/transfer`,
-        { targetWorkspaceId, ...(targetOwnerMemberId ? { targetOwnerMemberId } : {}) },
+        {
+          targetWorkspaceId,
+          ...(targetOwnerMemberId ? { targetOwnerMemberId } : {}),
+          ...(coverDigest ? { coverDigest } : {}),
+        },
         { 'x-hdw-workspace-id': sourceWorkspaceId },
       );
       return payload;
@@ -453,6 +476,17 @@ export interface HdwPullResult {
   missingBlobs: string[];
 }
 
+export interface HdwResourceRecord {
+  id: string;
+  kind: string;
+  ownerMemberId: string;
+  metadata?: Record<string, unknown> | null;
+  version: number | null;
+  versionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HdwTeamProjectRecord {
   id: string;
   workspaceId: string;
@@ -476,9 +510,11 @@ export interface HdwTeamProjectRecord {
    *  return this as `folder_id` (snake_case). */
   folderId?: string | null;
   folder_id?: string | null;
-  /** Owner's display name, enriched from the HDW workspace_members table
-   *  by joining ownerMemberId → workspace_member_id at query time. */
-  ownerDisplayName?: string | null;
+ /** Owner's display name, enriched from the HDW workspace_members table
+  *  by joining ownerMemberId → workspace_member_id at query time. */
+ ownerDisplayName?: string | null;
+  /** SHA-256 digest of the project's entry screenshot blob. */
+  coverDigest?: string | null;
 }
 
 export interface HdwUpsertTeamProjectInput {
@@ -489,6 +525,7 @@ export interface HdwUpsertTeamProjectInput {
   metadata?: Record<string, unknown> | null;
   ownerMemberId?: string;
   folderId?: string | null;
+  coverDigest?: string | null;
 }
 
 export interface HdwTransferResult {

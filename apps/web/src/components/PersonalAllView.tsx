@@ -4,34 +4,20 @@
 // scope pages. Folder CRUD operates on the local SQLite `folders` table
 // via `/api/folders` instead of the HDW proxy.
 import { useEffect, useId, useState } from 'react';
+import { navigate } from '../router';
+import { AddSkillDialog } from './AddSkillDialog';
+import { CloudSkillList } from './CloudSkillList';
 import { createPortal } from 'react-dom';
 import type { WorkspaceDirectoryItem } from '@open-design/contracts';
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
-import { navigate } from '../router';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 import { FolderCardMenu } from './FolderCardMenu';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
 import type { DesignSystemSummary, Project } from '../types';
 import { useT } from '../i18n';
-import type { Dict } from '../i18n/types';
 import styles from './TeamSpaceView.module.css';
  
- const FOLDER_CONTEXT_KEY = 'od:home-folder-context';
-
-type ScopeTab = 'projects' | 'skill' | 'mcp' | 'experts';
-
-interface TabDef {
-  id: ScopeTab;
-  icon: IconName;
-  labelKey: keyof Dict;
-}
-
-const TABS: TabDef[] = [
-  { id: 'projects', icon: 'folder', labelKey: 'personalScope.tabProjects' },
-  { id: 'skill', icon: 'sparkles', labelKey: 'personalScope.tabSkill' },
-  { id: 'mcp', icon: 'terminal', labelKey: 'personalScope.tabMcp' },
-  { id: 'experts', icon: 'robot', labelKey: 'personalScope.tabExperts' },
-];
+const FOLDER_CONTEXT_KEY = 'od:home-folder-context';
 
 interface PersonalFolderItem {
   folderId: string;
@@ -42,17 +28,6 @@ interface PersonalFolderItem {
   createdAt: string;
 }
 
-function PlaceholderPanel({ icon, label, note }: { icon: IconName; label: string; note: string }) {
-  return (
-    <div className={styles.panel}>
-      <span className={styles.panelIcon} aria-hidden>
-        <Icon name={icon} size={32} />
-      </span>
-      <h2 className={styles.panelTitle}>{label}</h2>
-      <p className={styles.panelNote}>{note}</p>
-    </div>
-  );
-}
 
 function PersonalProjectsPanel({
   workspaceId,
@@ -494,51 +469,55 @@ export function PersonalAllView({
   onRenameProject: (id: string, name: string) => void;
   onCopyProject?: (id: string) => Promise<void> | void;
 }) {
-  const t = useT();
+const t = useT();
+type ScopeTab = 'projects' | 'skill' | 'mcp';
+const TABS: { id: ScopeTab; icon: string; labelKey: string }[] = [
+  { id: 'projects', icon: 'folder', labelKey: 'personalScope.tabProjects' },
+  { id: 'skill', icon: 'sparkles', labelKey: 'personalScope.tabSkill' },
+  { id: 'mcp', icon: 'terminal', labelKey: 'personalScope.tabMcp' },
+];
 const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
+const [skillDialogOpen, setSkillDialogOpen] = useState(false);
+
 const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 const [workspaceMemberId, setWorkspaceMemberId] = useState<string | null>(null);
 const [showCreateGroup, setShowCreateGroup] = useState(false);
  const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
 
  // Resolve the personal workspace ID from the workspace directory.
-  // item with isDefaultTeam === true.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/workspace/directory', { cache: 'no-store' });
-        if (!res.ok) return;
-        const body = await res.json() as { items?: WorkspaceDirectoryItem[] };
-        if (cancelled) return;
-       const personal = body.items?.find((item) => item.isDefaultTeam === true);
-       setWorkspaceId(personal?.workspaceId ?? null);
-       setWorkspaceMemberId(personal?.workspaceMemberId ?? null);
-     } catch {
-        // leave workspaceId null
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+ // item with isDefaultTeam === true.
+ useEffect(() => {
+   let cancelled = false;
+   void (async () => {
+     try {
+       const res = await fetch('/api/workspace/directory', { cache: 'no-store' });
+       if (!res.ok) return;
+       const body = await res.json() as { items?: WorkspaceDirectoryItem[] };
+       if (cancelled) return;
+      const personal = body.items?.find((item) => item.isDefaultTeam === true);
+      setWorkspaceId(personal?.workspaceId ?? null);
+      setWorkspaceMemberId(personal?.workspaceMemberId ?? null);
+    } catch {
+       // leave workspaceId null
+     }
+   })();
+   return () => { cancelled = true; };
+ }, []);
 
-  const title = t('personalFunc.all');
-  const subtitle = t('personalScope.subtitlePersonal');
+ const title = t('personalFunc.all');
+ const subtitle = t('personalScope.subtitlePersonal');
 
-  // activeTab is always a value from `tabs` (starts at 'projects', only set
-  // via tab buttons), so the find is guaranteed to match.
-  const activeDef = TABS.find((tab) => tab.id === activeTab)!;
-
-  return (
-    <section className={styles.view} aria-labelledby="personal-all-title">
-      <header className={styles.header}>
-        <div className={styles.titleBlock}>
-          <h1 id="personal-all-title" className={styles.title}>{title}</h1>
-          <span className={styles.subtitle}>
-            <span className={styles.dot} aria-hidden />
-            {subtitle}
-          </span>
-        </div>
-        <div className={styles.headerActions}>
+ return (
+   <section className={styles.view} aria-labelledby="personal-all-title">
+     <header className={styles.header}>
+       <div className={styles.titleBlock}>
+         <h1 id="personal-all-title" className={styles.title}>{title}</h1>
+         <span className={styles.subtitle}>
+           <span className={styles.dot} aria-hidden />
+           {subtitle}
+         </span>
+       </div>
+       <div className={styles.headerActions}>
           {activeTab === 'projects' && workspaceId ? (
             <>
               <button
@@ -562,12 +541,32 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
               </button>
             </>
           ) : null}
+          {activeTab === 'skill' ? (
+            <button
+              type="button"
+              className={styles.inviteBtn}
+              onClick={() => setSkillDialogOpen(true)}
+            >
+              <Icon name="plus" size={15} aria-hidden />
+              <span>{t('personalScope.addSkill')}</span>
+            </button>
+          ) : null}
+          {activeTab === 'mcp' ? (
+            <button
+              type="button"
+              className={styles.inviteBtn}
+              onClick={() => { /* TODO: MCP add dialog */ }}
+            >
+              <Icon name="plus" size={15} aria-hidden />
+              <span>{t('personalScope.addMcp')}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.refreshBtn}
             title={t('recentProjects.refresh')}
             aria-label={t('recentProjects.refresh')}
-            onClick={() => window.dispatchEvent(new CustomEvent('personal:folders-updated'))}
+            onClick={() => window.dispatchEvent(new CustomEvent(`personal:${activeTab}-refresh`))}
           >
             <Icon name="refresh" size={16} aria-hidden />
           </button>
@@ -581,38 +580,48 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
            type="button"
            role="tab"
            aria-selected={activeTab === tab.id}
-           className={activeTab === tab.id ? styles.tabActive : styles.tab}
-           onClick={() => setActiveTab(tab.id)}
+          className={activeTab === tab.id ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab(tab.id)}
          >
-           <Icon name={tab.icon} size={16} aria-hidden />
-           <span>{t(tab.labelKey)}</span>
-        </button>
-      ))}
-    </div>
+           <Icon name={tab.icon as any} size={16} aria-hidden />
+           <span>{t(tab.labelKey as any)}</span>
+         </button>
+       ))}
+     </div>
 
      <div className={styles.content} role="tabpanel">
-        {activeTab === 'projects' ? (
-       <PersonalProjectsPanel
-         controlsPortalTarget={typeTabsEl}
-         workspaceId={workspaceId}
-         workspaceMemberId={workspaceMemberId}
-         showCreateGroup={showCreateGroup}
-          onShowCreateGroupChange={setShowCreateGroup}
-          designSystems={designSystems}
-         onOpenProject={onOpenProject}
-         onDeleteProject={onDeleteProject}
-         onDuplicateProject={onDuplicateProject}
-          onCopyProject={onCopyProject}
-         onRenameProject={onRenameProject}
-        />
-        ) : (
-          <PlaceholderPanel
-            icon={activeDef.icon}
-            label={t(activeDef.labelKey)}
-            note={t('personalScope.emptyNotePersonal')}
-          />
-        )}
+       {activeTab === 'projects' ? (
+         <PersonalProjectsPanel
+           controlsPortalTarget={typeTabsEl}
+           workspaceId={workspaceId}
+           workspaceMemberId={workspaceMemberId}
+           showCreateGroup={showCreateGroup}
+           onShowCreateGroupChange={setShowCreateGroup}
+           designSystems={designSystems}
+           onOpenProject={onOpenProject}
+           onDeleteProject={onDeleteProject}
+           onDuplicateProject={onDuplicateProject}
+           onCopyProject={onCopyProject}
+           onRenameProject={onRenameProject}
+         />
+       ) : activeTab === 'skill' ? (
+         <CloudSkillList workspaceId={workspaceId} workspaceMemberId={workspaceMemberId} />
+       ) : (
+         <div className={styles.panel}>
+           <span className={styles.panelIcon} aria-hidden>
+             <Icon name='terminal' size={32} />
+           </span>
+           <h2 className={styles.panelTitle}>
+             {t('personalFunc.mcp')}
+           </h2>
+           <p className={styles.panelNote}>{t('personalScope.emptyNotePersonal')}</p>
+         </div>
+       )}
       </div>
+
+     {activeTab === 'skill' ? (
+       <AddSkillDialog open={skillDialogOpen} onClose={() => setSkillDialogOpen(false)} />
+     ) : null}
     </section>
-  );
+ );
 }

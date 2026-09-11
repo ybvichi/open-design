@@ -5,10 +5,10 @@
 // tab is implemented in this pass. The other three render a placeholder
 // panel so the tab structure is visible and ready for future work.
 //
-// The Projects tab has a two-panel form grid:
-//   Left  — "选择文件": pick an internal project from a recent-projects
+// The two panels stack vertically (top-bottom layout):
+//   Top    — "选择文件": pick an internal project from a recent-projects
 //           list, or switch to "外部文件" and choose a folder from disk.
-//   Right — "公开信息": name + description shown on the community card.
+//   Bottom — "公开信息": name + description shown on the community card.
 //
 // The confirm button is disabled until a file source is selected and a
 // name is entered. On confirm the dialog calls onPublish with the
@@ -165,7 +165,7 @@ function ProjectsTab({
 
   return (
     <div className={styles.formGrid}>
-      {/* --- Left panel: file selection --- */}
+      {/* --- Top panel: file selection --- */}
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <span className={styles.panelIcon} aria-hidden>
@@ -290,7 +290,7 @@ function ProjectsTab({
         )}
       </section>
 
-      {/* --- Right panel: public info --- */}
+      {/* --- Bottom panel: public info --- */}
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
           <span className={styles.panelIcon} aria-hidden>
