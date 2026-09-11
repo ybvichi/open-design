@@ -1927,12 +1927,30 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         : {}),
       sendApiError,
     });
-  const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
-    ctx.verifyWorkspaceRequestAuthority,
-    ctx.verifyPersonalProjectDeleteLeaseAuthority,
-    authorizeProjectRequest,
-  );
-  async function verifiedWorkspaceProjectContext(
+ const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
+   ctx.verifyWorkspaceRequestAuthority,
+   ctx.verifyPersonalProjectDeleteLeaseAuthority,
+   authorizeProjectRequest,
+ );
+ // Share-aware read authorization: if a share record exists for this project
+ // + the current user, skip workspace-membership authorization. This lets
+ // non-team-members open shared projects read-only.
+ async function authorizeProjectReadWithShare(
+   req: any,
+   res: Response,
+   projectId: string,
+ ): Promise<boolean> {
+   try {
+     const shareAuthorized = Boolean(
+       await ctx.collabSync?.resolveShareAccess?.(projectId, req) ?? false,
+     );
+     if (shareAuthorized) return true;
+   } catch {
+     // share lookup failed — fall through to regular authorization
+   }
+   return authorizeProjectRequest(req, res, projectId, { mode: 'read' });
+ }
+ async function verifiedWorkspaceProjectContext(
     req: any,
   ): Promise<WorkspaceProjectContext | null> {
     if (!ctx.verifyWorkspaceRequestAuthority) return null;
@@ -5001,7 +5019,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
       // a team-shared project. This deliberately uses 'read' mode, NOT
       // 'duplicate' capability, because the caller is creating a NEW project
       // in their personal workspace — they are not mutating the source.
-      if (!await authorizeProjectRequest(req, res, sourceProject.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, sourceProject.id)) return;
       if (isDesignSystemLikeProject(sourceProject)) {
         return sendApiError(
           res,
@@ -5303,7 +5321,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
     const locations = await configuredProjectLocations();
     if (!project || !projectVisibleForLocations(project, locations))
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
-    if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+    if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
     // When a caller is about to *reference* this project (add it as read-only
     // context for another run), materialize its managed folder first so the
     // reference resolves to a real directory. See ensureReferencedProjectDir.
@@ -5342,7 +5360,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
     }
     const binding = getWorkspaceProjectByProjectId(db, project.id);
-    if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+    if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
     const claimed = workspaceProjectContextFromRequest(req);
     const assertedType = headerValue(req, 'x-od-workspace-type');
     const requestWorkspaceType = assertedType === 'team' || assertedType === 'personal'
@@ -5905,7 +5923,7 @@ let updatedByWorkspaceMemberId = effectiveMemberId;
     if (!getProject(db, req.params.id)) {
       return res.status(404).json({ error: 'project not found' });
     }
-    if (!await authorizeProjectRequest(req, res, req.params.id, { mode: 'read' })) return;
+    if (!await authorizeProjectReadWithShare(req, res, req.params.id)) return;
     res.json(listTabs(db, req.params.id));
   });
 
@@ -6098,7 +6116,7 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
 
 }
 
-export interface RegisterProjectFileRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'uploads' | 'node' | 'projectStore' | 'projectFiles' | 'documents' | 'artifacts' | 'projectPreviewScopes'> {
+export interface RegisterProjectFileRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'uploads' | 'node' | 'projectStore' | 'projectFiles' | 'documents' | 'artifacts' | 'projectPreviewScopes' | 'collabSync'> {
   verifyWorkspaceRequestAuthority?: VerifyWorkspaceRequestAuthority;
   authorizeProjectRequest?: AuthorizeProjectRequest;
   /** Startup-hydrated O(1) quarantine lookup for stale Team mirrors. */
@@ -6131,12 +6149,29 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         : {}),
       sendApiError,
     });
-  const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
-    ctx.verifyWorkspaceRequestAuthority,
-    undefined,
-    authorizeProjectRequest,
-  );
-  const requestCanWriteWorkspaceProject = createWorkspaceProjectWriteAuthorityCheck(
+ const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
+   ctx.verifyWorkspaceRequestAuthority,
+   undefined,
+   authorizeProjectRequest,
+ );
+ // Share-aware read authorization: if a share record exists for this project
+ // + the current user, skip workspace-membership authorization.
+ async function authorizeProjectReadWithShare(
+   req: any,
+   res: Response,
+   projectId: string,
+ ): Promise<boolean> {
+   try {
+     const shareAuthorized = Boolean(
+       await ctx.collabSync?.resolveShareAccess?.(projectId, req) ?? false,
+     );
+     if (shareAuthorized) return true;
+   } catch {
+     // share lookup failed — fall through to regular authorization
+   }
+   return authorizeProjectRequest(req, res, projectId, { mode: 'read' });
+ }
+ const requestCanWriteWorkspaceProject = createWorkspaceProjectWriteAuthorityCheck(
     ctx.verifyWorkspaceRequestAuthority,
     ctx.isProjectUnmaterializedPlaceholder,
   );
@@ -6781,7 +6816,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       if (project?.metadata?.teamMirrorRevokedAt) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
       }
@@ -6810,7 +6845,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!searchProject) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await authorizeProjectRequest(req, res, searchProject.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, searchProject.id)) return;
       const query = String(req.query.q ?? '');
       if (!query) {
         sendApiError(res, 400, 'BAD_REQUEST', 'q query parameter is required');
@@ -6840,7 +6875,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
         return;
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       const allowedProps = new Set([
         'color',
         'backgroundColor',
@@ -6897,7 +6932,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       const folders = await listProjectFolders(PROJECTS_DIR, req.params.id, {
         metadata: project.metadata,
       });
@@ -6984,7 +7019,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
         return;
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       const projectRoot = resolveProjectDir(PROJECTS_DIR, project.id, project.metadata);
       const audit = await auditDesignSystemPackage(projectRoot);
       res.setHeader('Cache-Control', 'no-store');
@@ -7001,7 +7036,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
         return;
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       const requestedPath = previewFilePathForProject(project, req.query.file);
       const meta = await resolveProjectFilePath(
         PROJECTS_DIR,
@@ -7502,7 +7537,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       if (!/\.html?$/i.test(fileName)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'versions are only available for HTML files');
       }
@@ -7751,7 +7786,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
-      if (!await authorizeProjectRequest(req, res, project.id, { mode: 'read' })) return;
+      if (!await authorizeProjectReadWithShare(req, res, project.id)) return;
       const body = await readProjectFileVersion(
         PROJECTS_DIR,
         project.id,
@@ -8152,7 +8187,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
 
 }
 
-export interface RegisterProjectUploadRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'paths' | 'projectStore' | 'projectFiles'> {
+export interface RegisterProjectUploadRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'paths' | 'projectStore' | 'projectFiles' | 'collabSync'> {
   verifyWorkspaceRequestAuthority?: VerifyWorkspaceRequestAuthority;
   authorizeProjectRequest?: AuthorizeProjectRequest;
   /** Durable first-open placeholder stamp lookup. */
@@ -8180,14 +8215,14 @@ export function registerProjectUploadRoutes(app: Express, ctx: RegisterProjectUp
         : {}),
       sendApiError,
     });
-  const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
-    ctx.verifyWorkspaceRequestAuthority,
-    undefined,
-    authorizeProjectRequest,
-  );
+ const enforceWorkspaceProjectMutation = createEnforceWorkspaceProjectMutation(
+   ctx.verifyWorkspaceRequestAuthority,
+   undefined,
+   authorizeProjectRequest,
+ );
 
-  app.post(
-    '/api/projects/:id/upload',
+ app.post(
+   '/api/projects/:id/upload',
     handleProjectUpload,
     async (req, res) => {
       try {

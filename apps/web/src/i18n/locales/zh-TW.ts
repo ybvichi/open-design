@@ -828,6 +828,7 @@ export const zhTW: Dict = {
   'sharedSpace.shareDialogCancel': 'Cancel',
   'sharedSpace.shareSuccess': 'Successfully shared to shared space',
   'sharedSpace.shareFailed': 'Share failed, please try again',
+'sharedSpace.cannotShareToSelf': '無法分享給自己，請重新選擇分享對象。',
   'sharedSpace.collaboratorBadge': 'Collaborator',
   'sharedSpace.sharedBy': 'Shared by',
  "squareScope.subtitle": "社群中所有人分享的專案、Skill、MCP 與工具。",

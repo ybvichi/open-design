@@ -37,12 +37,14 @@ export function PersonPicker({
   placeholder,
   multiple = false,
   onDuplicate,
+  excludeEmails = [],
 }: {
   selected: Person[];
   onChange: (p: Person[]) => void;
   placeholder?: string;
   multiple?: boolean;
   onDuplicate?: () => void;
+  excludeEmails?: string[];
 }) {
   const t = useT();
   const [query, setQuery] = useState('');
@@ -82,7 +84,13 @@ export function PersonPicker({
       .then((j) => {
         if (!aliveRef.current || reqId !== reqIdRef.current) return;
         const list: Person[] = Array.isArray(j?.data?.list) ? j.data.list : [];
-        setResults(list);
+        const filtered = excludeEmails.length
+          ? list.filter((p) => {
+              const email = typeof p.email === 'string' ? p.email.trim().toLowerCase() : '';
+              return !email || !excludeEmails.includes(email);
+            })
+          : list;
+        setResults(filtered);
         setActiveIdx(0);
         setOpen(true);
       })

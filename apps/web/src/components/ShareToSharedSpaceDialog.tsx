@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import { PersonPicker, type Person } from './PersonPicker';
 import { useT } from '../i18n';
+import { getStoredUserInfo } from '../auth/auth';
 import { shareProjectToSharedSpace } from '../collab/shared-space-catalog';
 import styles from './ShareToSharedSpaceDialog.module.css';
 
@@ -32,8 +33,23 @@ export function ShareToSharedSpaceDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Current user's email — used to exclude self from the recipient picker.
+  // Sharing to yourself is not allowed in the shared space.
+  const selfEmail = typeof getStoredUserInfo()?.email === 'string'
+    ? getStoredUserInfo().email.trim().toLowerCase()
+    : '';
+  const excludeEmails = selfEmail ? [selfEmail] : [];
+
   async function handleSubmit() {
     if (selected.length === 0) return;
+    // Guard against self-share even if the picker somehow let one through.
+    if (selfEmail && selected.some((p) => {
+      const email = typeof p.email === 'string' ? p.email.trim().toLowerCase() : '';
+      return email === selfEmail;
+    })) {
+      setError(t('sharedSpace.cannotShareToSelf'));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -90,12 +106,13 @@ export function ShareToSharedSpaceDialog({
       <label className={styles.label}>
         {t('sharedSpace.shareDialogRecipientLabel')}
       </label>
-      <PersonPicker
-        selected={selected}
-        onChange={setSelected}
-        multiple
-        placeholder={t('sharedSpace.shareDialogRecipientPlaceholder')}
-      />
+     <PersonPicker
+       selected={selected}
+       onChange={setSelected}
+       multiple
+       placeholder={t('sharedSpace.shareDialogRecipientPlaceholder')}
+       excludeEmails={excludeEmails}
+     />
       {error ? (
         <p className={styles.error} role="alert">{error}</p>
       ) : null}

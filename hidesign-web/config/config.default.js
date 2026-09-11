@@ -89,7 +89,7 @@ module.exports = appInfo => {
      * username=hujincheng;secret=yapovichi => E3B7692B2421198A801ECA73837810F4 [胡金成]
      */
     // adminKeys: [
-    //   '713C9C311144AF22E6236205F7C451A9', 
+    //   '713C9C311144AF22E6236205F7C451A9',
     //   '7BB7DAF93274E5A742F3B071794316CF'
     // ], // 从 token 中提取用户身份标识字段，默认从 payload 中提取
     // managerKeys: [

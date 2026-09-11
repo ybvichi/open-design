@@ -1,4 +1,4 @@
-import type { Express, Request, RequestHandler } from 'express';
+import type { Express, RequestHandler } from 'express';
 import {
   createWorkspaceFolder,
   listSubFolders,
@@ -14,42 +14,12 @@ import {
   type WorkspaceFolderInput,
 } from '../db.js';
 
-/** Shape of a remote-only team project summary merged into the root
- *  projects response. Mirrors `normalizeProject` output so the web client
- *  can treat local and remote projects uniformly. */
-export interface RemoteTeamProjectSummary {
-  id: string;
-  name: string;
-  skillId: string | null;
-  designSystemId: string | null;
-  pendingPrompt?: string;
-  metadata?: unknown;
-  appliedPluginSnapshotId?: string;
-  customInstructions?: string;
-  createdAt: number;
-  updatedAt: number;
-  workspaceId: string | null;
-  createdByWorkspaceMemberId?: string | null;
-  updatedByWorkspaceMemberId?: string | null;
-  workspaceVisibility?: string | null;
-}
-
 export interface RegisterFolderRoutesDeps {
   db: any;
   http: {
     requireLocalDaemonRequest: RequestHandler;
     sendApiError: (...args: any[]) => any;
   };
-  /** When provided and the workspace is a team workspace, the root projects
-   *  endpoint (`folderId = "root"`) merges in remote-only team projects —
-   *  those shared by teammates but not yet materialized on this daemon.
-   *  Mirrors the remote catalog merge in
-   *  `GET /api/workspaces/:id/projects?view=team`. */
-  mergeRemoteTeamProjects?: (
-    req: Request,
-    workspaceId: string,
-    localProjectIds: Set<string>,
-  ) => Promise<RemoteTeamProjectSummary[]>;
 }
 
 interface FolderRow {
@@ -175,27 +145,14 @@ try {
    const headerMemberId = typeof req.get === 'function'
      ? (req.get('x-od-workspace-member-id') || '').trim() || null
      : null;
-   const rows = listProjectsInFolder(db, workspaceId, folderId, headerMemberId);
-  const projects: RemoteTeamProjectSummary[] = rows.map((row) => ({
-     ...normalizeProject(row),
-     workspaceId: row.workspaceId ?? null,
-     createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
-     updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
-     workspaceVisibility: row.workspaceVisibility ?? null,
-   }));
-    // For the workspace root, merge in remote-only team projects that
-    // haven't been materialized locally. This mirrors the original
-    // GET /api/workspaces/:id/projects?view=team merge so team members
-    // see projects shared by teammates they haven't opened yet.
-    if (folderId === null && deps.mergeRemoteTeamProjects) {
-      const localIds = new Set(projects.map((p) => p.id));
-      try {
-        const remote = await deps.mergeRemoteTeamProjects(req, workspaceId, localIds);
-        projects.push(...remote);
-      } catch {
-        // Best-effort: remote catalog failures must not break the local list.
-      }
-    }
+ const rows = listProjectsInFolder(db, workspaceId, folderId, headerMemberId);
+  const projects = rows.map((row) => ({
+    ...normalizeProject(row),
+    workspaceId: row.workspaceId ?? null,
+    createdByWorkspaceMemberId: row.createdByWorkspaceMemberId ?? null,
+    updatedByWorkspaceMemberId: row.updatedByWorkspaceMemberId ?? null,
+    workspaceVisibility: row.workspaceVisibility ?? null,
+  }));
     res.json({ code: 0, data: { projects } });
   } catch (err) {
     sendApiError(res, 500, 'INTERNAL_ERROR', err instanceof Error ? err.message : String(err));

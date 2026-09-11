@@ -30,6 +30,7 @@ import {
 import { createHdwHttpResourceAdapter } from './hdw-http-resource-adapter.js';
 import { shouldUseHdwHttpResourceTransport } from './hdw-http-team-projects.js';
 import { createHdwCloudClientFromEnv } from '../integrations/hdw-cloud.js';
+import type { HdwCloudClient } from '../integrations/hdw-cloud.js';
 import type { WorkspaceContextProvider } from './workspace-context.js';
 import { createWorkspaceContextProviderFromEnv } from './vela-workspace-context.js';
 
@@ -150,6 +151,10 @@ export interface CreateCollabRuntimeOptions {
   teamResources?: TeamResourceStateProvider;
   /** Vela-owned team-project discovery catalog. Runtime treats it as an injectable sink. */
   teamProjectCatalog?: TeamProjectCatalogSink;
+  /** Pre-built HDW cloud client (avoids re-creating one without SSO cookies
+   *  inside the runtime). When set and the HDW transport is active, the
+   *  runtime uses this client instead of calling `createHdwCloudClientFromEnv`. */
+  hdwClient?: HdwCloudClient | null;
   /** Fired after a project is published so the caller can notify online members. */
   onPublished?: (result: {
     projectId: string;
@@ -198,17 +203,18 @@ function selectResourcePublishAdapter(
   resolveProjectDir: ((projectId: string) => string | Promise<string>) | undefined,
   resolvePullDir: ((projectId: string) => string | Promise<string>) | undefined,
   describeProject: ((projectId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>) | undefined,
+  hdwClient?: HdwCloudClient | null,
 ): ResourcePublishAdapter | null {
   if (!resolveProjectDir) return null;
   if (shouldUseHdwHttpResourceTransport()) {
-    const hdwClient = createHdwCloudClientFromEnv();
-    if (hdwClient) {
+    const client = hdwClient ?? createHdwCloudClientFromEnv();
+    if (client) {
       return createHdwHttpResourceAdapter({
         resolveProjectDir,
         ...(resolvePullDir ? { resolvePullDir } : {}),
         ...(describeProject ? { describeProject } : {}),
         hasTeamIdentity: (principal) => principal != null,
-        client: hdwClient,
+        client,
       });
     }
   }
@@ -276,13 +282,14 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
   };
 
   const baseAdapter =
-    options.adapter ??
-    selectResourcePublishAdapter(
-      options.resolveProjectDir,
-      options.resolvePullDir,
-      options.describeProject,
-    ) ??
-    createStubResourcePublishAdapter();
+   options.adapter ??
+   selectResourcePublishAdapter(
+     options.resolveProjectDir,
+     options.resolvePullDir,
+     options.describeProject,
+     options.hdwClient,
+   ) ??
+   createStubResourcePublishAdapter();
 
   function rememberTeamShare(
     projectId: string,

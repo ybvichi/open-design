@@ -247,19 +247,44 @@ export interface ServerContext {
      * — so a project the user just shared did not appear in 全部项目 until some
      * later poll (acceptance #53). Fire-and-forget.
      */
-   invalidateTeamProjectCatalog?(): void;
+  invalidateTeamProjectCatalog?(): void;
 
-    /** Move a team project to a folder (or to the workspace root when
-     *  folderId is null) on the HDW backend. Uses the lightweight
-     *  folder/project/move endpoint — a single UPDATE on
-     *  team_projects.folder_id — instead of the full catalog upsert. */
-    moveProjectFolder?(
-      workspaceId: string,
-      projectId: string,
-      folderId: string | null,
-      operatorMemberId?: string,
-    ): Promise<void>;
- };
+   /** Move a team project to a folder (or to the workspace root when
+    *  folderId is null) on the HDW backend. Uses the lightweight
+    *  folder/project/move endpoint — a single UPDATE on
+    *  team_projects.folder_id — instead of the full catalog upsert. */
+   moveProjectFolder?(
+     workspaceId: string,
+     projectId: string,
+     folderId: string | null,
+     operatorMemberId?: string,
+   ): Promise<void>;
+
+   /**
+    * Share-based access resolution for recipients who are NOT members of the
+    * project's home workspace. Returns the share metadata (home workspace ID,
+    * owner member ID, etc.) needed to authorize read access and pulls from
+    * the Shared Space context. Null when no share record exists.
+    */
+  resolveShareAccess?: (
+    projectId: string,
+    req: any,
+  ) => Promise<{
+    workspaceId: string;
+    resourceTeamId: string;
+    viewerMemberId: string;
+    ownerMemberId: string;
+  } | null>;
+  /**
+   * Check whether a pull scope was authorized through a share record rather
+   * than regular workspace membership. Returns true when the scope's
+   * viewerMemberId matches a valid share record for the project, allowing
+   * non-team-members to pass the `capturedScopeIsStillAuthorized` gate.
+   */
+  isShareAuthorizedScope?: (
+     scope: { workspaceId: string; resourceTeamId: string; viewerMemberId: string; ownerMemberId: string },
+   ) => Promise<boolean>;
+};
  lifecycle: {
     isDaemonShuttingDown: () => boolean;
   };

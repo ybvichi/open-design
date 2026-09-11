@@ -124,6 +124,23 @@ class CommunityController extends Controller {
     }
     try {
       const k = this.getKnex();
+      // Resolve the publisher username from workspace_members when the
+      // caller provides a workspace member ID. The member ID is the
+      // reliable publisher identity (from x-od-workspace-member-id);
+      // the SSO username may be absent or differ from the original.
+      let effectivePublisherUsername = publisherUsername;
+      if (body.publisherMemberId && body.publisherWorkspaceId) {
+        const member = await k('workspace_members')
+          .where({
+            workspace_id: body.publisherWorkspaceId,
+            workspace_member_id: body.publisherMemberId,
+          })
+          .select('username')
+          .first();
+        if (member?.username) {
+          effectivePublisherUsername = member.username;
+        }
+      }
       const blob = await k('blobs').where({ digest: body.archiveDigest }).first();
       if (!blob) {
         ctx.body = fail('Archive blob not found. Upload the blob first via PUT /community/blobs/:digest');
@@ -133,7 +150,7 @@ class CommunityController extends Controller {
         .whereRaw('name = ? AND deleted_at IS NULL', [body.name])
         .first();
       if (existing) {
-        if (existing.publisher_username !== publisherUsername) {
+        if (existing.publisher_username !== effectivePublisherUsername) {
           ctx.body = fail('Only the original publisher can publish new versions');
           return;
         }
@@ -170,7 +187,7 @@ class CommunityController extends Controller {
             id: pluginId,
             name: body.name,
             source: 'hdw-community',
-            publisher_username: publisherUsername,
+            publisher_username: effectivePublisherUsername,
             publisher_displayname: body.publisherDisplayname || null,
             publisher_github: body.publisherGithub || null,
             publisher_url: body.publisherUrl || null,

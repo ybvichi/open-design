@@ -13,6 +13,7 @@ import type { VelaTeamProjectCatalog } from '../collab/vela-cli-team-projects.js
 import type { ResourceHubPrincipal } from '../collab/resource-principal.js';
 import type { TeamProject } from '@open-design/contracts';
 import type { SqliteDb } from '../db.js';
+import { rebindWorkspaceProject } from '../db.js';
 
 /**
  * Mock mirror of workspace collab-context routes.
@@ -575,6 +576,19 @@ export function registerCollabContextHideSignRoutes(
       if (result === null) {
         res.status(502).json({ error: 'UPSTREAM_UNAVAILABLE', message: 'shared space server is unreachable' });
         return;
+      }
+      // After the HDW share record is written, update the local SQLite row
+      // so the project is treated as a team project for sync and listing.
+      // Without this, the row keeps visibility='personal' and the sync flow
+      // never picks it up for cloud upload.
+      if (deps.db) {
+        rebindWorkspaceProject(deps.db, projectId, {
+          workspaceId: homeWorkspaceId,
+          visibility: 'team',
+          resourceState: 'active',
+          cloudTombstonedAt: null,
+          syncState: 'pending_upload',
+        });
       }
       res.json(result);
     } catch (err) {

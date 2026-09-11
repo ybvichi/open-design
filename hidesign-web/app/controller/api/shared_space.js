@@ -32,18 +32,18 @@ class SharedSpaceController extends Controller {
   }
 
   // ---- Share projects to the shared space ----
-  // POST /hdw/api/shared-space/share
-  // body: { project_id, home_workspace_id, created_by_username, recipients: [{username, displayname?}] }
-  async share() {
-    const { ctx } = this;
-    const {
-      project_id: projectId,
-      home_workspace_id: homeWorkspaceId,
-      created_by_username: createdByUsername,
-      recipients = [],
-      display_name: displayName,
-      metadata: projectMetadata,
-    } = ctx.request.body;
+ // POST /hdw/api/shared-space/share
+ // body: { project_id, home_workspace_id, created_by_username, created_by_displayname?, recipients: [{username, displayname?}] }
+ async share() {
+   const { ctx } = this;
+   const {
+     project_id: projectId,
+     home_workspace_id: homeWorkspaceId,
+     created_by_username: createdByUsername,
+     created_by_displayname: createdByDisplayname,
+     recipients = [],
+     metadata: projectMetadata,
+   } = ctx.request.body;
 
     if (!projectId || !homeWorkspaceId || !createdByUsername) {
       ctx.body = { code: -1, msg: 'FAIL', error: '缺少必要参数 project_id, home_workspace_id 或 created_by_username' };
@@ -57,29 +57,30 @@ class SharedSpaceController extends Controller {
     try {
       const k = this.getKnex();
       const sharedSpaceId = getSharedSpaceTeamId();
-      const createdByMemberId = getSharedSpaceMemberId(createdByUsername);
-      const now = new Date();
+     const createdByMemberId = getSharedSpaceMemberId(createdByUsername);
+     const now = new Date();
 
-      // Deduplicate recipients by username and exclude the sharer themselves
-      const seen = new Set();
-      const rows = [];
-      for (const r of recipients) {
-        if (!r.username || seen.has(r.username)) continue;
-        seen.add(r.username);
-        // Sharer cannot share to themselves (owner exclusion rule)
-        if (r.username === createdByUsername) continue;
-        rows.push({
-          id: `${sharedSpaceId}_${projectId}_${r.username}`,
-          project_id: projectId,
-          home_workspace_id: homeWorkspaceId,
-          shared_space_id: sharedSpaceId,
-          recipient_member_id: getSharedSpaceMemberId(r.username),
-          recipient_username: r.username,
-          created_by_member_id: createdByMemberId,
-          created_by_username: createdByUsername,
-          created_at: now,
-        });
-      }
+     // Deduplicate recipients by username and exclude the sharer themselves
+     const seen = new Set();
+     const rows = [];
+     for (const r of recipients) {
+       if (!r.username || seen.has(r.username)) continue;
+       seen.add(r.username);
+       // Sharer cannot share to themselves (owner exclusion rule)
+       if (r.username === createdByUsername) continue;
+       rows.push({
+         id: `${sharedSpaceId}_${projectId}_${r.username}`,
+         project_id: projectId,
+         home_workspace_id: homeWorkspaceId,
+         shared_space_id: sharedSpaceId,
+         recipient_member_id: getSharedSpaceMemberId(r.username),
+         recipient_username: r.username,
+         created_by_member_id: createdByMemberId,
+         created_by_username: createdByUsername,
+         created_by_displayname: createdByDisplayname || null,
+         created_at: now,
+       });
+     }
 
       if (rows.length === 0) {
         ctx.body = { code: -1, msg: 'FAIL', error: '没有需要新增的分享 (接收人列表为空或全是自己)' };
@@ -90,11 +91,12 @@ class SharedSpaceController extends Controller {
       await k('workspace_project_shares')
         .insert(rows)
         .onConflict('id')
-        .merge({
-          created_by_member_id: createdByMemberId,
-          created_by_username: createdByUsername,
-          created_at: now,
-        });
+       .merge({
+         created_by_member_id: createdByMemberId,
+         created_by_username: createdByUsername,
+         created_by_displayname: createdByDisplayname || null,
+         created_at: now,
+       });
 
       ctx.body = {
          code: 0,
@@ -129,19 +131,20 @@ class SharedSpaceController extends Controller {
 
       // Query shares targeted to this user, then join team_projects + resources
       // to get the actual project metadata from the home workspace.
-      const shares = await k('workspace_project_shares as s')
-        .where({
-          's.shared_space_id': sharedSpaceId,
-          's.recipient_member_id': recipientMemberId,
-        })
-        .select(
-          's.id as share_id',
-          's.project_id',
-          's.home_workspace_id',
-          's.created_by_username as shared_by_username',
-          's.created_at as shared_at',
-        )
-        .orderBy('s.created_at', 'desc');
+     const shares = await k('workspace_project_shares as s')
+       .where({
+         's.shared_space_id': sharedSpaceId,
+         's.recipient_member_id': recipientMemberId,
+       })
+       .select(
+         's.id as share_id',
+         's.project_id',
+         's.home_workspace_id',
+         's.created_by_username as shared_by_username',
+         's.created_by_displayname as shared_by_displayname',
+         's.created_at as shared_at',
+       )
+       .orderBy('s.created_at', 'desc');
 
       // Enrich with team_projects metadata from each project's home workspace
       const projects = [];
@@ -184,8 +187,9 @@ class SharedSpaceController extends Controller {
             shareId: s.share_id,
             projectId: s.project_id,
             homeWorkspaceId: s.home_workspace_id,
-            sharedByUsername: s.shared_by_username,
-            sharedAt: s.shared_at instanceof Date ? s.shared_at.toISOString() : String(s.shared_at),
+           sharedByUsername: s.shared_by_username,
+           sharedByDisplayname: s.shared_by_displayname || null,
+           sharedAt: s.shared_at instanceof Date ? s.shared_at.toISOString() : String(s.shared_at),
             resourceId: tp?.resource_id || null,
             ownerMemberId: tp?.owner_member_id || null,
             displayName: tp?.display_name || null,

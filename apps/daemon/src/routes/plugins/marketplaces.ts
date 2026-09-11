@@ -265,6 +265,8 @@ app.post('/api/marketplaces/:id/plugins/:name/remix', async (req, res) => {
       } catch (err) {
         return res.status(500).json({ error: `Archive extraction failed: ${(err as Error).message}` });
       }
+      // Clean up the archive after extraction so it does not leak into the installed plugin folder or the remix project.
+      await fsp.unlink(archivePath).catch(() => {});
 
       // Archives often contain a top-level subdirectory (e.g. `tar czf
       // archive.tgz my-plugin/`). If the manifest is not at the extraction
@@ -316,23 +318,15 @@ app.post('/api/marketplaces/:id/plugins/:name/remix', async (req, res) => {
     // Create a project from the installed plugin (duplicate-project flow).
     const { ensureProject } = await import('../../projects.js');
     const { insertProject, insertConversation, getProject } = await import('../../db.js');
-   const { copyPluginFolderForProjectContext } = await import('../../plugins/share-helpers.js');
    const PROJECTS_DIR = projectsDir;
 
     const now = Date.now();
     const projectId = randomUUID();
     const conversationId = randomUUID();
-   const sourceSlug = String(installedPlugin.id || pluginName);
-   const stagedPath = `plugin-source/${sourceSlug}`;
    const metadata: { kind: 'prototype'; entryFile?: string } = { kind: 'prototype' };
    const projectRoot = await ensureProject(PROJECTS_DIR, projectId, metadata);
-   await copyPluginFolderForProjectContext(
-     (installedPlugin as { fsPath: string }).fsPath,
-     nodePath.join(projectRoot, 'plugin-source', sourceSlug),
-   );
-   // Also copy project content files (HTML, assets, etc.) to the project
-   // root so they are immediately visible in the file viewer — not buried
-   // under plugin-source/<slug> where users would have to drill in.
+   // Copy project content files (HTML, assets, etc.) to the project
+   // root so they are immediately visible in the file viewer.
    const pluginFsPath = (installedPlugin as { fsPath: string }).fsPath;
   const pluginEntries = await fs.promises.readdir(pluginFsPath, { withFileTypes: true });
   // Skip plugin metadata and non-content build artifacts.
@@ -340,7 +334,7 @@ app.post('/api/marketplaces/:id/plugins/:name/remix', async (req, res) => {
   // actual user-facing HTML/CSS/JS that the file viewer needs to show.
   const REMIX_SKIP_NAMES = new Set([
     'open-design.json', 'SKILL.md', '.claude-plugin',
-    'node_modules', 'build', '.git',
+    'node_modules', 'build', '.git', 'archive.tgz',
   ]);
   for (const ent of pluginEntries) {
     if (REMIX_SKIP_NAMES.has(ent.name)) continue;

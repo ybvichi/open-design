@@ -1211,8 +1211,9 @@ export interface Dict {
   'sharedSpace.shareDialogSubmit': string;
   'sharedSpace.shareDialogCancel': string;
   'sharedSpace.shareSuccess': string;
-  'sharedSpace.shareFailed': string;
-  'sharedSpace.collaboratorBadge': string;
+ 'sharedSpace.shareFailed': string;
+ 'sharedSpace.cannotShareToSelf': string;
+ 'sharedSpace.collaboratorBadge': string;
   'sharedSpace.sharedBy': string;
 'squareScope.subtitle': string;
  'squareScope.tabProjects': string;

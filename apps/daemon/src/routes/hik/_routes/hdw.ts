@@ -4,6 +4,8 @@ import * as http from 'node:http';
 import { Buffer } from 'node:buffer';
 import { URL } from 'node:url';
 import { UA, shouldBypassProxy } from '../../../http/http.js';
+import { HDW_BASE } from '../../../http/hdw.js';
+import { readSsoConfigFile } from '../../../http/hik_logins/hicoo.js';
 
 /**
  * Hidesign-Web (HDW) API 反向代理路由。
@@ -19,17 +21,15 @@ import { UA, shouldBypassProxy } from '../../../http/http.js';
  * 二进制响应（文件流、图片）逐块 pipe，不缓存进内存。
  */
 
-const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api';
-const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/api';
-const HDW_BASE = process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
-
 export interface RegisterHdwRoutesDeps {
   sendApiError: (...args: any[]) => any;
+  /** Daemon data root — used to read SSO cookies for upstream auth. */
+  dataDir?: string;
 }
 
 export function registerHdwRoutes(app: Express, deps: RegisterHdwRoutesDeps): void {
-  const { sendApiError } = deps;
-  app.use('/api/hdw/api', createHdwProxyHandler(sendApiError));
+  const { sendApiError, dataDir } = deps;
+  app.use('/api/hdw/api', createHdwProxyHandler(sendApiError, dataDir));
 }
 
 /** 需要透传给上游的请求头白名单（小写匹配）。 */
@@ -45,7 +45,7 @@ const FORWARD_HEADERS = new Set([
   'referer',
 ]);
 
-function createHdwProxyHandler(sendApiError: (...args: any[]) => any) {
+function createHdwProxyHandler(sendApiError: (...args: any[]) => any, dataDir?: string) {
   return (req: any, res: any) => {
     // Express app.use('/api/hdw/api', ...) 剥掉 mount 前缀后，req.url 形如
     // `/test?key=val`。拼到 HDW_BASE 的 pathname 后面即可。
@@ -53,7 +53,7 @@ function createHdwProxyHandler(sendApiError: (...args: any[]) => any) {
     const basePath = base.pathname.replace(/\/+$/, '');
     const targetPath = `${basePath}${req.url}`;
     const targetUrl = new URL(targetPath, base.origin);
-    proxyToUpstream(req, res, targetUrl, sendApiError);
+    proxyToUpstream(req, res, targetUrl, sendApiError, dataDir);
   };
 }
 
@@ -62,6 +62,7 @@ function proxyToUpstream(
   res: any,
   targetUrl: URL,
   sendApiError: (...args: any[]) => any,
+  dataDir?: string,
 ): void {
   const doReq = (u: URL, redirects: number) => {
     if (redirects > 15) {
@@ -86,6 +87,17 @@ function proxyToUpstream(
       if (FORWARD_HEADERS.has(key.toLowerCase())) {
         headers[key] = String(val);
       }
+    }
+
+    // 当前端请求未携带 authorization 时，注入本地 SSO cookie 进行认证，
+    // 与 `http/hdw.ts` 和 `integrations/hdw-cloud.ts` 的 cookie 回退逻辑一致。
+    if (!headers['authorization'] && !headers['Authorization'] && dataDir) {
+      try {
+        const sso = readSsoConfigFile(dataDir);
+        if (sso?.cookies?.length) {
+          headers['Cookie'] = sso.cookies.map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join('; ');
+        }
+      } catch { /* SSO not available — proceed without cookies */ }
     }
 
     const handleResponse = (resp: any) => {

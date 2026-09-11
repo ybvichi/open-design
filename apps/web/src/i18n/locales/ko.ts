@@ -821,6 +821,7 @@ export const ko: Dict = {
   'sharedSpace.shareDialogCancel': 'Cancel',
   'sharedSpace.shareSuccess': 'Successfully shared to shared space',
   'sharedSpace.shareFailed': 'Share failed, please try again',
+'sharedSpace.cannotShareToSelf': '자신과 공유할 수 없습니다. 다른 수신자를 선택해 주세요.',
   'sharedSpace.collaboratorBadge': 'Collaborator',
   'sharedSpace.sharedBy': 'Shared by',
   "squareScope.subtitle": "Community projects, Skills, MCPs, and tools shared by everyone.",

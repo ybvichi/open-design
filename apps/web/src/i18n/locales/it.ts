@@ -821,6 +821,7 @@ export const it: Dict = {
   'sharedSpace.shareDialogCancel': 'Cancel',
   'sharedSpace.shareSuccess': 'Successfully shared to shared space',
   'sharedSpace.shareFailed': 'Share failed, please try again',
+'sharedSpace.cannotShareToSelf': 'Non puoi condividere con te stesso. Scegli un altro destinatario.',
   'sharedSpace.collaboratorBadge': 'Collaborator',
   'sharedSpace.sharedBy': 'Shared by',
   "squareScope.subtitle": "Community projects, Skills, MCPs, and tools shared by everyone.",

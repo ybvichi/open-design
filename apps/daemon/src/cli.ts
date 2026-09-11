@@ -5690,8 +5690,8 @@ async function runPluginPublishHdw(rest) {
  const flags = parseFlags(rest, {
 // cover-digest is set by the server when it pre-generates a cover screenshot.
 // The CLI passes it through to the HDW publish payload as coverDigest.
-   string: new Set(['out', 'data-dir', 'publisher-username', 'publisher-displayname', 'publisher-github', 'publisher-url', 'changelog', 'title', 'description', 'entry', 'cover-digest']),
-  boolean: new Set(['help', 'h', 'json', 'dry-run']),
+ string: new Set(['out', 'data-dir', 'publisher-username', 'publisher-displayname', 'publisher-github', 'publisher-url', 'publisher-member-id', 'publisher-workspace-id', 'changelog', 'title', 'description', 'entry', 'cover-digest']),
+boolean: new Set(['help', 'h', 'json', 'dry-run']),
   });
   if (rest.length === 0 || flags.help || flags.h) {
     console.log(`Usage:
@@ -5716,7 +5716,7 @@ Exit codes:
     process.exit(rest.length === 0 ? 2 : 0);
   }
 
-  const folder = rest.find((a) => !a.startsWith('-') && a !== flags.out && a !== flags['data-dir'] && a !== flags['publisher-username'] && a !== flags['publisher-displayname'] && a !== flags['publisher-github'] && a !== flags['publisher-url'] && a !== flags.changelog && a !== flags.title && a !== flags.description && a !== flags.entry);
+  const folder = rest.find((a) => !a.startsWith('-') && a !== flags.out && a !== flags['data-dir'] && a !== flags['publisher-username'] && a !== flags['publisher-displayname'] && a !== flags['publisher-github'] && a !== flags['publisher-url'] && a !== flags['publisher-member-id'] && a !== flags['publisher-workspace-id'] && a !== flags.changelog && a !== flags.title && a !== flags.description && a !== flags.entry);
   const overrideTitle = typeof flags['title'] === 'string' ? flags['title'].trim() : '';
   const overrideDesc = typeof flags['description'] === 'string' ? flags['description'].trim() : '';
   const entryFile = typeof flags['entry'] === 'string' ? flags['entry'].trim() : '';
@@ -5918,6 +5918,8 @@ Exit codes:
   const { readSsoConfigFile } = await import('./http/hik_logins/hicoo.js');
   const session = readSsoConfigFile(dataDir);
   const publisherUsername = String(flags['publisher-username'] ?? session?.username ?? 'unknown').trim();
+  const publisherMemberId = typeof flags['publisher-member-id'] === 'string' ? flags['publisher-member-id'].trim() : '';
+  const publisherWorkspaceId = typeof flags['publisher-workspace-id'] === 'string' ? flags['publisher-workspace-id'].trim() : '';
 
   // Auto-increment version when re-publishing the same plugin.
   // If the plugin already exists on HDW with the same version, bump
@@ -6054,6 +6056,8 @@ Exit codes:
     ...(manifest.homepage ? { homepage: manifest.homepage } : {}),
     ...(manifest.license ? { license: manifest.license } : {}),
     publisherUsername,
+    ...(publisherMemberId ? { publisherMemberId } : {}),
+    ...(publisherWorkspaceId ? { publisherWorkspaceId } : {}),
     publisherDisplayname:
       (typeof flags['publisher-displayname'] === 'string' ? flags['publisher-displayname'] : '').trim()
       || (typeof session?.userInfo?.displayName === 'string' ? session.userInfo.displayName : '').trim()

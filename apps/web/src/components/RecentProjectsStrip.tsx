@@ -34,7 +34,6 @@ import { InviteDialog } from './InviteDialog';
 import { STATUS_LABEL_KEYS } from './DesignsTab';
 import { isDesignSystemProject, isPublishedDesignSystemProject } from './design-system-project';
 import type { SharedProjectPredicate } from '../collab/all-projects-list';
-import { useTeamMembers } from '../collab/useTeamMembers';
 import {
   notifyTeamProjectsChanged,
   useWorkspaceContext,
@@ -185,7 +184,6 @@ operator?: TeamSpaceOperator | null;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
-const EMPTY_MAP: ReadonlyMap<string, string> = new Map();
 /** Fallback for a caller with no sharing surface (no workspace, no grids). */
 const NOTHING_SHARED: SharedProjectPredicate = () => false;
 /** The chip a design-system project wears. Product name, not a translated
@@ -402,57 +400,11 @@ operator,
   const analytics = useAnalytics();
   const analyticsPage = space === 'drafts' ? 'drafts' : space === 'team' ? 'all_projects' : 'home';
   const rowRef = useRef<HTMLDivElement | null>(null);
-  // Real creator resolution (replaces the demo's mock 李娜/张伟 roster): the
-  // member directory turns an ownerMemberId into a display name, while the
-  // workspace context supplies the signed-in user's own name and profile image.
- const { resolve: resolveMember } = useTeamMembers();
- const {
-   context: workspaceContext,
-   loading: workspaceContextLoading,
- } = useWorkspaceContext();
-  // HDW team members fetched directly from the HDW API so the owner badge
-  // can resolve ownerMemberId → displayname without relying on the Vela
-  // collab-cloud roster (which may use different member IDs). The HDW
-  // /team/{workspaceId}/members endpoint returns workspace_member_id +
-  // displayname, which match the team-project ownerMemberId.
-  const [hdwMemberNames, setHdwMemberNames] = useState<ReadonlyMap<string, string>>(EMPTY_MAP);
-  useEffect(() => {
-    const teamId = workspaceContext?.workspaceId;
-    if (space !== 'team' || !teamId) { setHdwMemberNames(EMPTY_MAP); return; }
-    let cancelled = false;
-    const fetchMembers = async () => {
-      try {
-        const res = await fetch(
-          `/api/hdw/api/team/${encodeURIComponent(teamId)}/members`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) { if (!cancelled) setHdwMemberNames(EMPTY_MAP); return; }
-        const body = await res.json();
-        if (cancelled) return;
-        const list: Array<{ workspace_member_id?: string; displayname?: string; username?: string }> = body?.data?.members ?? [];
-        const map = new Map<string, string>();
-        for (const m of list) {
-          const id = m.workspace_member_id?.trim();
-          const name = m.displayname?.trim() || m.username?.trim() || '';
-          if (id && name) map.set(id, name);
-        }
-        if (!cancelled) setHdwMemberNames(map);
-      } catch {
-        if (!cancelled) setHdwMemberNames(EMPTY_MAP);
-      }
-    };
-    void fetchMembers();
-    const onMembersUpdated = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.teamId === teamId) void fetchMembers();
-    };
-    window.addEventListener('hdw:members-updated', onMembersUpdated);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('hdw:members-updated', onMembersUpdated);
-    };
-  }, [space, workspaceContext?.workspaceId]);
- // A cover request captures the complete identity at dispatch. A mutable ref
+  const {
+    context: workspaceContext,
+    loading: workspaceContextLoading,
+  } = useWorkspaceContext();
+  // A cover request captures the complete identity at dispatch. A mutable ref
   // keeps the queue callbacks stable without letting an in-flight read drift
   // to whichever Workspace a different render happens to select later.
   const workspaceContextRef = useRef(workspaceContext);
@@ -598,9 +550,9 @@ operator,
     }
     return palette[Math.abs(hash) % palette.length] ?? '#1a1917';
   }
- // The card owner avatar: first character of the owner display name with a
-  // deterministic background colour. The member roster (useTeamMembers),
-  // already loaded on team views, resolves the member id to a display name.
+// The card owner avatar: first character of the owner display name with a
+// deterministic background colour. The HDW backend JOIN provides
+// ownerDisplayName directly; the UI shows "我" for self-owned projects.
   const resolveCreator = (project: Project): {
     name: string;
     initial: string;
@@ -610,10 +562,13 @@ operator,
     canAdmin: boolean;
     memberId: string | null;
   } => {
-    // In the personal space (default team) the user is the sole member
-    // and owner, so every project is theirs — show "我" and grant full
-    // operations without a member-ID match.
-  if (workspaceContext?.isDefaultTeam) {
+   // In the personal space (default team) the user is the sole member
+   // and owner, so every project is theirs — show "我" and grant full
+   // operations without a member-ID match.
+  // When an HDW operator is provided (team/shared space), skip this
+  // shortcut — those spaces have multiple members, so ownership must
+  // be resolved by comparing ownerMemberId against the operator's ID.
+  if (!operator && workspaceContext?.isDefaultTeam) {
     return {
      name: workspaceContext?.displayName?.trim()
         || t('recentProjects.selfCreator'),
@@ -647,10 +602,8 @@ operator,
       ?? null;
    if (ownerMemberId && ownerMemberId === effectiveMemberId) {
       const name = project.ownerDisplayName?.trim()
-        || (ownerMemberId && hdwMemberNames.get(ownerMemberId))
-        || workspaceContext?.displayName?.trim()
-        || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
-        || t('recentProjects.teamMemberCreator');
+       || workspaceContext?.displayName?.trim()
+       || t('recentProjects.teamMemberCreator');
       const initial = Array.from(name.trim())[0]?.toUpperCase() ?? 'M';
       return {
         name,
@@ -663,9 +616,7 @@ operator,
       };
     }
     const name = project.ownerDisplayName?.trim()
-      || (ownerMemberId && hdwMemberNames.get(ownerMemberId))
-      || (ownerMemberId && resolveMember(ownerMemberId)?.displayName)
-      || t('recentProjects.teamMemberCreator');
+     || t('recentProjects.teamMemberCreator');
     const initial = (Array.from(name.trim())[0] ?? 'T').toUpperCase();
     return { name, initial, avatarUrl: null, ownedBySelf: false, canMutate: false, canAdmin: isAdmin, memberId: ownerMemberId ?? null };
   };
@@ -688,7 +639,6 @@ operator,
      kindFilter,
      ownerFilter,
      projectOwnerMemberIds,
-     resolveMember,
      resolvedLimit,
      selfMemberId,
     showOwnerFilter,
@@ -2406,6 +2356,15 @@ function requestDelete(project: Project) {
           homeWorkspaceId={homeWorkspaceId}
           projectName={sharedSpaceTarget.name}
           onClose={() => setSharedSpaceTarget(null)}
+          onShared={() => {
+            notifyTeamProjectsChanged();
+            window.dispatchEvent(new CustomEvent('personal:folders-updated'));
+            window.dispatchEvent(
+              new CustomEvent('hdw:folders-updated', {
+                detail: { teamId: workspaceContext?.workspaceId },
+              }),
+            );
+          }}
         />
       ) : null}
       {renameTarget ? (

@@ -47,8 +47,12 @@ class TeamProjectController extends Controller {
       const k = this.getKnex();
       const query = k('team_projects as tp')
         .join('resources as r', 'r.id', 'tp.resource_id')
+        .leftJoin('workspace_members as wm', function() {
+          this.on('wm.workspace_member_id', 'tp.owner_member_id')
+            .andOn('wm.workspace_id', 'tp.workspace_id');
+        })
         .where({ 'tp.workspace_id': workspaceId })
-        .select('tp.*', 'r.metadata as resource_metadata')
+        .select('tp.*', 'r.metadata as resource_metadata', 'wm.displayname as owner_displayname')
         .orderBy('tp.updated_at', 'desc');
       if (folderFilter === 'root') {
         query.whereNull('tp.folder_id');
@@ -76,8 +80,12 @@ class TeamProjectController extends Controller {
       const k = this.getKnex();
       const row = await k('team_projects as tp')
         .join('resources as r', 'r.id', 'tp.resource_id')
+        .leftJoin('workspace_members as wm', function() {
+          this.on('wm.workspace_member_id', 'tp.owner_member_id')
+            .andOn('wm.workspace_id', 'tp.workspace_id');
+        })
         .where({ 'tp.workspace_id': workspaceId, 'tp.project_id': projectId })
-        .select('tp.*', 'r.metadata as resource_metadata')
+        .select('tp.*', 'r.metadata as resource_metadata', 'wm.displayname as owner_displayname')
         .first();
 
       if (!row) {
@@ -414,6 +422,7 @@ class TeamProjectController extends Controller {
       resourceId: row.resource_id,
       ownerMemberId: row.owner_member_id,
       displayName: row.display_name || null,
+      ownerDisplayName: row.owner_displayname || null,
       syncState: row.sync_state,
       lastSyncedVersionId: row.last_synced_version_id || null,
       folderId: row.folder_id || null,

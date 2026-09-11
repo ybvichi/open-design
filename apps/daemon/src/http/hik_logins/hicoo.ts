@@ -144,17 +144,34 @@ export function readSsoConfigFile(dataDir: string): SsoSession | null {
     // 文件不存在或格式错误，视为未登录
     ssoCache.delete(filePath);
   }
-  return null;
+ return null;
+}
+
+/**
+ * Lightweight username reader: reads config.sso.json directly without
+ * device-binding validation. Used by share-access paths so that shared
+ * projects remain accessible even when the SSO session is missing or
+ * the device hash no longer matches (e.g. config copied to another machine).
+ */
+export function readSsoUsername(dataDir: string): string {
+  try {
+    const filePath = path.join(dataDir, 'config.sso.json');
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw) as SsoSession;
+    return typeof data.username === 'string' ? data.username.trim() : '';
+  } catch {
+    return '';
+  }
 }
 
 /** 写入 SSO 配置文件 */
 export function writeSsoConfigFile(dataDir: string, session: SsoSession, forDesignerDir?: string): void {
-  const filePath = path.join(dataDir, 'config.sso.json');
-  try {
-    // 生成设备绑定哈希，防止配置文件被拷贝到其他设备使用
-    const deviceHash = generateDeviceHash(session);
-    const lockedSession: SsoSession = { ...session, deviceHash };
-    fs.writeFileSync(filePath, JSON.stringify(lockedSession, null, 2), 'utf-8');
+const filePath = path.join(dataDir, 'config.sso.json');
+ try {
+   // 生成设备绑定哈希，防止配置文件被拷贝到其他设备使用
+   const deviceHash = generateDeviceHash(session);
+   const lockedSession: SsoSession = { ...session, deviceHash };
+   fs.writeFileSync(filePath, JSON.stringify(lockedSession, null, 2), 'utf-8');
     // 拷贝 for-designer 到用户目录
     if (forDesignerDir) {
       copyForDesignerToUserDirAndRun(forDesignerDir, session);

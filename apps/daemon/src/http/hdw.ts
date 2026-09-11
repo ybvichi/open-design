@@ -1,12 +1,36 @@
 import { getSharedSpaceTeamId, getSharedSpaceMemberId, getCollaboratorMemberId } from '../ids.js';
 import { UA, type Cookie } from './http.js';
-import { readSsoConfigFile } from './hik_logins/hicoo.js';
+import { readSsoConfigFile, readSsoUsername } from './hik_logins/hicoo.js';
 import { createHash } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
 
 const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api';
 const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/api';
-export const HDW_BASE = process.env.NODE_ENV === 'production' ? PROD_HDW_BASE : DEV_HDW_BASE;
+const PROD_HDW_BASE_URL = 'https://pixso.hikvision.com.cn';
+const DEV_HDW_BASE_URL = 'http://127.0.0.1:7002';
+const PROD_HDW_PATH_PREFIX = '/hik-plugin/hidesign-web/hdw';
+const DEV_HDW_PATH_PREFIX = '/hdw';
+
+/**
+ * Resolve the HDW REST API base URL from env, mirroring the override
+ * pattern in `integrations/hdw-cloud.ts`:
+ *   1. Explicit `OD_HDW_API_URL` (+ optional `OD_HDW_API_PREFIX`)
+ *   2. `NODE_ENV === 'production'` → production Pixso entry
+ *   3. Otherwise → local dev server at 127.0.0.1:7002
+ *
+ * Keeping this in sync with `hdw-cloud.ts` ensures all HDW clients
+ * (collab sync, community plugins, shared space, frontend proxy)
+ * can be pointed at the same backend via a single env var pair.
+ */
+function resolveHdwBase(env: NodeJS.ProcessEnv = process.env): string {
+  const baseUrl = env.OD_HDW_API_URL?.trim()
+    || (env.NODE_ENV === 'production' ? PROD_HDW_BASE_URL : DEV_HDW_BASE_URL);
+  const pathPrefix = env.OD_HDW_API_PREFIX?.trim()
+    || (env.NODE_ENV === 'production' ? PROD_HDW_PATH_PREFIX : DEV_HDW_PATH_PREFIX);
+  return `${baseUrl}${pathPrefix}/api`;
+}
+
+export const HDW_BASE = resolveHdwBase();
 
 interface HdwResponse<T> {
   code: number;
@@ -129,6 +153,8 @@ export interface HdwCommunityPublishInput {
   homepage?: string;
   license?: string;
   publisherUsername: string;
+  publisherMemberId?: string;
+  publisherWorkspaceId?: string;
   publisherDisplayname?: string;
   publisherGithub?: string;
   publisherUrl?: string;
@@ -245,8 +271,9 @@ export interface HdwSharedWithMeProject {
   shareId: string;
   projectId: string;
   homeWorkspaceId: string;
-  sharedByUsername: string;
-  sharedAt: string;
+ sharedByUsername: string;
+  sharedByDisplayname: string | null;
+ sharedAt: string;
   resourceId: string | null;
   ownerMemberId: string | null;
   displayName: string | null;
@@ -296,13 +323,11 @@ export async function fetchSharedWithMe(
   dataDir: string | undefined,
 ): Promise<HdwSharedWithMeProject[]> {
   if (!dataDir) return [];
-  const session = readSsoConfigFile(dataDir);
-  const username = session?.username?.trim() ?? '';
+  const username = readSsoUsername(dataDir);
   if (!username) return [];
   const data = await hdwGet<{ projects: HdwSharedWithMeProject[] }>(
     '/shared-space/shared-with-me',
-    { username },
-    session?.cookies,
+    { username, recipient_member_id: getSharedSpaceMemberId(username) },
   );
   return data?.projects ?? [];
 }
@@ -322,14 +347,18 @@ export async function shareToSharedSpace(
   const session = readSsoConfigFile(dataDir);
   return hdwPost<{ shared: number; skipped: number }>(
     '/shared-space/share',
-    {
-      project_id: input.projectId,
-      home_workspace_id: input.homeWorkspaceId,
-      created_by_username: input.createdByUsername,
-      recipients: input.recipients,
-      ...(input.displayName ? { display_name: input.displayName } : {}),
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    },
+   {
+     project_id: input.projectId,
+     home_workspace_id: input.homeWorkspaceId,
+     created_by_username: input.createdByUsername,
+     created_by_member_id: getSharedSpaceMemberId(input.createdByUsername),
+     ...(input.displayName ? { created_by_displayname: input.displayName } : {}),
+     recipients: input.recipients.map((r) => ({
+        ...r,
+        recipient_member_id: getSharedSpaceMemberId(r.username),
+     })),
+     ...(input.metadata ? { metadata: input.metadata } : {}),
+   },
     session?.cookies,
   );
 }

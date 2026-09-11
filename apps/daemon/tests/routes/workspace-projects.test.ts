@@ -518,7 +518,9 @@ describe('workspace project routes', () => {
     expect(recent.projects.map((item) => item.id)).toContain(draftId);
     expect(recent.projects.map((item) => item.id)).toContain(teamId);
     expect(drafts.projects.map((item) => item.id)).toContain(draftId);
-    expect(drafts.projects.map((item) => item.id)).not.toContain(teamId);
+    // A team project whose creator is the current member is still shown in
+    // drafts — e.g. a personal draft that was shared to the shared space.
+    expect(drafts.projects.map((item) => item.id)).toContain(teamId);
     expect(team.projects.map((item) => item.id)).toContain(teamId);
     expect(team.projects.map((item) => item.id)).not.toContain(draftId);
     for (const response of [all, recent, drafts, team, otherPersonal]) {

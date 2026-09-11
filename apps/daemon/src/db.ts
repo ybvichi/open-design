@@ -1633,12 +1633,17 @@ export function listProjectsInFolder(
   folderId: string | null,
   createdByWorkspaceMemberId?: string | null,
 ) {
-  // When a member ID is provided, filter personal-visibility projects to
-  // only those created by that member. Team-visibility projects remain
-  // visible to all members of the workspace.
-  const memberFilter = createdByWorkspaceMemberId
-    ? `AND (wp.visibility != 'personal' OR wp.created_by_workspace_member_id = ?)`
-    : '';
+ // When a member ID is provided, narrow to projects created by that member.
+ // This is used by the personal-scope views (personal-all, personal-folder)
+ // which must not surface other members' personal projects. Team-visibility
+ // projects created by this member are included too — e.g. a personal draft
+ // that was shared to the shared space became a team project, but the owner
+ // should still see it in their personal project list. When no member ID is
+ // provided, no visibility filter is applied and all projects in the folder
+ // are returned.
+ const memberFilter = createdByWorkspaceMemberId
+   ? `AND wp.created_by_workspace_member_id = ? AND wp.visibility IN ('personal', 'team')`
+   : '';
   const params: unknown[] = [workspaceId, folderId];
   if (createdByWorkspaceMemberId) params.push(createdByWorkspaceMemberId);
   return db

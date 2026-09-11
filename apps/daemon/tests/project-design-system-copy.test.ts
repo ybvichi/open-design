@@ -209,8 +209,53 @@ describe('project design-system copy route', () => {
     const copiedTabs = await fetchJson<{ tabs: string[]; active: string | null }>(
       `${started.url}/api/projects/${copied.project.id}/tabs`,
     );
-    expect(copiedTabs.tabs).toEqual(['index.html']);
-    expect(copiedTabs.active).toBe('index.html');
+   expect(copiedTabs.tabs).toEqual(['index.html']);
+   expect(copiedTabs.active).toBe('index.html');
+ }, 60_000);
+
+  it('does not carry over plugin-source staging directory during duplication', async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'od-project-copy-staging-'));
+    started = await startIsolatedServer(dataDir);
+
+    const sourceId = `source-staging-${Date.now()}`;
+    await postJson(`${started.url}/api/projects`, {
+      id: sourceId,
+      name: 'Remixed Project',
+      metadata: { kind: 'prototype' },
+      pendingPrompt: 'Original remix prompt',
+    });
+    await postJson(`${started.url}/api/projects/${sourceId}/files`, {
+      name: 'index.html',
+      content: '<!doctype html><title>Remix</title><main>Content</main>',
+    });
+    // Simulate residual plugin-source staging material left by the remix flow.
+    await postJson(`${started.url}/api/projects/${sourceId}/files`, {
+      name: 'plugin-source/sample-plugin/open-design.json',
+      content: '{"name":"sample-plugin"}',
+    });
+    await postJson(`${started.url}/api/projects/${sourceId}/files`, {
+      name: 'plugin-source/sample-plugin/SKILL.md',
+      content: '# Sample Plugin',
+    });
+
+    const copied = await postJson<{
+      project: { id: string; name: string };
+      conversationId: string;
+      copiedFiles: string[];
+    }>(`${started.url}/api/projects/${sourceId}/duplicate`, {});
+
+    expect(copied.project.id).not.toBe(sourceId);
+    expect(copied.copiedFiles).toContain('index.html');
+    expect(copied.copiedFiles).not.toContain('plugin-source/sample-plugin/open-design.json');
+    expect(copied.copiedFiles).not.toContain('plugin-source/sample-plugin/SKILL.md');
+    expect(copied.copiedFiles.every((f) => !f.startsWith('plugin-source/'))).toBe(true);
+
+    const dupFiles = await fetchJson<{ files: Array<{ name: string }> }>(
+      `${started.url}/api/projects/${copied.project.id}/files`,
+    );
+    const dupNames = dupFiles.files.map((f) => f.name);
+    expect(dupNames).toContain('index.html');
+    expect(dupNames.every((f) => !f.startsWith('plugin-source/'))).toBe(true);
   }, 60_000);
 
   it('rejects generic duplication for design-system-like projects', async () => {

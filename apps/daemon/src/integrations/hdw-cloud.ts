@@ -31,6 +31,8 @@ export interface HdwCloudConfig {
   token: string | null;
   /** Path prefix prepended to every request path. Defaults to '/hdw'. */
   pathPrefix?: string;
+  /** SSO cookies for cookie-based auth, used when no bearer token is set. */
+  cookies?: { name: string; value: string }[];
 }
 
 export function readHdwCloudConfig(
@@ -90,9 +92,11 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       'content-type': 'application/json',
       ...extra,
     };
-    if (config!.token) headers.authorization = `Bearer ${config!.token}`;
-    return headers;
-  }
+   if (config!.token) headers.authorization = `Bearer ${config!.token}`;
+   else if (config!.cookies?.length)
+     headers.cookie = config!.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+   return headers;
+ }
 
   async function request<T>(
     method: string,
@@ -119,49 +123,16 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
         const code = typeof payload?.error === 'string' ? payload.error : 'unknown';
         throw new HdwCloudError(response.status, code, payload?.message);
       }
-      return { status: response.status, payload: payload as T, etag };
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
+    return { status: response.status, payload: payload as T, etag };
+   } finally {
+     clearTimeout(timeout);
+   }
+ }
 
-
-  /** Fetch the HDW workspace member roster and build a Map of
-   *  workspace_member_id -> displayname for owner-name enrichment. */
-  async function fetchMemberDisplayNames(workspaceId: string): Promise<Map<string, string>> {
-    const names = new Map<string, string>();
-    try {
-      const { payload } = await request<{
-        code: number;
-        data?: {
-          members?: Array<{
-            workspace_member_id?: string;
-            displayname?: string;
-            username?: string;
-          }>;
-        };
-      }>(
-        'GET',
-        `/api/team/${encodeURIComponent(workspaceId)}/members`,
-        undefined,
-        { 'x-hdw-workspace-id': workspaceId },
-      );
-      const members = payload?.data?.members ?? [];
-      for (const m of members) {
-        const id = m.workspace_member_id?.trim();
-        const name = m.displayname?.trim() || m.username?.trim() || '';
-        if (id && name) names.set(id, name);
-      }
-    } catch {
-      // Best-effort: member fetch must not break the project list.
-    }
-    return names;
-  }
-
-  return {
-    isConfigured(): boolean {
-      return true;
-    },
+ return {
+   isConfigured(): boolean {
+     return true;
+   },
 
     get baseUrl(): string {
       return config!.baseUrl;
@@ -312,8 +283,8 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
       }
     },
 
-    /** List team projects for a workspace, enriched with the owner's
-     *  display name from the HDW workspace_members table. */
+    /** List team projects for a workspace. The HDW backend already
+     *  JOINs workspace_members to provide ownerDisplayName. */
     async listTeamProjects(
       workspaceId: string,
       folderId?: string | null,
@@ -329,24 +300,7 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
         undefined,
         { 'x-hdw-workspace-id': workspaceId },
       );
-      const projects = payload.projects ?? [];
-      // Enrich each project with the owner's display name by resolving
-      // ownerMemberId -> workspace_member_id -> displayname from the
-      // HDW member roster. Best-effort: failures must not break the list.
-      if (projects.length > 0) {
-        try {
-          const memberNames = await fetchMemberDisplayNames(workspaceId);
-          if (memberNames.size > 0) {
-            for (const p of projects) {
-              const dn = p.ownerMemberId ? memberNames.get(p.ownerMemberId) : undefined;
-              if (dn) p.ownerDisplayName = dn;
-            }
-          }
-        } catch {
-          // Best-effort: name enrichment must not break the project list.
-        }
-      }
-      return projects;
+      return payload.projects ?? [];
     },
 
     /** Get a single team project. */
@@ -448,12 +402,23 @@ export function createHdwCloudClient(options: HdwCloudClientOptions = {}) {
 
 export type HdwCloudClient = ReturnType<typeof createHdwCloudClient>;
 
-/** Build the client from env, or null when hdw cloud is not configured. */
+/** Build the client from env, or null when hdw cloud is not configured.
+ *  When no bearer token is configured, SSO cookies from `dataDir` are used
+ *  for cookie-based auth so the same login that works for the rest of the
+ *  HDW integration also works for resource publish/pull. */
 export function createHdwCloudClientFromEnv(
   env: NodeJS.ProcessEnv = process.env,
+  dataDir?: string,
 ): HdwCloudClient | null {
   const config = readHdwCloudConfig(env);
   if (!config) return null;
+  if (!config.token && dataDir) {
+    try {
+      const { readSsoConfigFile } = require('../http/hik_logins/hicoo.js');
+      const sso = readSsoConfigFile(dataDir);
+      if (sso?.cookies?.length) config.cookies = sso.cookies;
+    } catch { /* SSO not available — proceed without cookies */ }
+  }
   return createHdwCloudClient({ config });
 }
 

@@ -342,6 +342,38 @@ export interface RegisterCollabSyncRoutesDeps {
     atMs: number;
     status?: CollabSyncPullTimingStatus;
   }) => void;
+
+  /**
+   * Share-based access resolution for recipients who are NOT members of the
+   * project's home workspace. When the regular workspace-context verification
+   * fails (the caller is in the Shared Space, not the home team), this
+   * function checks the `workspace_project_shares` table via the HDW backend
+   * for a share record targeting this project + recipient. If found, it
+   * returns the share metadata needed to construct a pull scope.
+   *
+   * The HDW cloud client uses a shared bearer token, so the actual content
+   * pull (`pullResource`) does not check per-user team membership — only this
+   * daemon-level gate does. This allows non-team-members to pull shared
+   * projects without being added to the home workspace.
+   */
+  resolveShareAccess?: (
+    projectId: string,
+    req: Request,
+  ) => Promise<{
+    workspaceId: string;
+    resourceTeamId: string;
+    viewerMemberId: string;
+   ownerMemberId: string;
+ } | null>;
+  /**
+   * Check whether a pull scope was authorized through a share record (rather
+   * than through regular workspace membership). When this returns true the
+   * scope's `viewerMemberId` is a Shared Space member ID that will NOT appear
+   * in the home workspace's directory, so `verifyWorkspaceScope` would reject
+   * it. This callback lets `capturedScopeIsStillAuthorized` bypass the
+   * directory check for share-verified scopes.
+   */
+  isShareAuthorizedScope?: (scope: TeamMirrorPullScope) => Promise<boolean>;
 }
 
 /** Result of one shared-project content pull — the same flow whether it was
@@ -700,10 +732,12 @@ export function registerCollabSyncRoutes(
     retireUnmaterializedSharedPlaceholder,
     invalidateTeamProjectCatalog,
     resolveOwnerDisplayName,
-    notifyFilesChanged,
-    notifyProjectMetadataChanged,
-  } = deps;
-  const readManifest = deps.readManifest ?? readProjectManifest;
+   notifyFilesChanged,
+   notifyProjectMetadataChanged,
+ } = deps;
+const resolveShareAccess = deps.resolveShareAccess;
+const isShareAuthorizedScope = deps.isShareAuthorizedScope;
+const readManifest = deps.readManifest ?? readProjectManifest;
   const publicFilePublicationStore =
     deps.publicFilePublicationStore
     ?? createInMemoryPublicFilePublicationStore();
@@ -969,13 +1003,20 @@ export function registerCollabSyncRoutes(
     return { ok: true, principal };
   }
 
-  async function capturedScopeIsStillAuthorized(scope: TeamMirrorPullScope): Promise<boolean> {
-    try {
-      return await deps.verifyWorkspaceScope?.(scope) ?? false;
-    } catch {
-      return false;
-    }
-  }
+ async function capturedScopeIsStillAuthorized(scope: TeamMirrorPullScope): Promise<boolean> {
+   try {
+     // Share-verified scopes use a Shared Space member ID that won't appear
+     // in the home workspace's directory. If the share record still exists,
+     // bypass the directory check — the HDW cloud client uses a shared token
+     // and does not check per-user team membership.
+     if (isShareAuthorizedScope && await isShareAuthorizedScope(scope)) {
+       return true;
+     }
+     return await deps.verifyWorkspaceScope?.(scope) ?? false;
+   } catch {
+     return false;
+   }
+ }
 
   interface PreparedPulledProjectRegistration {
     existing: { name?: string | null } | null;
@@ -2226,17 +2267,50 @@ export function registerCollabSyncRoutes(
     return run;
   }
 
-  app.post('/api/projects/:id/collab/pull', async (req, res) => {
-    const projectId = req.params.id;
-    const { verification, principal, scope } =
-      await pullAccessForRequest(projectId, req);
-    if (!verification.ok) {
-      return sendWorkspaceVerificationFailure(res, verification);
-    }
-    if (!principal || !scope) {
-      return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
-    }
-    const outcome = await pullSharedProjectCoalesced(projectId, principal, scope);
+ app.post('/api/projects/:id/collab/pull', async (req, res) => {
+   const projectId = req.params.id;
+   const { verification, principal, scope } =
+     await pullAccessForRequest(projectId, req);
+    // Share-based fallback: the caller may be a Shared Space member who
+    // received a share but is NOT a member of the project's home workspace.
+    // The HDW cloud client uses a shared bearer token, so the actual content
+    // pull does not check per-user team membership — only this daemon-level
+    // gate does. Verify the share record and construct the scope from it.
+    // This fallback covers both cases: verification failed (not a team member)
+    // and verification passed but no principal/scope was resolved.
+    if (!verification.ok || !principal || !scope) {
+     if (!resolveShareAccess) {
+        if (!verification.ok) {
+          return sendWorkspaceVerificationFailure(res, verification);
+        }
+       return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
+     }
+     let shareScope: NonNullable<typeof scope> | null = null;
+     try {
+       shareScope = await resolveShareAccess(projectId, req);
+     } catch {
+       shareScope = null;
+     }
+     if (!shareScope) {
+       return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
+     }
+     const sharePrincipal: ResourceHubPrincipal = {
+       memberId: shareScope.ownerMemberId,
+       teamId: shareScope.resourceTeamId,
+       role: 'member',
+       lifecycleState: 'active',
+       workspaceType: 'team',
+     };
+     const outcome = await pullSharedProjectCoalesced(projectId, sharePrincipal, shareScope);
+     if (outcome.status === 'revoked') {
+       return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
+     }
+     if (outcome.status === 'register_failed') {
+       return res.status(502).json({ error: 'TEAM_PROJECT_PULL_REGISTER_UNAVAILABLE' });
+     }
+     return res.json({ ok: true, version: outcome.version });
+   }
+   const outcome = await pullSharedProjectCoalesced(projectId, principal, scope);
     if (outcome.status === 'revoked') {
       return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
     }

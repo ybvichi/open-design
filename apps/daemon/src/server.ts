@@ -3768,7 +3768,7 @@ export async function startServer({
   // hdw HTTP transport: when OD_RESOURCE_TRANSPORT=hdw-http (or
   // OD_TEAM_PROJECTS_TRANSPORT=hdw-http), use the hdw REST API for both the
   // team project catalog and the resource publish/pull adapter.
-  const hdwCloudClient = createHdwCloudClientFromEnv(process.env);
+  const hdwCloudClient = createHdwCloudClientFromEnv(process.env, RUNTIME_DATA_DIR);
   const hdwTeamProjectCatalog = hdwCloudClient
     ? createHdwHttpTeamProjectCatalogFromEnv(hdwCloudClient)
     : null;
@@ -3997,11 +3997,12 @@ export async function startServer({
       return resolveProjectShareDir(PROJECTS_DIR, projectId, project, resolveProjectDir);
     },
     resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
-    describeProject: describeCollabProject,
-    ...((hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)
-      ? { teamProjectCatalog: (hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)! }
-      : {}),
-    onPublished: ({ projectId, principal }) => {
+   describeProject: describeCollabProject,
+   ...((hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)
+     ? { teamProjectCatalog: (hdwTeamProjectCatalog ?? velaCliTeamProjectCatalog)! }
+     : {}),
+   hdwClient: hdwCloudClient,
+   onPublished: ({ projectId, principal }) => {
       persistWorkspaceProjectSyncState(projectId, principal?.teamId, 'synced');
     },
     onError: ({ projectId, principal }) => {
@@ -5148,13 +5149,59 @@ export async function startServer({
         projectId,
         at: Date.now(),
       }),
-    ...(sharedProjectPullProfiling
-      ? {
-          onPullTiming: emitSharedProjectPullTiming,
-        }
-      : {}),
-    // Resolve the owner's display name + role from the collab-cloud directory so
-    // /collab/status can hand the client a named "shared project" banner.
+   ...(sharedProjectPullProfiling
+     ? {
+         onPullTiming: emitSharedProjectPullTiming,
+       }
+     : {}),
+  resolveShareAccess: async (projectId, _req) => {
+    // Check the HDW shared-space backend for a share record targeting
+    // this project + the current user. The HDW cloud client uses a shared
+    // bearer token, so the actual content pull does not check per-user
+    // team membership — only this daemon-level gate does.
+    try {
+      const { fetchSharedWithMe } = await import('./http/hdw.js');
+      const { getSharedSpaceMemberId } = await import('./ids.js');
+      const { readSsoUsername } = await import('./http/hik_logins/hicoo.js');
+      const shares = await fetchSharedWithMe(RUNTIME_DATA_DIR);
+      const share = shares.find((s) => s.projectId === projectId);
+      if (!share || !share.ownerMemberId || !share.homeWorkspaceId) return null;
+      const username = readSsoUsername(RUNTIME_DATA_DIR);
+      const recipientMemberId = getSharedSpaceMemberId(username);
+     return {
+       workspaceId: share.homeWorkspaceId,
+       resourceTeamId: share.homeWorkspaceId,
+       viewerMemberId: recipientMemberId || '',
+       ownerMemberId: share.ownerMemberId,
+     };
+   } catch {
+     return null;
+   }
+ },
+ isShareAuthorizedScope: async (scope) => {
+   // A scope is share-authorized when a share record exists for the
+   // project and the scope's ownerMemberId matches the share's owner.
+   // The viewerMemberId is a Shared Space member ID (not a home workspace
+   // member ID), so it won't appear in the directory — this bypass lets
+   // capturedScopeIsStillAuthorized pass for share-verified scopes.
+   try {
+     const { fetchSharedWithMe } = await import('./http/hdw.js');
+     const shares = await fetchSharedWithMe(RUNTIME_DATA_DIR);
+     // fetchSharedWithMe already filters by the current user's
+     // recipient_member_id, so every share returned is for this user.
+     // Match on home workspace + owner to confirm the scope is valid.
+     const share = shares.find(
+       (s) => s.homeWorkspaceId === scope.workspaceId,
+     );
+     if (!share || !share.ownerMemberId || !share.homeWorkspaceId) return false;
+     return share.ownerMemberId === scope.ownerMemberId
+       && share.homeWorkspaceId === scope.workspaceId;
+   } catch {
+     return false;
+   }
+ },
+ // Resolve the owner's display name + role from the collab-cloud directory so
+   // /collab/status can hand the client a named "shared project" banner.
     ...(collabCloud
       ? {
           resolveOwnerDisplayName: async (
@@ -7921,6 +7968,7 @@ export async function startServer({
 
   registerHdwRoutes(app, {
     sendApiError,
+    dataDir: RUNTIME_DATA_DIR,
   });
 
   registerDaemonRoutes(app, {
@@ -7935,65 +7983,15 @@ export async function startServer({
     getResolvedPort: () => resolvedPort,
     getDaemonShuttingDown: () => daemonShuttingDown,
     sandboxRuntime: SANDBOX_RUNTIME,
-   env: process.env,
- });
-
-  // Remote team-project catalog merger for the folder routes. When the
-  // workspace is a team workspace, the root projects endpoint merges in
-  // remote-only team projects (shared by teammates but not yet materialized
-  // on this daemon). Mirrors the merge in
-  // GET /api/workspaces/:id/projects?view=team.
- const mergeRemoteTeamProjects = workspaceTeamProjectCatalog
-   ? async (req: express.Request, workspaceId: string, localProjectIds: Set<string>) => {
-       const verified = await verifyWorkspaceRequestAuthority(req);
-       // In dev mode (no vela), the request may not carry workspace headers
-       // (e.g. TeamSpaceView fetches /api/folders/root/projects with only a
-       // query param). Fall back to a minimal principal so remote team
-       // projects from the HDW cloud backend are still merged in.
-       let principal: ResourceHubPrincipal | null = null;
-       if (verified.ok) {
-         const context = verified.context;
-         if (context.workspaceType !== 'team' || context.memberStatus !== 'active') return [];
-         if (context.workspaceId !== workspaceId) return [];
-         principal = contextToResourceHubPrincipal(context);
-       } else {
-         principal = workspaceId ? { teamId: workspaceId, memberId: '' } : null;
-       }
-       if (!principal) return [];
-       let remoteProjects: VelaTeamProjectRecord[];
-       try {
-         remoteProjects = await workspaceTeamProjectCatalog!.list(principal);
-        } catch {
-          return [];
-        }
-        const msFromIso = (v: string): number => {
-          const parsed = Date.parse(v);
-          return Number.isFinite(parsed) ? parsed : Date.now();
-        };
-        return remoteProjects
-          .filter((p) => p.workspaceId === workspaceId)
-          .filter((p) => p.access.canView)
-          .filter((p) => !localProjectIds.has(p.projectId))
-          .map((p) => ({
-            id: p.projectId,
-            name: p.displayName?.trim() || p.projectId,
-            skillId: null as string | null,
-            designSystemId: null as string | null,
-            metadata: { sharedProjectPlaceholderAt: msFromIso(p.updatedAt) },
-            createdAt: msFromIso(p.createdAt),
-            updatedAt: msFromIso(p.updatedAt),
-            workspaceId,
-          }));
-      }
-    : undefined;
+  env: process.env,
+});
 
  registerFolderRoutes(app, {
    db,
    http: { requireLocalDaemonRequest, sendApiError },
-    ...(mergeRemoteTeamProjects ? { mergeRemoteTeamProjects } : {}),
  });
 
- const openDesignPublicMetadata = createOpenDesignPublicMetadataService();
+const openDesignPublicMetadata = createOpenDesignPublicMetadataService();
   registerOpenDesignPublicMetadataRoutes(app, {
     http: httpDeps,
     openDesignPublicMetadata,
@@ -8381,8 +8379,31 @@ export async function startServer({
       }
     });
   });
-  registerSocialShareRoutes(app, { http: httpDeps });
-  registerProjectRoutes(app, {
+ registerSocialShareRoutes(app, { http: httpDeps });
+ // Share-access resolver: checks the HDW shared-space backend for a share
+ // record targeting this project + the current user. Used by both
+ // registerProjectRoutes (via collabSync) and registerProjectFileRoutes.
+const resolveShareAccess = async (projectId: string, _req: any) => {
+  try {
+    const { fetchSharedWithMe } = await import('./http/hdw.js');
+    const { getSharedSpaceMemberId } = await import('./ids.js');
+    const shares = await fetchSharedWithMe(RUNTIME_DATA_DIR);
+    const share = shares.find((s) => s.projectId === projectId);
+    if (!share || !share.ownerMemberId || !share.homeWorkspaceId) return null;
+    const recipientMemberId = getSharedSpaceMemberId(
+      (await import('./http/hik_logins/hicoo.js')).readSsoUsername(RUNTIME_DATA_DIR),
+    );
+    return {
+      workspaceId: share.homeWorkspaceId,
+      resourceTeamId: share.homeWorkspaceId,
+      viewerMemberId: recipientMemberId || '',
+      ownerMemberId: share.ownerMemberId,
+    };
+  } catch {
+    return null;
+  }
+};
+ registerProjectRoutes(app, {
     db,
     design,
     http: httpDeps,
@@ -8491,12 +8512,28 @@ export async function startServer({
        teamProjectsDisplayCache.invalidate();
        workspaceTeamProjectCatalog?.invalidate();
      },
-     moveProjectFolder: async (workspaceId, projectId, folderId, operatorMemberId) => {
-       if (!hdwCloudClient) return;
-       await hdwCloudClient.moveProjectFolder(workspaceId, projectId, folderId, operatorMemberId);
-     },
-   },
-    ...(workspaceTeamProjectCatalog ? { teamProjectCatalog: workspaceTeamProjectCatalog } : {}),
+    moveProjectFolder: async (workspaceId, projectId, folderId, operatorMemberId) => {
+      if (!hdwCloudClient) return;
+      await hdwCloudClient.moveProjectFolder(workspaceId, projectId, folderId, operatorMemberId);
+    },
+
+    resolveShareAccess,
+  isShareAuthorizedScope: async (scope) => {
+    try {
+      const { fetchSharedWithMe } = await import('./http/hdw.js');
+      const shares = await fetchSharedWithMe(RUNTIME_DATA_DIR);
+      const share = shares.find(
+        (s) => s.homeWorkspaceId === scope.workspaceId,
+      );
+      if (!share || !share.ownerMemberId || !share.homeWorkspaceId) return false;
+      return share.ownerMemberId === scope.ownerMemberId
+        && share.homeWorkspaceId === scope.workspaceId;
+    } catch {
+      return false;
+    }
+  },
+},
+   ...(workspaceTeamProjectCatalog ? { teamProjectCatalog: workspaceTeamProjectCatalog } : {}),
     // Second witness for the team-share invariant: refuse a team share aimed at
     // a workspace the directory says is personal, even if the caller's headers
     // claim otherwise. See collab/team-share-scope.ts.
@@ -8923,14 +8960,17 @@ export async function startServer({
       revokedTeamProjectMirrors.has(projectId),
     isProjectUnmaterializedPlaceholder: (projectId) =>
       projectIsUnmaterializedSharedPlaceholder(projectId),
-    projectFiles: projectFileDeps,
-    documents: { buildDocumentPreview },
-    artifacts: artifactDeps,
-    projectPreviewScopes,
-    verifyWorkspaceRequestAuthority,
-  });
+   projectFiles: projectFileDeps,
+   documents: { buildDocumentPreview },
+   artifacts: artifactDeps,
+  projectPreviewScopes,
+  verifyWorkspaceRequestAuthority,
+  collabSync: { resolveShareAccess },
+  notifyProjectFileChange: (projectId) =>
+    collab.scheduler.notifyChanged(projectId, 'file-change'),
+});
 
-  registerMediaRoutes(app, {
+ registerMediaRoutes(app, {
     db,
     design,
     http: httpDeps,
@@ -9159,11 +9199,18 @@ export async function startServer({
         if (action === 'publish-hdw' && typeof body.entryFile === 'string' && body.entryFile.trim()) {
           cliArgs.push('--entry', body.entryFile.trim());
         }
-       if (action === 'publish-hdw') {
-         cliArgs.push('--data-dir', RUNTIME_DATA_DIR);
-         try {
-           const { readSsoConfigFile } = await import('./http/hik_logins/hicoo.js');
-           const sso = readSsoConfigFile(RUNTIME_DATA_DIR);
+      if (action === 'publish-hdw') {
+        cliArgs.push('--data-dir', RUNTIME_DATA_DIR);
+        // Pass the workspace member ID + workspace ID so the HDW backend
+        // can resolve the publisher username from workspace_members
+        // instead of relying on the SSO session username.
+        const wsMemberId = String(req.get('x-od-workspace-member-id') ?? '').trim();
+        const wsId = String(req.get('x-od-workspace-id') ?? '').trim();
+        if (wsMemberId) cliArgs.push('--publisher-member-id', wsMemberId);
+        if (wsId) cliArgs.push('--publisher-workspace-id', wsId);
+        try {
+          const { readSsoConfigFile } = await import('./http/hik_logins/hicoo.js');
+          const sso = readSsoConfigFile(RUNTIME_DATA_DIR);
            if (sso?.username) cliArgs.push('--publisher-username', sso.username);
            const display = sso?.userInfo?.displayName?.trim();
            if (display) cliArgs.push('--publisher-displayname', display);

@@ -1,10 +1,13 @@
-// Scope view for the "/shared-with-me" route. Fetches projects shared to
+// Scope view for the "/share-me" route. Fetches projects shared to
 // the current user via the Shared Space and renders them with
 // RecentProjectsStrip. Shared-space projects are read + comment only —
 // the card menu hides edit/delete/move actions.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { SharedWithMeProject } from '@open-design/contracts';
+import type { ProjectTitleHint } from './EntryShell';
 import { Icon, type IconName } from './Icon';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
+import { useWorkspaceContext } from '../collab/useWorkspaceContext';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import type { Project } from '../types';
@@ -25,30 +28,8 @@ const TABS: TabDef[] = [
   { id: 'mcp', icon: 'terminal', labelKey: 'personalScope.tabMcp' },
 ];
 
-/** Shared-with-me project row from the daemon. Mirrors HdwSharedWithMeProject. */
-interface SharedProjectRow {
-  shareId: string;
-  projectId: string;
-  homeWorkspaceId: string;
-  sharedByUsername: string;
-  sharedAt: string;
-  resourceId: string | null;
-  ownerMemberId: string | null;
-  displayName: string | null;
-  syncState: string;
- folderId: string | null;
- metadata: Record<string, unknown> | null;
- lastSyncedVersionId: string | null;
- access: {
-    canView: boolean;
-    canComment: boolean;
-    canEdit: boolean;
-    frozen: boolean;
-  };
-}
-
 /** Convert a shared-with-me row to the local Project shape. */
-function sharedRowToProject(row: SharedProjectRow): Project {
+function sharedRowToProject(row: SharedWithMeProject): Project {
   const sharedAtMs = Date.parse(row.sharedAt);
   const fallback = Number.isFinite(sharedAtMs) ? sharedAtMs : 0;
   return {
@@ -58,24 +39,42 @@ function sharedRowToProject(row: SharedProjectRow): Project {
     designSystemId: null,
     createdAt: fallback,
     updatedAt: fallback,
-    createdByWorkspaceMemberId: row.ownerMemberId ?? null,
-    ownerDisplayName: row.sharedByUsername ?? null,
-    ...(row.metadata ? { metadata: row.metadata as unknown as Project['metadata'] } : {}),
+   createdByWorkspaceMemberId: row.ownerMemberId ?? null,
+    ownerDisplayName: row.sharedByDisplayname ?? null,
+   ...(row.metadata ? { metadata: row.metadata as unknown as Project['metadata'] } : {}),
   };
 }
 
 export function SharedWithMeView({
   onOpenProject,
 }: {
-  onOpenProject: (id: string) => void;
+  onOpenProject: (
+    id: string,
+    fileName?: string,
+    projectTitleHint?: ProjectTitleHint,
+  ) => Promise<boolean> | boolean | void;
 }) {
-  const t = useT();
-  const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
+ const t = useT();
+  const { context: workspaceContext } = useWorkspaceContext();
+  // Pass the current user's shared-space member ID + role as the operator so
+  // RecentProjectsStrip does strict ownership comparison instead of the
+  // isDefaultTeam shortcut (which would label every project "我").
+  const operator = workspaceContext?.workspaceMemberId
+    ? {
+        memberId: workspaceContext.workspaceMemberId,
+        role: (workspaceContext.role ?? 'member') as 'owner' | 'admin' | 'member' | 'guest',
+      }
+    : null;
+ const [activeTab, setActiveTab] = useState<ScopeTab>('projects');
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   const title = t('sharedSpace.title');
   const subtitle = t('sharedSpace.subtitle');
+
+  // Keep the latest shared-with-me rows so the open handler can look up
+  // homeWorkspaceId for the clicked project.
+  const sharedRowsRef = useRef<SharedWithMeProject[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +83,11 @@ export function SharedWithMeView({
       try {
         const rows = await fetchSharedWithMeCatalog();
         if (cancelled) return;
-        setProjects(rows.map((r) => sharedRowToProject(r as unknown as SharedProjectRow)));
+        setProjects(rows.map((r) => sharedRowToProject(r)));
+        // Stash the raw rows so the open handler can build a hint with
+        // homeWorkspaceId — the workspace the project actually lives in,
+        // which is NOT the shared space.
+        if (!cancelled) sharedRowsRef.current = rows;
       } catch {
         if (!cancelled) setProjects([]);
       } finally {
@@ -101,6 +104,22 @@ export function SharedWithMeView({
       window.removeEventListener('shared:projects-refresh', onRefresh);
     };
   }, []);
+  const handleOpen = useCallback(
+    (id: string) => {
+      const row = sharedRowsRef.current.find((r) => r.projectId === id);
+      const hint: ProjectTitleHint | undefined = row
+        ? {
+            name: row.displayName?.trim() || '',
+            workspaceId: workspaceContext?.workspaceId ?? null,
+            workspaceMemberId: workspaceContext?.workspaceMemberId ?? null,
+            authoritative: true,
+            homeWorkspaceId: row.homeWorkspaceId,
+          }
+        : undefined;
+      return onOpenProject(id, undefined, hint);
+    },
+    [onOpenProject, workspaceContext],
+  );
 
   const activeDef = TABS.find((tab) => tab.id === activeTab)!;
 
@@ -161,12 +180,13 @@ export function SharedWithMeView({
               <p className={styles.panelNote}>{t('sharedSpace.emptyNote')}</p>
             </div>
           ) : (
-            <RecentProjectsStrip
-              projects={projects}
-              heading=""
-              space="team"
-              onOpen={onOpenProject}
-            />
+           <RecentProjectsStrip
+             projects={projects}
+             heading=""
+             space="team"
+              operator={operator}
+             onOpen={handleOpen}
+           />
           )
         ) : (
           <div className={styles.panel}>

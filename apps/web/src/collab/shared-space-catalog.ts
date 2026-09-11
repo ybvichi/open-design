@@ -1,14 +1,14 @@
 // The ONE read of the shared-space project catalog
 // (`GET /api/workspace/projects/shared-with-me`).
 //
-// Mirrors the team-projects-catalog pattern: coalesced GET keyed by
-// a stable string, returning a typed array. The shared space is
-// workspace-agnostic — the daemon resolves the current user from the
-// SSO session, so no workspace headers are needed.
+// The daemon joins `workspace_project_shares` (share metadata) with
+// `team_projects` (live project data) so the response always carries the
+// current project state. The shared space is workspace-agnostic — the daemon
+// resolves the current user from the SSO session, so no workspace headers are
+// needed.
 
-import type { TeamProject } from '@open-design/contracts';
+import type { SharedWithMeProject, SharedWithMeResponse } from '@open-design/contracts';
 import { coalescedGet, forceCoalescedGet } from '../lib/coalesced-get';
-import { asTeamProjectRows } from './team-projects-catalog';
 
 const SHARED_WITH_ME_CACHE_KEY = 'shared-with-me-projects';
 
@@ -21,20 +21,17 @@ const SHARED_WITH_ME_CACHE_KEY = 'shared-with-me-projects';
  */
 export async function fetchSharedWithMeCatalog(options?: {
   force?: boolean;
-}): Promise<TeamProject[]> {
-  const run = async (): Promise<TeamProject[]> => {
+}): Promise<SharedWithMeProject[]> {
+  const run = async (): Promise<SharedWithMeProject[]> => {
     const response = await fetch('/api/workspace/projects/shared-with-me');
     if (!response.ok) throw new Error(`shared-with-me ${response.status}`);
-    const body = await response.json();
-    return asTeamProjectRows(body);
+    const body = (await response.json()) as SharedWithMeResponse;
+    return body.projects ?? [];
   };
-  let projects: TeamProject[];
   if (options?.force) {
-    projects = await forceCoalescedGet(SHARED_WITH_ME_CACHE_KEY, run);
-  } else {
-    projects = await coalescedGet(SHARED_WITH_ME_CACHE_KEY, run);
+    return forceCoalescedGet(SHARED_WITH_ME_CACHE_KEY, run);
   }
-  return asTeamProjectRows(projects);
+  return coalescedGet(SHARED_WITH_ME_CACHE_KEY, run);
 }
 
 /**

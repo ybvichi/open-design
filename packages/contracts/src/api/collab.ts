@@ -222,6 +222,55 @@ export interface WorkspaceTeamProjectsResponse {
   projects: TeamProject[];
 }
 
+/**
+ * A team project in the Shared Space that was shared to the current user.
+ *
+ * The data is a JOIN of two HDW tables:
+ * - `workspace_project_shares` (share metadata: who shared, when, access)
+ * - `team_projects` (live project data: name, sync state, owner, metadata)
+ *
+ * The daemon fetches both and merges them so the project fields always reflect
+ * the current `team_projects` row, not a snapshot copied at share time.
+ */
+export interface SharedWithMeProject {
+  /** Stable share-record id from `workspace_project_shares`. */
+  shareId: string;
+  /** The team project id (local project id). */
+  projectId: string;
+  /** The workspace the project originated from before being shared. */
+  homeWorkspaceId: string;
+ /** Username of the member who shared the project. */
+ sharedByUsername: string;
+  /** Display name of the member who shared the project (falls back to username). */
+  sharedByDisplayname: string;
+ /** ISO timestamp of when the share was created. */
+ sharedAt: string;
+  /** The recipient's member ID in the Shared Space — deterministically derived
+   * from the username via `getSharedSpaceMemberId`. Used as the management
+   * key in `workspace_project_shares` (recipient_member_id column). */
+  recipientMemberId: string;
+ /** Live project display name from `team_projects`. */
+ displayName: string | null;
+  /** Live owner member id from `team_projects`. */
+  ownerMemberId: string | null;
+  /** Live folder id from `team_projects`. Null = root-level. */
+  folderId: string | null;
+  /** Live project metadata from `team_projects`. */
+  metadata: ProjectMetadata | null;
+  /** Per-share access flags. Shared Space grants read + comment only. */
+  access: {
+    canView: boolean;
+    canComment: boolean;
+    canEdit: boolean;
+    frozen: boolean;
+  };
+}
+
+/** GET /api/workspace/projects/shared-with-me response. */
+export interface SharedWithMeResponse {
+  projects: SharedWithMeProject[];
+}
+
 // Workspace context seam onto the B (identity/membership) + D (visibility)
 // lanes. A faithful SUBSET of B's `CurrentWorkspaceContext`
 // (vela packages/shared/src/workspace-context.ts) — the exact fields C needs to

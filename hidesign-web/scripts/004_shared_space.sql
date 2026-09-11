@@ -26,10 +26,11 @@ CREATE TABLE IF NOT EXISTS workspace_project_shares (
     home_workspace_id       TEXT NOT NULL,
     shared_space_id         TEXT NOT NULL,
     recipient_member_id     TEXT NOT NULL,
-    recipient_username      TEXT NOT NULL,
-    created_by_member_id    TEXT,
-    created_by_username     TEXT,
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   recipient_username      TEXT NOT NULL,
+   created_by_member_id    TEXT,
+   created_by_username     TEXT,
+   created_by_displayname TEXT,
+   created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_shares_recipient

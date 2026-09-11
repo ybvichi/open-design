@@ -3,8 +3,9 @@
  *
  * Pins the deep-link shape for the project route:
  *
- *   /                                                 home
- *   /projects/:id                                     project root
+*   /                                                 home
+ *   /share-me                                          shared-with-me
+*   /projects/:id                                     project root
  *   /projects/:id/files/:path                         file view
  *   /projects/:id/conversations/:cid                  specific conversation
  *   /projects/:id/conversations/:cid/files/:path      conversation + file
@@ -24,9 +25,18 @@ function roundTrip(route: Route): Route {
 }
 
 describe('parseRoute / buildPath (issue #1505)', () => {
-  it('parses the home route', () => {
-    expect(parseRoute('/')).toEqual({ kind: 'home', view: 'home' });
-    expect(parseRoute('')).toEqual({ kind: 'home', view: 'home' });
+ it('parses the home route', () => {
+    expect(parseRoute('/')).toEqual({ kind: 'home', view: 'shared-with-me' });
+    expect(parseRoute('')).toEqual({ kind: 'home', view: 'shared-with-me' });
+  });
+
+  it('parses the share-me route', () => {
+    expect(parseRoute('/share-me')).toEqual({ kind: 'home', view: 'shared-with-me' });
+    expect(buildPath({ kind: 'home', view: 'shared-with-me' })).toBe('/share-me');
+  });
+
+  it('still accepts the legacy /shared-with-me alias', () => {
+    expect(parseRoute('/shared-with-me')).toEqual({ kind: 'home', view: 'shared-with-me' });
   });
 
   it('round-trips a bare project route', () => {
@@ -107,9 +117,9 @@ describe('parseRoute / buildPath (issue #1505)', () => {
     });
   });
 
-  it('falls back to home when the URL is unrecognized', () => {
-    expect(parseRoute('/something/else')).toEqual({ kind: 'home', view: 'home' });
-    expect(parseRoute('/projects')).toEqual({ kind: 'home', view: 'projects' });
+ it('falls back to home when the URL is unrecognized', () => {
+    expect(parseRoute('/something/else')).toEqual({ kind: 'home', view: 'shared-with-me' });
+   expect(parseRoute('/projects')).toEqual({ kind: 'home', view: 'projects' });
   });
 
   it('parses the collab demo route with and without a project id', () => {

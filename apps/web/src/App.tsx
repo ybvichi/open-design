@@ -676,6 +676,31 @@ async function pullTeamSharedProjectIfAvailable(
   }
 }
 
+/**
+ * Share-based pull for recipients who are NOT members of the project's home
+ * workspace. The catalog lookup is skipped (the project is not in the shared
+ * space's team catalog) and the pull endpoint's share-verification fallback
+ * authorizes the request via the workspace_project_shares record.
+ */
+async function pullSharedProjectViaShare(
+  projectId: string,
+  workspaceContext: WorkspaceCollabContext | null,
+): Promise<TeamSharedProjectPullOutcome> {
+  if (!workspaceContext) return { isTeamShared: false, pulled: false };
+  try {
+    const pullResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/collab/pull`, {
+      method: 'POST',
+      headers: workspaceProjectHeaders(workspaceContext),
+    });
+    if (pullResponse.ok) {
+      invalidateProjectFilesCache(projectId, workspaceContext);
+    }
+    return { isTeamShared: true, pulled: pullResponse.ok };
+  } catch {
+    return { isTeamShared: false, pulled: false };
+  }
+}
+
 // A member's first-ever open of a just-shared project races the daemon's
 // local materialization (POST /collab/pull's registerPulledProject, or
 // ProjectView's own /collab/status poll firing ensureSharedProjectPlaceholder
@@ -3707,7 +3732,35 @@ function AppInner() {
     const openingAuthorizationGeneration = projectAuthorizationGenerationRef.current;
     const openingScopeKey = projectListScopeKey(openingContext);
     const expectedWorkspaceId = openingContext?.workspaceId ?? null;
-    const hintMatchesOpeningScope =
+    // When opening a shared-with-me project, the project lives in a different
+    // workspace (homeWorkspaceId from the share record). Resolve that
+    // workspace's context so the pull path queries the correct team catalog.
+    // The project stays in its original workspace — it is NOT moved to the
+   // shared space. Navigation still uses openingContext (shared space).
+   let homeWorkspaceId = projectTitleHint?.homeWorkspaceId?.trim() || null;
+   let pullContext = openingContext;
+   let pullWorkspaceId = expectedWorkspaceId;
+    if (homeWorkspaceId && homeWorkspaceId !== expectedWorkspaceId) {
+      try {
+        const homeContext = await resolveBoundProjectWorkspaceContext(homeWorkspaceId);
+       if (homeContext) {
+         pullContext = homeContext;
+         pullWorkspaceId = homeContext.workspaceId;
+       }
+     } catch {
+       // Fall back to openingContext if the home workspace can't be resolved.
+     }
+     if (currentWorkspaceAccountGeneration() !== openingAccountGeneration) return false;
+   }
+   // When the user is NOT a member of the home workspace (resolveBoundProjectWorkspaceContext
+   // returned null), the backend's share-verification fallback authorizes the pull and read
+   // via the share record. The catalog lookup (fetchTeamProjectCatalogEntry) must be skipped
+  // because the project is not in the shared space's team catalog — the pull endpoint itself
+  // verifies the share and constructs the correct scope internally.
+  let shareBasedPull = pullContext === openingContext
+     && Boolean(homeWorkspaceId)
+     && homeWorkspaceId !== expectedWorkspaceId;
+  const hintMatchesOpeningScope =
       !projectTitleHint
       || Boolean(
         expectedWorkspaceId
@@ -3740,12 +3793,20 @@ function AppInner() {
         ? workspaceIdentityCacheKey(liveContext) === workspaceIdentityCacheKey(openingContext)
         : liveState.loading === true || liveState.identityChangePending === true;
     };
-    const canUseLocalProject = (project: Project) => {
-      if (project.workspaceId) return project.workspaceId === expectedWorkspaceId;
-      return !requiresBoundCatalogProject;
-    };
-    const navigateToOpenedProject = (project: Project) => {
-      const projectWorkspaceId = project.workspaceId?.trim() ?? '';
+   const canUseLocalProject = (project: Project) => {
+     if (project.workspaceId) {
+       return project.workspaceId === expectedWorkspaceId
+         || project.workspaceId === pullWorkspaceId
+         || (shareBasedPull && project.workspaceId === homeWorkspaceId);
+     }
+     return !requiresBoundCatalogProject;
+   };
+  const navigateToOpenedProject = (project: Project) => {
+    const projectWorkspaceId = project.workspaceId?.trim() ?? '';
+    // Don't overwrite a witness already set by ensureShareBootstrapWitness
+    // (shared-with-me projects where openingContext is the shared space,
+    // not the project's home workspace).
+    if (!projectOpenWorkspaceWitnessRef.current) {
       projectOpenWorkspaceWitnessRef.current =
         projectWorkspaceId
         && openingContext?.workspaceId === projectWorkspaceId
@@ -3759,8 +3820,34 @@ function AppInner() {
               accountGeneration: openingAccountGeneration,
             }
           : null;
-      navigate({ kind: 'project', projectId: id, fileName: routeFileName });
-      return true;
+    }
+    navigate({ kind: 'project', projectId: id, fileName: routeFileName });
+    return true;
+  };
+    const ensureShareBootstrapWitness = async (project: Project) => {
+      if (projectOpenWorkspaceWitnessRef.current) return;
+      const projectWorkspaceId = project.workspaceId?.trim() ?? '';
+      if (!projectWorkspaceId) return;
+      if (openingContext?.workspaceId === projectWorkspaceId) return;
+      try {
+        const scopeResponse = await fetch(
+          `/api/projects/${encodeURIComponent(project.id)}/workspace-scope`,
+          { cache: 'no-store' },
+        );
+        if (!scopeResponse.ok) return;
+        const body = (await scopeResponse.json()) as { scope?: { context?: WorkspaceCollabContext } };
+        const ctx = body.scope?.context;
+        if (ctx && ctx.workspaceId === projectWorkspaceId && ctx.memberStatus === 'active') {
+          projectOpenWorkspaceWitnessRef.current = {
+            projectId: project.id,
+            projectWorkspaceId,
+            context: ctx,
+            accountGeneration: openingAccountGeneration,
+          };
+        }
+      } catch {
+        // best-effort: navigateToOpenedProject proceeds without a witness
+      }
     };
     const rememberHintAuthority = () => {
       if (projectTitleHint?.authoritative && catalogName && openingScopeIsCurrent()) {
@@ -3808,11 +3895,15 @@ function AppInner() {
         };
         return next;
       });
-      rememberHintAuthority();
-      const localProject = projectsRef.current.find(
-        (project) => project.id === id && canUseLocalProject(project),
-      );
-      return localProject ? navigateToOpenedProject(localProject) : false;
+     rememberHintAuthority();
+     const localProject = projectsRef.current.find(
+       (project) => project.id === id && canUseLocalProject(project),
+     );
+      if (localProject) {
+        await ensureShareBootstrapWitness(localProject);
+        return navigateToOpenedProject(localProject);
+      }
+      return false;
     }
     if (
       !catalogName
@@ -3823,68 +3914,80 @@ function AppInner() {
       const localProject = projectsRef.current.find(
         (project) => project.id === id && canUseLocalProject(project),
       );
-      return localProject ? navigateToOpenedProject(localProject) : false;
+      if (localProject) {
+        await ensureShareBootstrapWitness(localProject);
+        return navigateToOpenedProject(localProject);
+      }
+      return false;
     }
-    try {
-      const project = await getProject(id, openingContext);
-      if (!openingScopeIsCurrent()) return false;
-      if (project && canUseLocalProject(project)) {
-        const openedProject = catalogName ? { ...project, name: catalogName } : project;
-        setProjects((curr) => openingScopeIsCurrent()
-          ? [
-              openedProject,
-              ...curr.filter((candidate) => candidate.id !== openedProject.id),
-            ]
-          : curr);
-        rememberHintAuthority();
-        return navigateToOpenedProject(openedProject);
-      }
-      const { pulled } = await pullTeamSharedProjectIfAvailable(id, openingContext);
-      if (!openingScopeIsCurrent()) return false;
-      if (pulled) {
-        const pulledProject = await getProject(id, openingContext);
-        if (!openingScopeIsCurrent()) return false;
-        if (pulledProject && canUseLocalProject(pulledProject)) {
-          const openedProject = catalogName
-            ? { ...pulledProject, name: catalogName }
-            : pulledProject;
-          setProjects((curr) => openingScopeIsCurrent()
-            ? [
-                openedProject,
-                ...curr.filter((candidate) => candidate.id !== openedProject.id),
-              ]
-            : curr);
-          rememberHintAuthority();
-          return navigateToOpenedProject(openedProject);
-        }
-      }
-      const request = beginProjectListRequest('all');
-      const list = await listCurrentWorkspaceProjects({ workspaceView: 'all' });
-      if (!openingScopeIsCurrent()) return false;
-      const reconciledList = catalogName
-        ? list.map((candidate) =>
-            candidate.id === id && canUseLocalProject(candidate)
-              ? { ...candidate, name: catalogName }
-              : candidate)
-        : list;
-      reconcileFetchedProjects(reconciledList, request);
-      const fetchedProject = locallyDeletedProjectIdsRef.current.has(id)
-        ? undefined
-        : reconciledList.find(
-            (candidate) => candidate.id === id && canUseLocalProject(candidate),
-          );
-      if (fetchedProject) {
-        rememberHintAuthority();
-        return navigateToOpenedProject(fetchedProject);
-      }
-    } catch {
-      // Fall through to the same visible missing-project state. The daemon can
-      // return 404 or transiently fail while reconciling a deleted backing
-      // project; either way the user needs feedback instead of a silent bounce.
-    }
+try {
+  const project = await getProject(id, pullContext);
+  if (!openingScopeIsCurrent()) return false;
+  // If the backend returned the project, it authorized access (possibly via
+  // a share record). Open it directly — canUseLocalProject would reject a
+  // shared project whose workspaceId belongs to the home workspace.
+  if (project) {
+    const openedProject = catalogName ? { ...project, name: catalogName } : project;
+    setProjects((curr) => openingScopeIsCurrent()
+      ? [
+          openedProject,
+          ...curr.filter((candidate) => candidate.id !== openedProject.id),
+        ]
+      : curr);
+   rememberHintAuthority();
+    await ensureShareBootstrapWitness(openedProject);
+    return navigateToOpenedProject(openedProject);
+  }
+ const { pulled } = await (shareBasedPull
+  ? pullSharedProjectViaShare(id, pullContext)
+  : pullTeamSharedProjectIfAvailable(id, pullContext));
+ if (!openingScopeIsCurrent()) return false;
+  if (pulled) {
+    const pulledProject = await getProject(id, pullContext);
     if (!openingScopeIsCurrent()) return false;
-    setProjectOpenError(t('project.missing'));
-    return false;
+    if (pulledProject) {
+      const openedProject = catalogName
+        ? { ...pulledProject, name: catalogName }
+        : pulledProject;
+      setProjects((curr) => openingScopeIsCurrent()
+        ? [
+            openedProject,
+            ...curr.filter((candidate) => candidate.id !== openedProject.id),
+          ]
+        : curr);
+     rememberHintAuthority();
+      await ensureShareBootstrapWitness(openedProject);
+      return navigateToOpenedProject(openedProject);
+    }
+  }
+  const request = beginProjectListRequest('all');
+  const list = await listCurrentWorkspaceProjects({ workspaceView: 'all' });
+  if (!openingScopeIsCurrent()) return false;
+  const reconciledList = catalogName
+    ? list.map((candidate) =>
+        candidate.id === id && canUseLocalProject(candidate)
+          ? { ...candidate, name: catalogName }
+          : candidate)
+    : list;
+  reconcileFetchedProjects(reconciledList, request);
+  const fetchedProject = locallyDeletedProjectIdsRef.current.has(id)
+    ? undefined
+    : reconciledList.find(
+        (candidate) => candidate.id === id && canUseLocalProject(candidate),
+      );
+ if (fetchedProject) {
+   rememberHintAuthority();
+    await ensureShareBootstrapWitness(fetchedProject);
+    return navigateToOpenedProject(fetchedProject);
+ }
+} catch {
+    // Fall through to the same visible missing-project state. The daemon can
+    // return 404 or transiently fail while reconciling a deleted backing
+    // project; either way the user needs feedback instead of a silent bounce.
+  }
+  if (!openingScopeIsCurrent()) return false;
+  setProjectOpenError(t('project.missing'));
+  return false;
   }, [
     beginProjectListRequest,
     listCurrentWorkspaceProjects,
