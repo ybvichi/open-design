@@ -10,22 +10,22 @@
 // workspace identity is carried as request headers so hdw can authorize
 // per-workspace without a shared session.
 
+import {
+  PROD_HDW_BASE_URL as PROD_HDW_API_URL,
+  DEV_HDW_BASE_URL as DEV_HDW_API_URL,
+  PROD_HDW_PATH_PREFIX,
+  DEV_HDW_PATH_PREFIX,
+} from '../http/hdw-constants.js';
+
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 type FetchLike = typeof fetch;
 
 /**
  * Environment-aware default base URLs for the hdw ResourceHub API.
- * Mirrors the pattern in `http/hdw.ts`:
- *   dev  → http://127.0.0.1:7002
- *   prod → https://pixso.hikvision.com.cn/hik-plugin/hidesign-web
- *
- * The `pathPrefix` (default `/hdw`) is appended separately, so these base
- * URLs exclude the `/hdw` segment.
+ * Base URLs and path prefixes are shared from `http/hdw-constants.ts`
+ * so all HDW clients stay in sync.
  */
-const PROD_HDW_API_URL = 'https://pixso.hikvision.com.cn';
-const DEV_HDW_API_URL = 'http://127.0.0.1:7002';
-
 export interface HdwCloudConfig {
   baseUrl: string;
   token: string | null;
@@ -38,9 +38,8 @@ export interface HdwCloudConfig {
 export function readHdwCloudConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): HdwCloudConfig | null {
-  const HDW_API_URL =  env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL
-  //const pathPrefix =  '/hik-plugin/hidesign-web/hdw';
-  const pathPrefix = env.NODE_ENV === 'production' ? '/hik-plugin/hidesign-web/hdw' : '/hdw'
+  const HDW_API_URL = env.NODE_ENV === 'production' ? PROD_HDW_API_URL : DEV_HDW_API_URL;
+  const pathPrefix = env.NODE_ENV === 'production' ? PROD_HDW_PATH_PREFIX : DEV_HDW_PATH_PREFIX;
   const baseUrl = env.OD_HDW_API_URL?.trim()
     || HDW_API_URL;
   return {

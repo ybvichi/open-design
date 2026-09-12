@@ -11,11 +11,6 @@ import { readSsoConfigFile } from '../../../http/hik_logins/hicoo.js';
  * Hidesign-Web (HDW) API 反向代理路由。
  *
  * 把前端 `/api/hdw/*` 请求透传到上游 HDW 后端。上游地址按运行环境自动选择：
- * 开发环境（NODE_ENV !== 'production'）指向本地 Egg.js 服务
- *   http://127.0.0.1:7002/hdw/api
- * 生产环境指向线上 Pixso 插件入口
- *   https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api
- *
  * 支持 GET / POST / PUT / DELETE / PATCH，透传请求体（JSON / form /
  * multipart）与 query string，原样返回上游响应（状态码、headers、body）。
  * 二进制响应（文件流、图片）逐块 pipe，不缓存进内存。

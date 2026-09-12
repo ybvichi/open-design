@@ -6,19 +6,16 @@ import { promises as fsp } from 'node:fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const PROD_HDW_BASE = 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web/hdw/api';
-const DEV_HDW_BASE = 'http://127.0.0.1:7002/hdw/api';
-const PROD_HDW_BASE_URL = 'https://pixso.hikvision.com.cn';
-const DEV_HDW_BASE_URL = 'http://127.0.0.1:7002';
-const PROD_HDW_PATH_PREFIX = '/hik-plugin/hidesign-web/hdw';
-const DEV_HDW_PATH_PREFIX = '/hdw';
+import {
+  PROD_HDW_BASE_URL,
+  DEV_HDW_BASE_URL,
+  PROD_HDW_PATH_PREFIX,
+  DEV_HDW_PATH_PREFIX,
+} from './hdw-constants.js';
 
 /**
  * Resolve the HDW REST API base URL from env, mirroring the override
  * pattern in `integrations/hdw-cloud.ts`:
- *   1. Explicit `OD_HDW_API_URL` (+ optional `OD_HDW_API_PREFIX`)
- *   2. `NODE_ENV === 'production'` → production Pixso entry
- *   3. Otherwise → local dev server at 127.0.0.1:7002
  *
  * Keeping this in sync with `hdw-cloud.ts` ensures all HDW clients
  * (collab sync, community plugins, shared space, frontend proxy)
