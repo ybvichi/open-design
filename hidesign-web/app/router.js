@@ -32,6 +32,12 @@ module.exports = app => {
   router.get('/hdw/api/shared-space/shared-by-me', controller.api.sharedSpace.sharedByMe);
   router.del('/hdw/api/shared-space/:share_id', controller.api.sharedSpace.unshare);
   router.del('/hdw/api/shared-space/project/:project_id', controller.api.sharedSpace.unshareProject);
+  // api:resource_share // 资源分享（skill/mcp）
+  router.post('/hdw/api/resource-share/share', controller.api.resourceShare.share);
+  router.get('/hdw/api/resource-share/shared-with-me', controller.api.resourceShare.sharedWithMe);
+  router.get('/hdw/api/resource-share/shared-by-me', controller.api.resourceShare.sharedByMe);
+  router.del('/hdw/api/resource-share/:share_id', controller.api.resourceShare.unshare);
+  router.del('/hdw/api/resource-share/resource/:resource_id', controller.api.resourceShare.unshareResource);
   router.del('/hdw/api/folder/:folder_id', controller.api.folder.del);
   router.post('/hdw/api/folder/rename', controller.api.folder.rename);
   router.get('/hdw/api/folder/list', controller.api.folder.list);

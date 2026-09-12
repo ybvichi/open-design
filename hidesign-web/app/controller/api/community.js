@@ -154,7 +154,10 @@ class CommunityController extends Controller {
         .whereRaw('name = ? AND deleted_at IS NULL', [body.name])
         .first();
       if (existing) {
-        if (existing.publisher_username !== effectivePublisherUsername) {
+        // Allow a real publisher to claim a plugin whose original publisher
+        // was 'unknown' (from a task-based publish that didn't pass publisher
+        // params). Once claimed, the normal ownership check applies.
+        if (existing.publisher_username !== effectivePublisherUsername && existing.publisher_username !== 'unknown') {
           ctx.body = fail('Only the original publisher can publish new versions');
           return;
         }
@@ -171,6 +174,9 @@ class CommunityController extends Controller {
       await k.transaction(async trx => {
         if (existing) {
           const update = { updated_at: new Date() };
+          if (existing.publisher_username === 'unknown' && effectivePublisherUsername !== 'unknown') {
+            update.publisher_username = effectivePublisherUsername;
+          }
           if (body.title !== undefined) update.title = body.title;
           if (body.titleI18n !== undefined) update.title_i18n = JSON.stringify(body.titleI18n);
           if (body.description !== undefined) update.description = body.description;

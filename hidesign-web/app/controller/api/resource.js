@@ -242,14 +242,21 @@ class ResourceController extends Controller {
 
     try {
       const k = this.getKnex();
-      const updated = await k('resources')
-        .where({ id: resourceId })
-        .whereNull('deleted_at')
-        .update({ deleted_at: new Date() });
+      let deleted = 0;
 
-      if (updated === 0) {
+      await k.transaction(async trx => {
+        // Hard delete the resource. FK ON DELETE CASCADE handles
+        // resource_versions, resource_refs, resource_version_blobs,
+        // team_projects, pending_version_uploads, and
+        // workspace_resource_shares automatically.
+        deleted = await trx('resources')
+          .where({ id: resourceId })
+          .del();
+      });
+
+      if (deleted === 0) {
         ctx.status = 404;
-        ctx.body = { error: 'not_found', message: 'Resource not found or already deleted' };
+        ctx.body = { error: 'not_found', message: 'Resource not found' };
         return;
       }
 
@@ -262,8 +269,6 @@ class ResourceController extends Controller {
     }
   }
 
-
-
   // ---- List: GET /api/workspaces/:ws/resources?kind=skill ----
   async list() {
     const { ctx } = this;
@@ -274,7 +279,7 @@ class ResourceController extends Controller {
     try {
       const k = this.getKnex();
       let q = k('resources as r')
-        .leftJoin('resource_refs as rr', function() {
+        .leftJoin('resource_refs as rr', function () {
           this.on('rr.resource_id', 'r.id').andOn('rr.ref', '=', k.raw('?', ['published']));
         })
         .leftJoin('resource_versions as rv', 'rv.id', 'rr.version_id')

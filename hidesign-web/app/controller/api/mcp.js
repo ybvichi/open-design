@@ -196,12 +196,11 @@ class McpController extends Controller {
 
     try {
       const k = this.getKnex();
-      const updated = await k('resources')
+      const deleted = await k('resources')
         .where({ id: resourceId, kind: KIND })
-        .whereNull('deleted_at')
-        .update({ deleted_at: new Date() });
+        .del();
 
-      if (updated === 0) {
+      if (deleted === 0) {
         ctx.body = { code: -1, msg: 'template not found' };
         return;
       }
