@@ -61,11 +61,40 @@ class ResourceShareController extends Controller {
 
       // Deduplicate recipients by username and exclude the sharer
       const seen = new Set();
-      const rows = [];
+      const candidateRecipients = [];
       for (const r of recipients) {
         if (!r.username || seen.has(r.username)) continue;
         seen.add(r.username);
         if (r.username === createdByUsername) continue;
+        candidateRecipients.push(r);
+      }
+
+      if (candidateRecipients.length === 0) {
+        ctx.body = { code: -1, msg: 'FAIL', error: '没有需要新增的分享 (接收人列表为空或全是自己)' };
+        return;
+      }
+
+      // Check which recipients already have a share for this resource+space.
+      // The DB unique constraint (resource_id, shared_space_id, recipient_member_id)
+      // is the final safety net, but this explicit check lets us return an
+      // accurate skipped count and a helpful message.
+      const existingShares = await k('workspace_resource_shares')
+        .where({
+          resource_id: resourceId,
+          shared_space_id: sharedSpaceId,
+        })
+        .whereIn('recipient_username', candidateRecipients.map(r => r.username))
+        .select('recipient_username');
+
+      const existingUsernames = new Set(existingShares.map(s => s.recipient_username));
+
+      const rows = [];
+      let skippedDuplicates = 0;
+      for (const r of candidateRecipients) {
+        if (existingUsernames.has(r.username)) {
+          skippedDuplicates++;
+          continue;
+        }
         rows.push({
           id: `${sharedSpaceId}_${resourceId}_${r.username}`,
           resource_id: resourceId,
@@ -81,27 +110,25 @@ class ResourceShareController extends Controller {
         });
       }
 
-      if (rows.length === 0) {
-        ctx.body = { code: -1, msg: 'FAIL', error: '没有需要新增的分享 (接收人列表为空或全是自己)' };
-        return;
+      let newlyShared = 0;
+      if (rows.length > 0) {
+        // onConflict().ignore() as a race-condition safety net — the DB
+        // unique constraint will reject any concurrent duplicate insert.
+        const result = await k('workspace_resource_shares')
+          .insert(rows)
+          .onConflict('id')
+          .ignore();
+        newlyShared = result ? result.rowCount || rows.length : rows.length;
       }
 
-      await k('workspace_resource_shares')
-        .insert(rows)
-        .onConflict('id')
-        .merge({
-          created_by_member_id: createdByMemberId,
-          created_by_username: createdByUsername,
-          created_by_displayname: createdByDisplayname || null,
-          created_at: now,
-        });
+      const totalSkipped = recipients.length - candidateRecipients.length + skippedDuplicates;
 
       ctx.body = {
         code: 0,
         msg: 'SUCCESS',
         data: {
-          shared: rows.length,
-          skipped: recipients.length - rows.length,
+          shared: newlyShared,
+          skipped: totalSkipped,
           shared_space_id: sharedSpaceId,
         },
       };

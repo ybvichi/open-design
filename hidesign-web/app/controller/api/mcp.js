@@ -67,38 +67,6 @@ class McpController extends Controller {
     }
   }
 
-  // ---- Check: GET /hdw/api/mcp/check?workspace_id=...&label=... ----
-  // Returns { exists: boolean } so the web UI can reject duplicates
-  // before calling create.
-  async check() {
-    const { ctx } = this;
-    const workspaceId = ctx.query.workspace_id || ctx.request.headers['x-hdw-workspace-id'];
-    const label = (ctx.query.label || '').trim();
-
-    if (!workspaceId || !label) {
-      ctx.body = { code: -1, msg: 'workspace_id and label are required' };
-      return;
-    }
-
-    try {
-      const k = this.getKnex();
-      const rows = await k('resources')
-        .where({ kind: KIND, workspace_id: workspaceId })
-        .whereNull('deleted_at')
-        .select('metadata');
-
-      const exists = rows.some(row => {
-        const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
-        return (meta.label || '').trim().toLowerCase() === label.toLowerCase();
-      });
-
-      ctx.body = { code: 0, msg: 'ok', data: { exists } };
-    } catch (err) {
-      ctx.logger.error('[hdw] mcp check error:', err);
-      ctx.body = { code: -1, msg: 'internal error', error: err.message };
-    }
-  }
-
   // ---- Create: POST /hdw/api/mcp ----
   async create() {
     const { ctx } = this;

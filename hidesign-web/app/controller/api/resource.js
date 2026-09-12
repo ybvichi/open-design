@@ -324,6 +324,43 @@ class ResourceController extends Controller {
       ctx.body = { error: 'internal_error', message: err.message };
     }
   }
+  // ---- Check: GET /api/workspaces/:ws/resources/check?kind=...&name=... ----
+  // Returns { exists: boolean } so the daemon can reject duplicates
+  // before creating a resource. Works for both skill and mcp kinds:
+  // skills store the name in metadata.title, mcp in metadata.label.
+  async check() {
+    const { ctx } = this;
+    const workspaceId = ctx.params.workspaceId;
+    const kind = ctx.query.kind || '';
+    const name = (ctx.query.name || '').trim().toLowerCase();
+
+    if (!workspaceId || !kind || !name) {
+      ctx.status = 400;
+      ctx.body = { error: 'invalid_request', message: 'workspaceId, kind and name are required' };
+      return;
+    }
+
+    try {
+      const k = this.getKnex();
+      const rows = await k('resources')
+        .where({ kind, workspace_id: workspaceId })
+        .whereNull('deleted_at')
+        .select('metadata');
+
+      const exists = rows.some(row => {
+        const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+        const title = (meta.title || meta.label || '').trim().toLowerCase();
+        return title === name;
+      });
+
+      ctx.body = { exists };
+    } catch (err) {
+      ctx.logger.error('[hdw] resource check error:', err);
+      ctx.status = 500;
+      ctx.body = { error: 'internal_error', message: err.message };
+    }
+  }
+
   // ---- Helpers ----
 
   async _nextVersionNumber(resourceId) {

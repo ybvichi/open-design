@@ -53,6 +53,7 @@ module.exports = app => {
   router.post('/hdw/api/workspaces/:workspaceId/resources/:resourceId/materialize', controller.api.resource.materialize);
   router.del('/hdw/api/workspaces/:workspaceId/resources/:resourceId', controller.api.resource.remove);
   router.get('/hdw/api/workspaces/:workspaceId/resources', controller.api.resource.list);
+  router.get('/hdw/api/workspaces/:workspaceId/resources/check', controller.api.resource.check);
   // api:blob // Blob 上传下载
   router.put('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.upload);
   router.get('/hdw/api/workspaces/:workspaceId/blobs/:digest', controller.api.blob.download);
@@ -71,10 +72,9 @@ module.exports = app => {
   router.get('/hdw/api/community/plugins/:name/versions/:version/archive', controller.api.community.downloadArchive);
   router.get('/hdw/api/community/cover/:digest', controller.api.community.downloadCover);
 
- // api:mcp // MCP 模板目录
- router.get('/hdw/api/mcp', controller.api.mcp.list);
- router.get('/hdw/api/mcp/check', controller.api.mcp.check);
- router.post('/hdw/api/mcp', controller.api.mcp.create);
- router.put('/hdw/api/mcp/:resourceId', controller.api.mcp.update);
- router.del('/hdw/api/mcp/:resourceId', controller.api.mcp.remove);
+  // api:mcp // MCP 模板目录
+  router.get('/hdw/api/mcp', controller.api.mcp.list);
+  router.post('/hdw/api/mcp', controller.api.mcp.create);
+  router.put('/hdw/api/mcp/:resourceId', controller.api.mcp.update);
+  router.del('/hdw/api/mcp/:resourceId', controller.api.mcp.remove);
 };
