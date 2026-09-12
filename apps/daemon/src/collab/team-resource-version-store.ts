@@ -11,6 +11,7 @@ export interface TeamResourceVersionStore {
     resourceId: string,
     versionId: string,
   ): Promise<void>;
+  delete(workspaceId: string, kind: string, resourceId: string): Promise<void>;
 }
 
 function versionKey(workspaceId: string, kind: string, resourceId: string) {
@@ -55,11 +56,14 @@ export function createTeamResourceVersionStore(
           // single writer. Every cursor that arrived before this batch began
           // shares one full-file atomic replace instead of queueing another
           // rewrite of the same JSON document.
-          const next = {
-            ...versions,
-            ...Object.fromEntries(batchVersions),
-          };
-          await fs.promises.mkdir(runtimeDataDir, { recursive: true });
+         const next = {
+           ...versions,
+           ...Object.fromEntries(batchVersions),
+         };
+          for (const [k, v] of Object.entries(next)) {
+            if (v === '__deleted__') delete (next as Record<string, string>)[k];
+          }
+         await fs.promises.mkdir(runtimeDataDir, { recursive: true });
           const tempPath = `${filePath}.${process.pid}.tmp`;
           await fs.promises.writeFile(
             tempPath,
@@ -93,6 +97,16 @@ export function createTeamResourceVersionStore(
   return {
     get(workspaceId, kind, resourceId) {
       return versions[versionKey(workspaceId, kind, resourceId)] ?? null;
+    },
+    delete(workspaceId, kind, resourceId) {
+      const key = versionKey(workspaceId, kind, resourceId);
+      if (!(key in versions)) return Promise.resolve();
+      pendingVersions.set(key, '__deleted__');
+      const committed = new Promise<void>((resolve, reject) => {
+        pendingWaiters.push({ resolve, reject });
+      });
+      scheduleDrain();
+      return committed;
     },
     set(workspaceId, kind, resourceId, versionId) {
       const key = versionKey(workspaceId, kind, resourceId);

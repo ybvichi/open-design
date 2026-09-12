@@ -481,6 +481,7 @@ const [skillDialogOpen, setSkillDialogOpen] = useState(false);
 
 const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 const [workspaceMemberId, setWorkspaceMemberId] = useState<string | null>(null);
+const [workspaceType, setWorkspaceType] = useState<string | null>(null);
 const [showCreateGroup, setShowCreateGroup] = useState(false);
  const [typeTabsEl, setTypeTabsEl] = useState<HTMLDivElement | null>(null);
 
@@ -497,6 +498,7 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
       const personal = body.items?.find((item) => item.isDefaultTeam === true);
       setWorkspaceId(personal?.workspaceId ?? null);
       setWorkspaceMemberId(personal?.workspaceMemberId ?? null);
+      setWorkspaceType(personal?.workspaceType ?? null);
     } catch {
        // leave workspaceId null
      }
@@ -604,9 +606,9 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
            onCopyProject={onCopyProject}
            onRenameProject={onRenameProject}
          />
-       ) : activeTab === 'skill' ? (
-         <CloudSkillList workspaceId={workspaceId} workspaceMemberId={workspaceMemberId} />
-       ) : (
+) : activeTab === 'skill' ? (
+ <CloudSkillList workspaceId={workspaceId} workspaceMemberId={workspaceMemberId} workspaceType={workspaceType} />
+) : (
          <div className={styles.panel}>
            <span className={styles.panelIcon} aria-hidden>
              <Icon name='terminal' size={32} />

@@ -68,7 +68,7 @@ const fakeContract: SidecarContractDescriptor<FakeStamp> = {
 };
 
 function testIpcPath(root: string): string {
-  if (process.platform === "win32") return `\\\\.\\pipe\\open-design-sidecar-test-${process.pid}-${Date.now()}`;
+  if (process.platform === "win32") return `\\\\.\\pipe\\hi-design-sidecar-test-${process.pid}-${Date.now()}`;
   return join(root, "ipc.sock");
 }
 
@@ -142,7 +142,7 @@ describe("generic sidecar path boundary", () => {
 
 describe("generic sidecar JSON IPC", () => {
   it("traces low-level IPC events without changing request semantics", async () => {
-    const root = await mkdtemp(join(tmpdir(), "open-design-sidecar-ipc-"));
+    const root = await mkdtemp(join(tmpdir(), "hi-design-sidecar-ipc-"));
     const socketPath = testIpcPath(root);
     const previousTrace = process.env.OD_JSON_IPC_TRACE;
     const previousError = console.error;
@@ -195,7 +195,7 @@ describe("generic sidecar JSON IPC", () => {
     // character is virtually guaranteed to straddle a boundary; with the old
     // per-chunk `chunk.toString()` the round-trip corrupts, with StringDecoder
     // it is byte-exact.
-    const root = await mkdtemp(join(tmpdir(), "open-design-sidecar-utf8-"));
+    const root = await mkdtemp(join(tmpdir(), "hi-design-sidecar-utf8-"));
     const socketPath = testIpcPath(root);
     // Mix of CJK glyphs incl. the exact ones seen corrupted in QA exports.
     const unit = "拥挤让人焦虑，留白让人信任。敢留白，是因为知道什么最重要——交付边界。";

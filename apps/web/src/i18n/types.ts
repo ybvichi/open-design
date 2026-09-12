@@ -1213,7 +1213,16 @@ export interface Dict {
   'personalScope.cloudSkillInstalling': string;
   'personalScope.cloudSkillInstalled': string;
   'personalScope.cloudSkillInstallFailed': string;
-  'personalScope.cloudSkillAlreadyInstalled': string;
+ 'personalScope.cloudSkillAlreadyInstalled': string;
+  'personalScope.cloudSkillKind': string;
+  'personalScope.cloudSkillSource': string;
+  'personalScope.cloudSkillUpdatedToday': string;
+  'personalScope.cloudSkillUpdatedYesterday': string;
+ 'personalScope.cloudSkillUpdatedDaysAgo': string;
+ 'personalScope.cloudSkillUninstall': string;
+ 'personalScope.cloudSkillUninstalling': string;
+ 'personalScope.cloudSkillUninstallFailed': string;
+ 'personalScope.cloudSkillUninstallDenied': string;
 'personalScope.emptyNoteShared': string;
   'sharedSpace.title': string;
   'sharedSpace.subtitle': string;

@@ -63,5 +63,5 @@ module.exports = app => {
   router.del('/hdw/api/community/plugins/:name', controller.api.community.remove);
   router.put('/hdw/api/community/blobs/:digest', controller.api.community.uploadBlob);
   router.get('/hdw/api/community/plugins/:name/versions/:version/archive', controller.api.community.downloadArchive);
- router.get('/hdw/api/community/cover/:digest', controller.api.community.downloadCover);
+  router.get('/hdw/api/community/cover/:digest', controller.api.community.downloadCover);
 };

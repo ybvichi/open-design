@@ -111,6 +111,14 @@ module.exports = appInfo => {
   // ResourceHub blob 存储目录
   config.blobDir = path.join(appInfo.baseDir, 'data', 'blobs');
 
+  // 社区插件市场公开 API 基地址（含反向代理路径前缀）。
+  // 部署在 pixso.hikvision.com.cn/hik-plugin/hidesign-web 后面，
+  // 因此 coverUrl / archiveUrl 需要带上 /hik-plugin/hidesign-web 前缀，
+  // 否则前端直接访问 /hdw/api/... 会 404。
+  config.community = {
+    publicApiBase: 'https://pixso.hikvision.com.cn/hik-plugin/hidesign-web',
+  };
+
   // add your user config here
   const userConfig = {
     // myAppName: 'egg',

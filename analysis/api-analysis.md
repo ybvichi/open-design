@@ -1152,7 +1152,7 @@
    "args": ["E:\\workspace\\...\\apps\\daemon\\dist\\cli.js", "mcp"],
    "env": {
      "OD_DATA_DIR": "E:\\workspace\\...\\.od",
-     "OD_SIDECAR_IPC_PATH": "\\\\.\\pipe\\open-design-default-daemon"
+     "OD_SIDECAR_IPC_PATH": "\\\\.\\pipe\\hi-design-default-daemon"
    },
    "daemonUrl": "http://127.0.0.1:56514",
    "webBaseUrl": "http://127.0.0.1:60202",

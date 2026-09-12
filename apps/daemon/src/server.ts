@@ -6814,6 +6814,7 @@ export async function startServer({
   async function syncSharedTeamSkill(
     resource: TeamResourceShareRecord,
     scope: TeamResourceRequestScope,
+    cloudInstall = false,
   ): Promise<void> {
     const dirId = stripPrefixAndValidateId(
       resource.id,
@@ -6830,24 +6831,50 @@ export async function startServer({
     const hubResourceId =
       resource.hubResourceId ??
       `skill-${workspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')}-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-    const isOwnedByCurrentMember =
-      typeof resource.ownerMemberId === 'string' &&
-      resource.ownerMemberId === scope.principal.memberId;
-    const bindingResourceId = workspaceTeamSkillBindingResourceId(
+   const isOwnedByCurrentMember =
+     typeof resource.ownerMemberId === 'string' &&
+     resource.ownerMemberId === scope.principal.memberId;
+   // The hub naming this member as owner is not proof that this device
+   // still has the author's local source. A fresh data root (or a second
+   // device) must pull the published copy just like any teammate. Skip
+   // only when the local directory AND a valid Personal binding are both
+   // present — same rule as syncSharedTeamDesignSystem's
+   // ownedDesignSystemSourceIsReady.
+   const ownerLocalSourceReady =
+     isOwnedByCurrentMember
+     && fs.existsSync(path.join(USER_SKILLS_DIR, dirId))
+     && (() => {
+       const ownerBinding = getWorkspaceResourceByResourceId(db, 'skill', resource.id);
+       return Boolean(
+         ownerBinding
+         && ownerBinding.workspaceId === workspaceId
+         && ownerBinding.visibility === 'personal'
+         && ownerBinding.resourceState !== 'deleted'
+         && ownerBinding.createdByWorkspaceMemberId === scope.principal.memberId,
+       );
+     })();
+   const bindingResourceId = workspaceTeamSkillBindingResourceId(
       workspaceId,
       resource.id,
     );
     const captureActivationFence = (): string | null =>
       workspaceTeamSkillBindingActivationFence(db, workspaceId, resource.id);
+    // Cloud-installed skills are not in the `vela shared` team-sharing list,
+    // so teamResourceStillShared always returns false for them. Bypass the
+    // stillShared gate entirely and call markTeamSynced directly, mirroring
+    // syncSharedTeamDesignSystem's pattern.
+    const stillShared = cloudInstall
+      ? async (): Promise<boolean> => true
+      : () => teamResourceStillShared('skill', resource, scope);
     // Claim the pulled copy for the workspace whose hub served it — a
     // team-shared skill is workspace-owned by construction, same rule
     // syncSharedTeamDesignSystem's markTeamSynced already ships (#145).
     // Fills the gap this resource type previously had no binding row at
     // all: `enforceSkillWorkspaceMutation` (routes/static-resource.ts) and
     // `listSkills`'s workspace filter (skills.ts) both read this row.
-    function markTeamSynced(): boolean {
-      if (isOwnedByCurrentMember || !workspaceId) return false;
-      const existingBinding = getWorkspaceResourceByResourceId(
+   function markTeamSynced(): boolean {
+     if (!workspaceId) return false;
+     const existingBinding = getWorkspaceResourceByResourceId(
         db,
         'skill',
         bindingResourceId,
@@ -6874,28 +6901,36 @@ export async function startServer({
       });
       return true;
     }
-    if (isOwnedByCurrentMember) return;
-    if (
-      fs.existsSync(targetDir) &&
+   if (ownerLocalSourceReady) return;
+   if (
+     fs.existsSync(targetDir) &&
       workspaceId &&
       resource.versionId &&
-      teamResourceVersions.get(workspaceId, 'skill', resource.id) === resource.versionId
-    ) {
-      await activateWorkspaceTeamSkillIfStillShared({
-        captureActivationFence,
-        stillShared: () => teamResourceStillShared('skill', resource, scope),
-        activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
-        activate: markTeamSynced,
-      });
+    teamResourceVersions.get(workspaceId, 'skill', resource.id) === resource.versionId
+  ) {
+      if (cloudInstall) {
+        markTeamSynced();
+      } else {
+        await activateWorkspaceTeamSkillIfStillShared({
+          captureActivationFence,
+          stillShared,
+          activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
+          activate: markTeamSynced,
+        });
+      }
       return;
     }
-    if (fs.existsSync(targetDir) && !resource.versionId) {
-      await activateWorkspaceTeamSkillIfStillShared({
-        captureActivationFence,
-        stillShared: () => teamResourceStillShared('skill', resource, scope),
-        activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
-        activate: markTeamSynced,
-      });
+  if (fs.existsSync(targetDir) && !resource.versionId) {
+      if (cloudInstall) {
+        markTeamSynced();
+      } else {
+        await activateWorkspaceTeamSkillIfStillShared({
+          captureActivationFence,
+          stillShared,
+          activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
+          activate: markTeamSynced,
+        });
+      }
       return;
     }
 
@@ -6909,33 +6944,51 @@ export async function startServer({
           resourceId: resource.id,
           hubResourceId,
         },
-        pullInto: (stagedFolder) =>
-          teamResourcePullBatcher.pull({
-            workspaceId,
-            kind: 'skill',
-            resourceId: hubResourceId,
-            dir: stagedFolder,
-            ref: 'published',
-          }),
+        pullInto: cloudInstall
+          ? async (stagedFolder) => {
+              const result = await hdwCloudClient?.pullResource(workspaceId, hubResourceId, 'published');
+              if (!result) throw new Error('cloud skill not found on hub');
+              for (const entry of result.manifest.entries) {
+                const normalized = entry.path.replaceAll('\\', '/').replace(/^\/+/u, '');
+                if (!normalized || normalized.split('/').some((s) => s === '..' || s === '.')) continue;
+                const blob = await hdwCloudClient?.downloadBlob(workspaceId, entry.digest);
+                if (!blob) continue;
+                const filePath = path.join(stagedFolder, normalized);
+                await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+                await fs.promises.writeFile(filePath, blob, { mode: entry.mode ?? 0o644 });
+              }
+            }
+          : (stagedFolder) =>
+              teamResourcePullBatcher.pull({
+                workspaceId,
+                kind: 'skill',
+                resourceId: hubResourceId,
+                dir: stagedFolder,
+                ref: 'published',
+              }),
         verifyWorkspaceScope: () => teamResourceScopeStillAuthorized(scope),
-        verifyStillShared: () => teamResourceStillShared('skill', resource, scope),
+        verifyStillShared: stillShared,
       });
       if (materialized.status !== 'committed') return;
-      const activated = await resolveAndActivateWorkspaceTeamSkill({
-        resolve: async () => {
-          const resolved = await listSkills([
-            teamResourceWorkspaceRoot(USER_SKILLS_DIR, workspaceId),
-          ]);
-          return resolved.find(
-            (skill) => skill.id === resource.id && skill.dir === materialized.targetDir,
-          ) ?? null;
-        },
-        captureActivationFence,
-        stillShared: () => teamResourceStillShared('skill', resource, scope),
-        activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
-        activate: markTeamSynced,
-      });
-      if (!activated) return;
+      if (cloudInstall) {
+        markTeamSynced();
+      } else {
+        const activated = await resolveAndActivateWorkspaceTeamSkill({
+          resolve: async () => {
+            const resolved = await listSkills([
+              teamResourceWorkspaceRoot(USER_SKILLS_DIR, workspaceId),
+            ]);
+            return resolved.find(
+              (skill) => skill.id === resource.id && skill.dir === materialized.targetDir,
+            ) ?? null;
+          },
+          captureActivationFence,
+          stillShared,
+          activationFenceIsCurrent: (fence) => captureActivationFence() === fence,
+          activate: markTeamSynced,
+        });
+        if (!activated) return;
+      }
       if (workspaceId && resource.versionId) {
         await teamResourceVersions.set(
           workspaceId,
@@ -7279,14 +7332,47 @@ const designSystemBackingProjects = new Map<string, string>();
         ownerMemberId: cloudResource.ownerMemberId,
         versionId: cloudResource.versionId ?? undefined,
         version: cloudResource.version ?? undefined,
-      };
-      await syncSharedTeamSkill(record, scope);
-      res.json({ installed: true, localId });
+     };
+    await syncSharedTeamSkill(record, scope, true);
+    res.json({ installed: true, localId });
+   } catch (err: any) {
+     res.status(500).json({ error: err instanceof Error ? err.message : 'cloud skill install failed' });
+   }
+ });
+  app.delete('/api/workspace/skills/cloud/:resourceId/uninstall', async (req: any, res: any) => {
+    const resourceId = typeof req.params.resourceId === 'string' ? decodeURIComponent(req.params.resourceId) : '';
+    if (!resourceId) return res.status(400).json({ error: 'invalid resource id' });
+    const resolution = await resolveTeamResourceScope(req);
+    if (!resolution.ok) {
+      return res.status(resolution.status).json({ error: resolution.code, message: resolution.message });
+    }
+    const scope = resolution.scope;
+    const workspaceId = scope.principal.teamId;
+    if (!hdwCloudClient) {
+      return res.status(503).json({ error: 'HDW_CLOUD_NOT_CONFIGURED' });
+    }
+    try {
+      const resources = await hdwCloudClient.listResources(workspaceId, 'skill');
+      const cloudResource = resources.find((r) => r.id === resourceId);
+      if (!cloudResource) {
+        return res.status(404).json({ error: 'CLOUD_SKILL_NOT_FOUND' });
+      }
+      const localId = (cloudResource.metadata as any)?.localId ?? cloudResource.id;
+      const dirId = stripPrefixAndValidateId(localId, localId.startsWith('user:') ? 'user:' : '');
+      if (!dirId) {
+        return res.status(400).json({ error: 'invalid local id' });
+      }
+      const targetDir = teamResourceMaterializationDir(USER_SKILLS_DIR, workspaceId, localId, dirId);
+      await fs.promises.rm(targetDir, { recursive: true, force: true });
+      const bindingResourceId = workspaceTeamSkillBindingResourceId(workspaceId, localId);
+      deleteWorkspaceResourceByResourceId(db, 'skill', bindingResourceId);
+      await teamResourceVersions.delete(workspaceId, 'skill', localId);
+      res.json({ ok: true, localId });
     } catch (err: any) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'cloud skill install failed' });
+      res.status(500).json({ error: err instanceof Error ? err.message : 'cloud skill uninstall failed' });
     }
   });
-  const teamResourceListByKind = {
+ const teamResourceListByKind = {
     design_system: designSystemsTeamList,
     plugin: pluginsTeamList,
     skill: skillsTeamList,

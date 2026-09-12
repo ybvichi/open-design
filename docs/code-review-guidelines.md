@@ -296,7 +296,7 @@ Review in this order. Each priority lists the concrete checks for it.
 
 - No committed secrets, API keys, or `media-config.json` content. No widening of credential storage scope without explicit need.
 - Logs do not leak credentials, tokens, or full prompt payloads.
-- Keep control-plane runtime state separate from daemon-owned data. Sidecar and `tools-dev` runtime/log/IPC state follows the namespace-scoped `.tmp/<source>/<namespace>/...` contract (with `tools-dev` logs under `.tmp/tools-dev/<namespace>/...`) and POSIX IPC sockets under `/tmp/open-design/ipc/<namespace>/<app>.sock`.
+- Keep control-plane runtime state separate from daemon-owned data. Sidecar and `tools-dev` runtime/log/IPC state follows the namespace-scoped `.tmp/<source>/<namespace>/...` contract (with `tools-dev` logs under `.tmp/tools-dev/<namespace>/...`) and POSIX IPC sockets under `/tmp/hi-design/ipc/<namespace>/<app>.sock`.
 - Daemon-owned data must derive from the daemon's already-resolved `RUNTIME_DATA_DIR`; subprocesses inherit that truth through `OD_DATA_DIR`. Review the root **Daemon data directory contract** instead of documenting or recomputing another concrete daemon data path.
 - For daemon, desktop, sidecar, path, log, or namespace changes, validate the relevant side of that split per `AGENTS.md`: resolved daemon data-root propagation for daemon data; concurrent namespaces, log-path inspection, and desktop `inspect eval`/`inspect screenshot` for control-plane state.
 

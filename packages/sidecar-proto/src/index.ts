@@ -62,11 +62,11 @@ export const STAMP_SOURCE_FLAG = SIDECAR_STAMP_FLAGS.source;
 export const SIDECAR_STAMP_FIELDS = ["app", "mode", "namespace", "ipc", "source"] as const;
 
 export const SIDECAR_DEFAULTS = Object.freeze({
-  host: "127.0.0.1",
-  ipcBase: "/tmp/open-design/ipc",
-  namespace: "default",
-  projectTmpDirName: ".tmp",
-  windowsPipePrefix: "open-design",
+ host: "127.0.0.1",
+ ipcBase: "/tmp/hi-design/ipc",
+ namespace: "default",
+ projectTmpDirName: ".tmp",
+ windowsPipePrefix: "hi-design",
 } as const);
 
 export const OPEN_DESIGN_PRODUCT_NAME = "Hi Design";
