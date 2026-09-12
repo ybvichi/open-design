@@ -59,6 +59,7 @@ class ResourceController extends Controller {
       if (existing && !body.ownerMemberId) {
         effectiveOwner = existing.owner_member_id;
       }
+      const scope = body.scope || 'private';
       await k('resources')
         .insert({
           id: resourceId,
@@ -66,12 +67,14 @@ class ResourceController extends Controller {
           kind,
           owner_member_id: effectiveOwner,
           metadata: metadata ? JSON.stringify(metadata) : null,
+          scope,
         })
         .onConflict('id')
         .merge({
           deleted_at: null,
           ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
           ...(body.ownerMemberId ? { owner_member_id: effectiveOwner } : {}),
+          ...(scope ? { scope } : {}),
         });
 
       // Compute manifest digest and ensure all blobs are recorded.
@@ -260,12 +263,116 @@ class ResourceController extends Controller {
         return;
       }
 
-      ctx.status = 204;
-      ctx.body = null;
+      ctx.body = { code: 0, msg: 'ok', data: { ok: true } };
     } catch (err) {
       ctx.logger.error('[hdw] remove resource error:', err);
       ctx.status = 500;
       ctx.body = { error: 'internal_error', message: err.message };
+    }
+  }
+
+  // ---- Create: POST /api/workspaces/:ws/resources ----
+  // Direct insert for resources that are pure JSON metadata (e.g. MCP
+  // templates). Skills use the two-phase publish protocol instead.
+  // Returns {code, msg, data} envelope so the daemon's hdwPost helper works.
+  async create() {
+    const { ctx } = this;
+    const workspaceId = ctx.params.workspaceId;
+    const body = ctx.request.body || {};
+    const kind = body.kind || 'resource';
+    const ownerMemberId = body.ownerMemberId || body.owner_member_id || 'system';
+    const metadata = body.metadata || null;
+    const scope = body.scope || 'private';
+
+    if (!workspaceId || !ownerMemberId || !metadata) {
+      ctx.body = { code: -1, msg: 'workspaceId, ownerMemberId and metadata are required' };
+      return;
+    }
+
+    const id = (metadata.id) ? metadata.id : 'res-' + crypto.randomUUID();
+
+    try {
+      const k = this.getKnex();
+      await k('resources').insert({
+        id,
+        workspace_id: workspaceId,
+        kind,
+        owner_member_id: ownerMemberId,
+        metadata: JSON.stringify(metadata),
+        scope,
+      });
+
+      const row = await k('resources').where({ id }).first();
+      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+      ctx.body = {
+        code: 0,
+        msg: 'ok',
+        data: {
+          resource: {
+            id: row.id,
+            kind: row.kind,
+            ownerMemberId: row.owner_member_id,
+            ...(row.scope ? { scope: row.scope } : {}),
+            metadata: meta,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          },
+        },
+      };
+    } catch (err) {
+      ctx.logger.error('[hdw] resource create error:', err);
+      ctx.body = { code: -1, msg: 'internal error', error: err.message };
+    }
+  }
+
+  // ---- Update: PUT /api/workspaces/:ws/resources/:resourceId ----
+  // Direct update of metadata (and optionally scope) on an existing
+  // resource. Returns {code, msg, data} envelope.
+  async update() {
+    const { ctx } = this;
+    const resourceId = ctx.params.resourceId;
+    const body = ctx.request.body || {};
+    const metadata = body.metadata || null;
+
+    if (!metadata) {
+      ctx.body = { code: -1, msg: 'metadata is required' };
+      return;
+    }
+
+    try {
+      const k = this.getKnex();
+      const updateFields = { metadata: JSON.stringify(metadata) };
+      if (body.scope) updateFields.scope = body.scope;
+      const updated = await k('resources')
+        .where({ id: resourceId })
+        .whereNull('deleted_at')
+        .update(updateFields);
+
+      if (updated === 0) {
+        ctx.body = { code: -1, msg: 'resource not found' };
+        return;
+      }
+
+      const row = await k('resources').where({ id: resourceId }).first();
+      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+      ctx.body = {
+        code: 0,
+        msg: 'ok',
+        data: {
+          resource: {
+            id: row.id,
+            kind: row.kind,
+            ownerMemberId: row.owner_member_id,
+            ...(row.scope ? { scope: row.scope } : {}),
+            metadata: meta,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          },
+        },
+      };
+    } catch (err) {
+      ctx.logger.error('[hdw] resource update error:', err);
+      ctx.body = { code: -1, msg: 'internal error', error: err.message };
     }
   }
 
@@ -275,6 +382,7 @@ class ResourceController extends Controller {
     const workspaceId = ctx.params.workspaceId;
     const kind = ctx.query.kind || undefined;
     const ownerMemberId = ctx.query.owner_member_id || undefined;
+    const scope = ctx.query.scope || undefined;
 
     try {
       const k = this.getKnex();
@@ -290,6 +398,7 @@ class ResourceController extends Controller {
           'r.kind',
           'r.owner_member_id as owner_member_id',
           'r.metadata',
+          'r.scope',
           'r.created_at',
           'r.updated_at',
           'rv.version',
@@ -303,6 +412,9 @@ class ResourceController extends Controller {
       if (ownerMemberId) {
         q = q.where('r.owner_member_id', ownerMemberId);
       }
+      if (scope) {
+        q = q.where('r.scope', scope);
+      }
 
       const rows = await q;
 
@@ -310,6 +422,7 @@ class ResourceController extends Controller {
         id: row.id,
         kind: row.kind,
         ownerMemberId: row.owner_member_id,
+        ...(row.scope ? { scope: row.scope } : {}),
         metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
         version: row.version || null,
         versionId: row.version_id || null,
