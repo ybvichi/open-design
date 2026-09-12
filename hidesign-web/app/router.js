@@ -64,4 +64,10 @@ module.exports = app => {
   router.put('/hdw/api/community/blobs/:digest', controller.api.community.uploadBlob);
   router.get('/hdw/api/community/plugins/:name/versions/:version/archive', controller.api.community.downloadArchive);
   router.get('/hdw/api/community/cover/:digest', controller.api.community.downloadCover);
+
+  // api:mcp // MCP 模板目录
+  router.get('/hdw/api/mcp', controller.api.mcp.list);
+  router.post('/hdw/api/mcp', controller.api.mcp.create);
+  router.put('/hdw/api/mcp/:resourceId', controller.api.mcp.update);
+  router.del('/hdw/api/mcp/:resourceId', controller.api.mcp.remove);
 };
