@@ -48,6 +48,9 @@ class ResourceController extends Controller {
     const ref = body.ref || 'published';
     const metadata = body.metadata || null;
     const ownerMemberId = body.ownerMemberId || 'system';
+    // When no scope is provided, leave it NULL (personal scope).
+    // Only set scope when the caller explicitly passes one (e.g. 'public').
+    const scope = body.scope || null;
 
     try {
       const k = this.getKnex();
@@ -59,7 +62,6 @@ class ResourceController extends Controller {
       if (existing && !body.ownerMemberId) {
         effectiveOwner = existing.owner_member_id;
       }
-      const scope = body.scope || 'private';
       await k('resources')
         .insert({
           id: resourceId,
@@ -74,7 +76,7 @@ class ResourceController extends Controller {
           deleted_at: null,
           ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
           ...(body.ownerMemberId ? { owner_member_id: effectiveOwner } : {}),
-          ...(scope ? { scope } : {}),
+          ...(scope !== null ? { scope } : {}),
         });
 
       // Compute manifest digest and ensure all blobs are recorded.
@@ -282,7 +284,8 @@ class ResourceController extends Controller {
     const kind = body.kind || 'resource';
     const ownerMemberId = body.ownerMemberId || body.owner_member_id || 'system';
     const metadata = body.metadata || null;
-    const scope = body.scope || 'private';
+    // When no scope is provided, leave it NULL (personal scope).
+    const scope = body.scope || null;
 
     if (!workspaceId || !ownerMemberId || !metadata) {
       ctx.body = { code: -1, msg: 'workspaceId, ownerMemberId and metadata are required' };
@@ -412,9 +415,11 @@ class ResourceController extends Controller {
       if (ownerMemberId) {
         q = q.where('r.owner_member_id', ownerMemberId);
       }
-      if (scope) {
-        q = q.where('r.scope', scope);
-      }
+     if (scope) {
+       q = q.where('r.scope', scope);
+     } else {
+       q = q.whereNull('r.scope');
+     }
 
       const rows = await q;
 
